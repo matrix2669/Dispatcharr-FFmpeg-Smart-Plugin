@@ -1,6 +1,6 @@
 {
   "name": "FFmpeg Smart Profiles",
-  "version": "0.1.0-dev.4",
+  "version": "0.1.0-dev.5",
   "description": "Installs FFmpeg Smart stream/output profiles and manages hardware capacity cache rebuilds.",
   "author": "matrix2669",
   "help_url": "https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin",
@@ -58,7 +58,7 @@
     {
       "id": "benchmark_status",
       "label": "Benchmark Status",
-      "description": "Show benchmark state and recent log output.",
+      "description": "Show active benchmark progress, cached hardware capabilities, device speeds/capacities, and recent log output.",
       "button_label": "Check Status"
     },
     {

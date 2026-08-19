@@ -1,6 +1,7 @@
 import copy
 import glob
 import os
+import re
 import shlex
 import signal
 import subprocess
@@ -14,6 +15,7 @@ RUNTIME_DIR = PLUGIN_DIR / "runtime"
 PID_FILE = RUNTIME_DIR / "recache.pid"
 LOG_FILE = RUNTIME_DIR / "recache.log"
 BENCHMARK_LOCK_FILE = PLUGIN_DIR / ".benchmark.lock"
+CACHE_FILE = PLUGIN_DIR / ".capabilities.cache"
 LEGACY_OUTPUT_NAMES = {
     "FFmpeg Smart - Passthrough",
     "FFmpeg Smart - 720p 2M Stereo",
@@ -23,7 +25,7 @@ LEGACY_OUTPUT_NAMES = {
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.1.0-dev.4"
+    version = "0.1.0-dev.5"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
@@ -273,7 +275,12 @@ class Plugin:
 
         if logger:
             logger.info("FFmpeg Smart profile install result: %s", result)
-        return {"status": "ok", "message": self._result_message(result), **result}
+        return {
+            "status": "ok",
+            "message": self._result_message(result) + " Refresh the browser to load profile changes.",
+            "refresh_required": True,
+            **result,
+        }
 
     @staticmethod
     def _upsert_profile(model, desired, update_existing, result, managed_command):
@@ -334,7 +341,11 @@ class Plugin:
             logger.info("FFmpeg Smart profile removal: removed=%s skipped=%s", removed, skipped)
         return {
             "status": "ok",
-            "message": f"Removed {len(removed)} profile(s); skipped {len(skipped)}.",
+            "message": (
+                f"Removed {len(removed)} profile(s); skipped {len(skipped)}. "
+                "Refresh the browser to load profile changes."
+            ),
+            "refresh_required": True,
             "removed": removed,
             "skipped": skipped,
         }
@@ -452,6 +463,8 @@ class Plugin:
         if running:
             status = "running"
             message = f"Hardware benchmark is running (PID {pid})."
+            if lines:
+                message += f" Latest progress: {lines[-1]}"
         elif lines and any("Cache rebuild complete" in line for line in lines):
             status = "complete"
             message = "Hardware cache rebuild completed successfully."
@@ -461,7 +474,71 @@ class Plugin:
         else:
             status = "idle"
             message = "No hardware benchmark has been started by this plugin."
-        return {"status": status, "message": message, "pid": pid, "recent_log": lines}
+        capabilities = self._capability_summary()
+        if capabilities:
+            label = "Cached capabilities while rebuild is active: " if running else ""
+            message += " " + label + capabilities["summary"]
+        elif not running:
+            message += " No valid hardware capability cache is available."
+        return {
+            "status": status,
+            "message": message,
+            "pid": pid,
+            "capabilities": capabilities,
+            "recent_log": lines,
+        }
+
+    @staticmethod
+    def _capability_summary():
+        try:
+            values = {}
+            for line in CACHE_FILE.read_text(encoding="utf-8").splitlines():
+                match = re.fullmatch(r"([A-Z0-9_]+)='(.*)'", line.strip())
+                if match:
+                    values[match.group(1)] = match.group(2)
+        except OSError:
+            return None
+
+        accel = values.get("BEST_ACCEL", "unknown")
+        codec = values.get("BEST_CODEC", "unknown")
+        primary = Plugin._device_capability(values, "PRIMARY")
+        secondary = Plugin._device_capability(values, "SECONDARY")
+        if not primary and accel == "unknown" and codec == "unknown":
+            return None
+
+        decode_10bit = values.get("SUPPORTS_10BIT_DECODE", "false") == "true"
+        encode_10bit = values.get("SUPPORTS_10BIT_ENCODE", "false") == "true"
+        parts = [
+            f"Capabilities: {accel.upper()}/{codec.upper()}",
+            f"10-bit decode={'yes' if decode_10bit else 'no'}",
+            f"encode={'yes' if encode_10bit else 'no'}",
+        ]
+        if primary:
+            parts.append(
+                f"primary {primary['device']} capacity={primary['capacity']} speed={primary['speed']}x"
+            )
+        if secondary:
+            parts.append(
+                f"secondary {secondary['device']} capacity={secondary['capacity']} speed={secondary['speed']}x"
+            )
+        return {
+            "acceleration": accel,
+            "codec": codec,
+            "supports_10bit_decode": decode_10bit,
+            "supports_10bit_encode": encode_10bit,
+            "primary": primary,
+            "secondary": secondary,
+            "summary": "; ".join(parts) + ".",
+        }
+
+    @staticmethod
+    def _device_capability(values, prefix):
+        device = values.get(f"{prefix}_DEVICE", "")
+        capacity = values.get(f"{prefix}_CAPACITY", "0")
+        speed = values.get(f"{prefix}_SPEED", "0")
+        if not device or capacity in ("", "0"):
+            return None
+        return {"device": device, "capacity": int(capacity), "speed": speed}
 
     @staticmethod
     def _read_pid():
