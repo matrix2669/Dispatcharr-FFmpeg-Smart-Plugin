@@ -24,7 +24,7 @@ manager = PluginManager.get()
 registry = manager.discover_plugins(sync_db=True, force_reload=True)
 discovered = registry[PLUGIN_KEY]
 assert discovered.name == "FFmpeg Smart Profiles"
-assert discovered.version == "0.1.0-dev.3"
+assert discovered.version == "0.1.0-dev.4"
 
 with transaction.atomic():
     config = PluginConfig.objects.get(key=PLUGIN_KEY)
@@ -44,6 +44,11 @@ with transaction.atomic():
     assert len(first["created"]) == 4, first
     assert StreamProfile.objects.filter(name="FFmpeg Smart").count() == 1
     assert OutputProfile.objects.filter(name__startswith="FFmpeg Smart - ").count() == 3
+    assert all(
+        profile.command.endswith("ffmpeg-smart.sh")
+        and profile.parameters.startswith("-i pipe:0")
+        for profile in OutputProfile.objects.filter(name__startswith="FFmpeg Smart - ")
+    )
 
     second = loaded.instance.run("install_profiles", {}, context)
     assert second["status"] == "ok"

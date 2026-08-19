@@ -1,4 +1,7 @@
+import copy
+import glob
 import os
+import shlex
 import signal
 import subprocess
 import time
@@ -11,11 +14,16 @@ RUNTIME_DIR = PLUGIN_DIR / "runtime"
 PID_FILE = RUNTIME_DIR / "recache.pid"
 LOG_FILE = RUNTIME_DIR / "recache.log"
 BENCHMARK_LOCK_FILE = PLUGIN_DIR / ".benchmark.lock"
+LEGACY_OUTPUT_NAMES = {
+    "FFmpeg Smart - Passthrough",
+    "FFmpeg Smart - 720p 2M Stereo",
+    "FFmpeg Smart - 1080p 8M Stereo",
+}
 
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.1.0-dev.3"
+    version = "0.1.0-dev.4"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
@@ -24,11 +32,45 @@ class Plugin:
     help_url = "https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin"
 
     fields = [
-        {"id": "stream_profile_name", "label": "Stream profile name", "type": "string", "default": "FFmpeg Smart"},
-        {"id": "install_passthrough_output", "label": "Install passthrough output profile", "type": "boolean", "default": True},
-        {"id": "install_720p_output", "label": "Install 720p output profile", "type": "boolean", "default": True},
-        {"id": "install_1080p_output", "label": "Install 1080p output profile", "type": "boolean", "default": True},
+        {"id": "stream_1_enabled", "label": "Enable Stream Profile 1", "type": "boolean", "default": True},
+        {"id": "stream_1_name", "label": "Stream Profile 1 name", "type": "string", "default": "FFmpeg Smart"},
+        {
+            "id": "stream_1_options",
+            "label": "Stream Profile 1 options",
+            "type": "string",
+            "default": "",
+            "help_text": "Optional ffmpeg-smart flags, for example: -vc h264 -maxres 1080 -maxbr 8M -maxchan 2",
+        },
+        {"id": "stream_2_enabled", "label": "Enable Stream Profile 2", "type": "boolean", "default": False},
+        {"id": "stream_2_name", "label": "Stream Profile 2 name", "type": "string", "default": "FFmpeg Smart 2"},
+        {
+            "id": "stream_2_options",
+            "label": "Stream Profile 2 options",
+            "type": "string",
+            "default": "-vc h264 -maxres 1080 -maxbr 8M -maxchan 2",
+        },
+        {"id": "output_1_enabled", "label": "Enable Output Profile 1", "type": "boolean", "default": True},
+        {"id": "output_1_name", "label": "Output Profile 1 name", "type": "string", "default": "FFmpeg Smart - Adaptive"},
+        {"id": "output_1_options", "label": "Output Profile 1 options", "type": "string", "default": ""},
+        {"id": "output_2_enabled", "label": "Enable Output Profile 2", "type": "boolean", "default": True},
+        {"id": "output_2_name", "label": "Output Profile 2 name", "type": "string", "default": "FFmpeg Smart - 720p 2M Stereo"},
+        {"id": "output_2_options", "label": "Output Profile 2 options", "type": "string", "default": "-vc h264 -maxres 720 -maxbr 2M -maxchan 2"},
+        {"id": "output_3_enabled", "label": "Enable Output Profile 3", "type": "boolean", "default": True},
+        {"id": "output_3_name", "label": "Output Profile 3 name", "type": "string", "default": "FFmpeg Smart - 1080p 8M Stereo"},
+        {"id": "output_3_options", "label": "Output Profile 3 options", "type": "string", "default": "-vc h264 -maxres 1080 -maxbr 8M -maxchan 2"},
+        {
+            "id": "remove_missing_profiles",
+            "label": "Remove disabled or renamed managed profiles",
+            "type": "boolean",
+            "default": True,
+        },
         {"id": "update_existing", "label": "Update existing managed profiles", "type": "boolean", "default": True},
+        {
+            "id": "profile_note",
+            "label": "Profile behavior",
+            "type": "info",
+            "description": "All managed Stream and Output Profiles use the bundled ffmpeg-smart.sh. Output Profiles use its pipe-safe input mode.",
+        },
     ]
 
     actions = [
@@ -58,6 +100,22 @@ class Plugin:
         },
     ]
 
+    def __init__(self):
+        self.actions = copy.deepcopy(type(self).actions)
+        gpu_count = len(glob.glob("/dev/dri/renderD*"))
+        if gpu_count <= 0:
+            estimate = "about 1–2 minutes (no DRM GPU detected)"
+        elif gpu_count == 1:
+            estimate = "about 1–2 minutes for 1 detected GPU"
+        else:
+            estimate = (
+                f"about {gpu_count * 2}–{gpu_count * 4} minutes for "
+                f"{gpu_count} detected GPUs"
+            )
+        for action in self.actions:
+            if action.get("id") == "rebuild_cache":
+                action["confirm"]["message"] += f" Estimated runtime: {estimate}."
+
     def run(self, action: str, params: dict, context: dict):
         settings = context.get("settings") or {}
         logger = context.get("logger")
@@ -79,68 +137,88 @@ class Plugin:
             except ProcessLookupError:
                 pass
 
+    def _stream_definitions(self, settings):
+        defaults = {
+            1: (True, "FFmpeg Smart", ""),
+            2: (False, "FFmpeg Smart 2", "-vc h264 -maxres 1080 -maxbr 8M -maxchan 2"),
+        }
+        definitions = []
+        for slot, (enabled, default_name, default_options) in defaults.items():
+            if not settings.get(f"stream_{slot}_enabled", enabled):
+                continue
+            name = str(settings.get(f"stream_{slot}_name") or default_name).strip()
+            if not name:
+                raise ValueError(f"Stream Profile {slot} name cannot be empty")
+            options = self._validate_options(
+                str(settings.get(f"stream_{slot}_options", default_options) or ""),
+                f"Stream Profile {slot} options",
+            )
+            definitions.append(
+                {
+                    "name": name,
+                    "command": str(SCRIPT_PATH),
+                    "parameters": self._join_parameters(
+                        '-i "{streamUrl}" -user_agent "{userAgent}"', options
+                    ),
+                    "is_active": True,
+                }
+            )
+        self._validate_unique_names(definitions, "Stream Profile")
+        return definitions
+
+    def _output_definitions(self, settings):
+        defaults = {
+            1: (True, "FFmpeg Smart - Adaptive", ""),
+            2: (True, "FFmpeg Smart - 720p 2M Stereo", "-vc h264 -maxres 720 -maxbr 2M -maxchan 2"),
+            3: (True, "FFmpeg Smart - 1080p 8M Stereo", "-vc h264 -maxres 1080 -maxbr 8M -maxchan 2"),
+        }
+        definitions = []
+        for slot, (enabled, default_name, default_options) in defaults.items():
+            if not settings.get(f"output_{slot}_enabled", enabled):
+                continue
+            name = str(settings.get(f"output_{slot}_name") or default_name).strip()
+            if not name:
+                raise ValueError(f"Output Profile {slot} name cannot be empty")
+            options = self._validate_options(
+                str(settings.get(f"output_{slot}_options", default_options) or ""),
+                f"Output Profile {slot} options",
+            )
+            definitions.append(
+                {
+                    "name": name,
+                    "command": str(SCRIPT_PATH),
+                    "parameters": self._join_parameters("-i pipe:0", options),
+                }
+            )
+        self._validate_unique_names(definitions, "Output Profile")
+        return definitions
+
     @staticmethod
-    def _output_definitions():
-        common = (
-            "-nostdin -hide_banner -loglevel warning -i pipe:0 "
-            "-map 0:v:0 -map 0:a:0? "
-        )
-        trailer = (
-            "-avoid_negative_ts make_zero -start_at_zero -mpegts_copyts 0 "
-            "-mpegts_flags +pat_pmt_at_frames+resend_headers -flush_packets 1 "
-            "-f mpegts pipe:1"
-        )
-        return {
-            "passthrough": {
-                "name": "FFmpeg Smart - Passthrough",
-                "command": "ffmpeg",
-                "parameters": common + "-c copy " + trailer,
-            },
-            "720p": {
-                "name": "FFmpeg Smart - 720p 2M Stereo",
-                "command": "ffmpeg",
-                "parameters": (
-                    common
-                    + "-c:v libx264 -preset faster -b:v 1700k -maxrate 2000k "
-                    "-bufsize 4000k -vf \"scale=w=-2:h=min(720\\,ih)\" "
-                    "-c:a aac -b:a 192k -ac 2 "
-                    + trailer
-                ),
-            },
-            "1080p": {
-                "name": "FFmpeg Smart - 1080p 8M Stereo",
-                "command": "ffmpeg",
-                "parameters": (
-                    common
-                    + "-c:v libx264 -preset faster -b:v 6800k -maxrate 8000k "
-                    "-bufsize 16000k -vf \"scale=w=-2:h=min(1080\\,ih)\" "
-                    "-c:a aac -b:a 192k -ac 2 "
-                    + trailer
-                ),
-            },
-        }
+    def _validate_unique_names(definitions, label):
+        names = [definition["name"] for definition in definitions]
+        duplicates = sorted({name for name in names if names.count(name) > 1})
+        if duplicates:
+            raise ValueError(f"Duplicate {label} name(s): {', '.join(duplicates)}")
 
-    def _stream_definition(self, settings):
-        name = str(settings.get("stream_profile_name") or "FFmpeg Smart").strip()
-        if not name:
-            raise ValueError("Stream profile name cannot be empty")
-        return {
-            "name": name,
-            "command": str(SCRIPT_PATH),
-            "parameters": '-i "{streamUrl}" -user_agent "{userAgent}"',
-            "is_active": True,
-        }
+    @staticmethod
+    def _validate_options(options, label):
+        try:
+            tokens = shlex.split(options)
+        except ValueError as exc:
+            raise ValueError(f"{label} contains invalid quoting: {exc}") from exc
+        forbidden = {"-i", "--recache", "--recache-only"}
+        invalid = next((token for token in tokens if token in forbidden), None)
+        if invalid:
+            raise ValueError(f"{label} cannot contain {invalid}")
+        return options.strip()
 
-    def _selected_output_definitions(self, settings):
-        definitions = self._output_definitions()
-        selected = []
-        if settings.get("install_passthrough_output", True):
-            selected.append(definitions["passthrough"])
-        if settings.get("install_720p_output", True):
-            selected.append(definitions["720p"])
-        if settings.get("install_1080p_output", True):
-            selected.append(definitions["1080p"])
-        return selected
+    @staticmethod
+    def _join_parameters(base, options):
+        return f"{base} {options}".strip()
+
+    @staticmethod
+    def _is_managed_script(command):
+        return Path(command).name == SCRIPT_PATH.name
 
     def _install_profiles(self, settings, logger):
         from django.db import transaction
@@ -148,24 +226,50 @@ class Plugin:
 
         self._ensure_script()
         update_existing = bool(settings.get("update_existing", True))
-        result = {"created": [], "updated": [], "unchanged": [], "conflicts": []}
+        result = {"created": [], "updated": [], "unchanged": [], "removed": [], "conflicts": []}
+        stream_definitions = self._stream_definitions(settings)
+        output_definitions = self._output_definitions(settings)
 
         with transaction.atomic():
-            self._upsert_profile(
-                StreamProfile,
-                self._stream_definition(settings),
-                update_existing,
-                result,
-                managed_command=lambda command: Path(command).name == SCRIPT_PATH.name,
-            )
-            for definition in self._selected_output_definitions(settings):
+            for definition in stream_definitions:
+                self._upsert_profile(
+                    StreamProfile,
+                    definition,
+                    update_existing,
+                    result,
+                    managed_command=self._is_managed_script,
+                )
+            for definition in output_definitions:
                 self._upsert_profile(
                     OutputProfile,
                     {**definition, "is_active": True},
                     update_existing,
                     result,
-                    managed_command=lambda command: command == "ffmpeg",
+                    managed_command=lambda command, name=definition["name"]: (
+                        self._is_managed_script(command)
+                        or (name in LEGACY_OUTPUT_NAMES and command == "ffmpeg")
+                    ),
                 )
+            if settings.get("remove_missing_profiles", True):
+                desired_stream_names = {definition["name"] for definition in stream_definitions}
+                desired_names = {definition["name"] for definition in output_definitions}
+                for profile in StreamProfile.objects.all():
+                    if not self._is_managed_script(profile.command) or profile.name in desired_stream_names:
+                        continue
+                    if profile.locked:
+                        result["conflicts"].append(f"{profile.name} (locked, disabled or renamed)")
+                    else:
+                        result["removed"].append(profile.name)
+                        profile.delete()
+                for profile in OutputProfile.objects.all():
+                    legacy = profile.name in LEGACY_OUTPUT_NAMES and profile.command == "ffmpeg"
+                    if (not self._is_managed_script(profile.command) and not legacy) or profile.name in desired_names:
+                        continue
+                    if profile.locked:
+                        result["conflicts"].append(f"{profile.name} (locked, disabled or renamed)")
+                    else:
+                        result["removed"].append(profile.name)
+                        profile.delete()
 
         if logger:
             logger.info("FFmpeg Smart profile install result: %s", result)
@@ -208,24 +312,24 @@ class Plugin:
 
         removed = []
         skipped = []
-        stream = self._stream_definition(settings)
-        outputs = list(self._output_definitions().values())
         with transaction.atomic():
-            self._remove_matching(
-                StreamProfile,
-                stream,
-                lambda command: Path(command).name == SCRIPT_PATH.name,
-                removed,
-                skipped,
-            )
-            for definition in outputs:
-                self._remove_matching(
-                    OutputProfile,
-                    definition,
-                    lambda command: command == "ffmpeg",
-                    removed,
-                    skipped,
-                )
+            for profile in StreamProfile.objects.all():
+                if not self._is_managed_script(profile.command):
+                    continue
+                if profile.locked:
+                    skipped.append(profile.name)
+                else:
+                    removed.append(profile.name)
+                    profile.delete()
+            for profile in OutputProfile.objects.all():
+                legacy = profile.name in LEGACY_OUTPUT_NAMES and profile.command == "ffmpeg"
+                if not self._is_managed_script(profile.command) and not legacy:
+                    continue
+                if profile.locked:
+                    skipped.append(profile.name)
+                else:
+                    removed.append(profile.name)
+                    profile.delete()
         if logger:
             logger.info("FFmpeg Smart profile removal: removed=%s skipped=%s", removed, skipped)
         return {
@@ -391,5 +495,6 @@ class Plugin:
     def _result_message(result):
         return (
             f"Created {len(result['created'])}, updated {len(result['updated'])}, "
-            f"unchanged {len(result['unchanged'])}, conflicts {len(result['conflicts'])}."
+            f"unchanged {len(result['unchanged'])}, removed {len(result['removed'])}, "
+            f"conflicts {len(result['conflicts'])}."
         )

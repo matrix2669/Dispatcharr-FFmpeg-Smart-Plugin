@@ -4,7 +4,7 @@ set -euo pipefail
 
 LOG_PREFIX="[ffmpeg-smart]"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="benchmark-lock-v21"
+VERSION="pipe-input-v22"
 CAPACITY_BENCHMARK_VERSION="concurrency-1.2-v1"
 CACHE_FILE="$SCRIPT_DIR/.capabilities.cache"
 PROBE_SAMPLE="$SCRIPT_DIR/probe-sample.mkv"
@@ -996,7 +996,25 @@ else
     NET_ARGS=()
 fi
 
-PROBE=$(ffprobe "${UA_ARGS[@]}" -v quiet -print_format json -show_streams "$URL" 2>&1) || {
+PIPE_INPUT=false
+PIPE_CAPTURE=""
+PROBE_TARGET="$URL"
+if [[ "$URL" == "pipe:0" || "$URL" == "-" ]]; then
+    PIPE_INPUT=true
+    URL="pipe:0"
+    PIPE_CAPTURE="$(mktemp "${TMPDIR:-/tmp}/ffmpeg-smart-input.XXXXXX.ts")"
+    trap '[[ -z "$PIPE_CAPTURE" ]] || rm -f -- "$PIPE_CAPTURE"' EXIT
+    capture_status=0
+    timeout 4s dd of="$PIPE_CAPTURE" bs=188 status=none || capture_status=$?
+    if [[ "$capture_status" != "0" && "$capture_status" != "124" && "$capture_status" != "143" ]] ||
+       [[ ! -s "$PIPE_CAPTURE" ]]; then
+        echo "$LOG_PREFIX ERROR: Unable to sample pipe input for probing" >&2
+        exit 1
+    fi
+    PROBE_TARGET="$PIPE_CAPTURE"
+fi
+
+PROBE=$(ffprobe "${UA_ARGS[@]}" -v quiet -print_format json -show_streams "$PROBE_TARGET" 2>&1) || {
     echo "$LOG_PREFIX ERROR: ffprobe failed - cannot access stream" >&2
     exit 1
 }
@@ -1285,36 +1303,45 @@ export FFMPEG_SMART_OUTPUT_WIDTH="$TARGET_WIDTH"
 export FFMPEG_SMART_OUTPUT_HEIGHT="$TARGET_HEIGHT"
 export FFMPEG_SMART_FPS_FRAC="$FPS_OUT"
 
-exec ffmpeg \
-    "${UA_ARGS[@]}" \
-    "${NET_ARGS[@]}" \
-    "${HWACCEL_ARGS[@]}" \
-    -reinit_filter 0 \
-    -fflags +genpts+igndts+discardcorrupt \
-    -err_detect ignore_err \
-    -i "$URL" \
-    -map 0:v:0 \
-    -map 0:a:0? \
-    -c:v "$ENCODER" \
-    $VF_ARGS \
-    $PROFILE_ARGS \
-    $HDR_ARGS \
-    $COLOR_ARGS \
-    -b:v "$VBITRATE" \
-    -maxrate "$MAXRATE" \
-    -bufsize "$BUFSIZE" \
-    -g "$GOP" \
-    $BF_ARGS \
-    ${ACCEL_OPTS} \
-    -fps_mode cfr \
-    -r "$FPS_OUT" \
-    $TAG_ARGS \
-    "${AUDIO_ARGS[@]}" \
-    -avoid_negative_ts make_zero \
-    -start_at_zero \
-    -mpegts_copyts 0 \
-    -mpegts_flags +pat_pmt_at_frames+resend_headers \
-    -flush_packets 1 \
-    -max_muxing_queue_size 4096 \
-    -f mpegts \
-    pipe:1
+run_ffmpeg() {
+    exec ffmpeg \
+        "${UA_ARGS[@]}" \
+        "${NET_ARGS[@]}" \
+        "${HWACCEL_ARGS[@]}" \
+        -reinit_filter 0 \
+        -fflags +genpts+igndts+discardcorrupt \
+        -err_detect ignore_err \
+        -i "$URL" \
+        -map 0:v:0 \
+        -map 0:a:0? \
+        -c:v "$ENCODER" \
+        $VF_ARGS \
+        $PROFILE_ARGS \
+        $HDR_ARGS \
+        $COLOR_ARGS \
+        -b:v "$VBITRATE" \
+        -maxrate "$MAXRATE" \
+        -bufsize "$BUFSIZE" \
+        -g "$GOP" \
+        $BF_ARGS \
+        ${ACCEL_OPTS} \
+        -fps_mode cfr \
+        -r "$FPS_OUT" \
+        $TAG_ARGS \
+        "${AUDIO_ARGS[@]}" \
+        -avoid_negative_ts make_zero \
+        -start_at_zero \
+        -mpegts_copyts 0 \
+        -mpegts_flags +pat_pmt_at_frames+resend_headers \
+        -flush_packets 1 \
+        -max_muxing_queue_size 4096 \
+        -f mpegts \
+        pipe:1
+}
+
+if [[ "$PIPE_INPUT" == "true" ]]; then
+    { cat "$PIPE_CAPTURE"; cat; } | run_ffmpeg
+    ffmpeg_status="${PIPESTATUS[1]}"
+    exit "$ffmpeg_status"
+fi
+run_ffmpeg
