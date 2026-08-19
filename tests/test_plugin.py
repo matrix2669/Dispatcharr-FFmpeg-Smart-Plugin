@@ -50,6 +50,21 @@ class ActiveTranscodeSelectionTests(unittest.TestCase):
 
 
 class ProfileDefinitionTests(unittest.TestCase):
+    def test_profile_actions_warn_that_dispatcharr_restart_is_required(self):
+        plugin = Plugin()
+        actions = {action["id"]: action for action in plugin.actions}
+
+        self.assertTrue(actions["install_profiles"]["confirm"]["required"])
+        self.assertIn(
+            "full Dispatcharr restart",
+            actions["install_profiles"]["confirm"]["message"],
+        )
+        self.assertTrue(actions["remove_profiles"]["confirm"]["required"])
+        self.assertIn(
+            "full Dispatcharr restart",
+            actions["remove_profiles"]["confirm"]["message"],
+        )
+
     def test_benchmark_confirmation_estimates_from_detected_gpu_count(self):
         with patch("plugin.glob.glob", return_value=["renderD128", "renderD129"]):
             plugin = Plugin()

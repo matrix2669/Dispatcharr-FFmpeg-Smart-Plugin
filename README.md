@@ -22,7 +22,9 @@ Every managed profile points to the bundled `ffmpeg-smart.sh`. Output Profiles u
 
 Every slot has an enable checkbox, editable profile name, and editable `ffmpeg-smart` options. Running **Install or Update Profiles** reconciles renamed or disabled managed profiles when the corresponding cleanup setting is enabled. Existing development profiles that used the native `ffmpeg` command are migrated to the script when their names match the original bundled templates.
 
-Profile installation is idempotent. Locked profiles, duplicate names, and same-name profiles pointing to unrelated commands are reported as conflicts rather than overwritten. Dispatcharr does not currently expose a frontend profile-store refresh event to plugins, so the install/update and removal results explicitly prompt for a browser refresh.
+Profile installation is idempotent. Locked profiles, duplicate names, and same-name profiles pointing to unrelated commands are reported as conflicts rather than overwritten. Dispatcharr requires a full restart before directly created or updated profiles can be used, so both profile-changing actions show a confirmation warning and return a restart-required notification.
+
+The plugin cannot restart Dispatcharr by itself in a standard container deployment. It runs as the unprivileged Dispatcharr service user and is intentionally not given access to the Docker host control socket.
 
 ## Hardware cache
 

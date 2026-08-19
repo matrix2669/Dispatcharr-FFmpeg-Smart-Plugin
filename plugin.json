@@ -1,6 +1,6 @@
 {
   "name": "FFmpeg Smart Profiles",
-  "version": "0.1.0-dev.5",
+  "version": "0.1.0-dev.6",
   "description": "Installs FFmpeg Smart stream/output profiles and manages hardware capacity cache rebuilds.",
   "author": "matrix2669",
   "help_url": "https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin",
@@ -41,7 +41,12 @@
       "label": "Install or Update Profiles",
       "description": "Create the selected Stream Profile and Output Profiles.",
       "button_label": "Install / Update",
-      "button_color": "blue"
+      "button_color": "blue",
+      "confirm": {
+        "required": true,
+        "title": "Install or update profiles?",
+        "message": "Installing or updating profiles requires a full Dispatcharr restart before the profiles can be used. Continue?"
+      }
     },
     {
       "id": "rebuild_cache",
@@ -70,7 +75,7 @@
       "confirm": {
         "required": true,
         "title": "Remove managed profiles?",
-        "message": "Channels using these profiles may need to be reassigned first."
+        "message": "Removing profiles requires a full Dispatcharr restart before the change fully takes effect. Channels using these profiles may need to be reassigned first. Continue?"
       }
     }
   ]

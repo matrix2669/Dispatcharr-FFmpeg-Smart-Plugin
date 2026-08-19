@@ -25,7 +25,7 @@ LEGACY_OUTPUT_NAMES = {
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.1.0-dev.5"
+    version = "0.1.0-dev.6"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
@@ -76,7 +76,17 @@ class Plugin:
     ]
 
     actions = [
-        {"id": "install_profiles", "label": "Install or Update Profiles", "button_label": "Install / Update", "button_color": "blue"},
+        {
+            "id": "install_profiles",
+            "label": "Install or Update Profiles",
+            "button_label": "Install / Update",
+            "button_color": "blue",
+            "confirm": {
+                "required": True,
+                "title": "Install or update profiles?",
+                "message": "Installing or updating profiles requires a full Dispatcharr restart before the profiles can be used. Continue?",
+            },
+        },
         {
             "id": "rebuild_cache",
             "label": "Rebuild Hardware Cache",
@@ -97,7 +107,7 @@ class Plugin:
             "confirm": {
                 "required": True,
                 "title": "Remove managed profiles?",
-                "message": "Channels using these profiles may need to be reassigned first.",
+                "message": "Removing profiles requires a full Dispatcharr restart before the change fully takes effect. Channels using these profiles may need to be reassigned first. Continue?",
             },
         },
     ]
@@ -277,8 +287,8 @@ class Plugin:
             logger.info("FFmpeg Smart profile install result: %s", result)
         return {
             "status": "ok",
-            "message": self._result_message(result) + " Refresh the browser to load profile changes.",
-            "refresh_required": True,
+            "message": self._result_message(result) + " Restart Dispatcharr before using these profiles.",
+            "restart_required": True,
             **result,
         }
 
@@ -343,9 +353,9 @@ class Plugin:
             "status": "ok",
             "message": (
                 f"Removed {len(removed)} profile(s); skipped {len(skipped)}. "
-                "Refresh the browser to load profile changes."
+                "Restart Dispatcharr for the removal to fully take effect."
             ),
-            "refresh_required": True,
+            "restart_required": True,
             "removed": removed,
             "skipped": skipped,
         }
