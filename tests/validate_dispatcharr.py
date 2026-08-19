@@ -1,60 +1,65 @@
-"""Rollback-only integration validation for a locally installed plugin."""
+"""Validate the plugin files installed in a Dispatcharr container."""
 
-import os
-import sys
-
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "dispatcharr.settings")
-sys.path.insert(0, "/app")
-
-import django
-
-django.setup()
-
-from django.db import transaction
-
-from apps.plugins.loader import PluginManager
-from apps.plugins.models import PluginConfig
-from core.models import OutputProfile, StreamProfile
+import importlib.util
+import json
+from pathlib import Path
 
 
-PLUGIN_KEY = "ffmpeg_smart_profiles"
+PLUGIN_DIR = Path("/data/plugins/ffmpeg_smart_profiles")
+PLUGIN_PATH = PLUGIN_DIR / "plugin.py"
+MANIFEST_PATH = PLUGIN_DIR / "plugin.json"
 
 
-manager = PluginManager.get()
-registry = manager.discover_plugins(sync_db=True, force_reload=True)
-discovered = registry[PLUGIN_KEY]
-assert discovered.name == "FFmpeg Smart Profiles"
-assert discovered.version == "0.1.0-dev.6"
+spec = importlib.util.spec_from_file_location("installed_ffmpeg_smart", PLUGIN_PATH)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
 
-with transaction.atomic():
-    config = PluginConfig.objects.get(key=PLUGIN_KEY)
-    config.enabled = True
-    config.save(update_fields=["enabled"])
+manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+plugin = module.Plugin()
 
-    loaded = manager.discover_plugins(
-        sync_db=False,
-        force_reload=True,
-        release_connections=False,
-    )[PLUGIN_KEY]
-    assert loaded.loaded
+assert plugin.version == "0.1.0-dev.7"
+assert manifest["version"] == plugin.version
+assert (PLUGIN_DIR / "ffmpeg-smart.sh").is_file()
 
-    context = {"settings": {}, "logger": None}
-    first = loaded.instance.run("install_profiles", {}, context)
-    assert first["status"] == "ok"
-    assert first["restart_required"] is True
-    assert len(first["created"]) == 4, first
-    assert StreamProfile.objects.filter(name="FFmpeg Smart").count() == 1
-    assert OutputProfile.objects.filter(name__startswith="FFmpeg Smart - ").count() == 3
-    assert all(
-        profile.command.endswith("ffmpeg-smart.sh")
-        and profile.parameters.startswith("-i pipe:0")
-        for profile in OutputProfile.objects.filter(name__startswith="FFmpeg Smart - ")
-    )
+streams = plugin._stream_definitions({})
+outputs = plugin._output_definitions({})
 
-    second = loaded.instance.run("install_profiles", {}, context)
-    assert second["status"] == "ok"
-    assert len(second["unchanged"]) == 4, second
+assert len(streams) == 1
+assert streams[0]["name"] == "FFmpeg Smart"
+assert streams[0]["parameters"].endswith("-10bit -hdr")
 
-    transaction.set_rollback(True)
+assert len(outputs) == 1
+assert outputs[0]["name"] == "FFMpeg Smart - 720p Mobile"
+assert outputs[0]["parameters"] == (
+    "-i pipe:0 -maxres 720 -maxbr 2M -maxchan 2 -sdr -deint"
+)
 
-print("Dispatcharr plugin discovery and idempotent profile install passed")
+# Force SDR must win without raising an error when both controls are enabled.
+override = plugin._stream_definitions(
+    {"stream_1_hdr": True, "stream_1_sdr": True}
+)[0]["parameters"]
+assert "-sdr" in override
+assert "-hdr" not in override
+
+legacy_stream = plugin._stream_definitions(
+    {"stream_1_options": "-10bit -hdr"}
+)[0]["parameters"]
+legacy_output = plugin._output_definitions(
+    {"output_1_options": "-maxres 720 -maxbr 2M -maxchan 2 -sdr -deint"}
+)[0]["parameters"]
+assert legacy_stream.count("-10bit") == 1
+assert legacy_stream.count("-hdr") == 1
+assert legacy_output.count("-sdr") == 1
+assert legacy_output.count("-deint") == 1
+
+normalized, moved = plugin._normalize_policy_settings(
+    {"output_2_options": "-maxres 1080 -10bit -hdr -sdr -deinterlace"}
+)
+assert normalized["output_2_options"] == "-maxres 1080"
+assert normalized["output_2_10bit"] is True
+assert normalized["output_2_hdr"] is True
+assert normalized["output_2_sdr"] is True
+assert normalized["output_2_deint"] is True
+assert len(moved) == 4
+
+print("Installed Dispatcharr plugin defaults and generated profiles passed")

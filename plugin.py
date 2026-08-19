@@ -21,11 +21,58 @@ LEGACY_OUTPUT_NAMES = {
     "FFmpeg Smart - 720p 2M Stereo",
     "FFmpeg Smart - 1080p 8M Stereo",
 }
+POLICY_DEFAULTS = {
+    "stream_1": {"10bit": True, "hdr": True, "sdr": False, "deint": False},
+    "stream_2": {"10bit": False, "hdr": False, "sdr": False, "deint": False},
+    "output_1": {"10bit": False, "hdr": False, "sdr": True, "deint": True},
+    "output_2": {"10bit": False, "hdr": False, "sdr": False, "deint": False},
+    "output_3": {"10bit": False, "hdr": False, "sdr": False, "deint": False},
+}
+
+
+def policy_fields(
+    prefix,
+    label,
+    *,
+    ten_bit_default=False,
+    hdr_default=False,
+    sdr_default=False,
+    deint_default=False,
+):
+    return [
+        {
+            "id": f"{prefix}_10bit",
+            "label": f"{label}: allow 10-bit",
+            "type": "boolean",
+            "default": ten_bit_default,
+            "help_text": "Unchecked leaves 10-bit on the wrapper's automatic hardware policy.",
+        },
+        {
+            "id": f"{prefix}_hdr",
+            "label": f"{label}: allow HDR",
+            "type": "boolean",
+            "default": hdr_default,
+            "help_text": "Force SDR overrides this setting when both are checked.",
+        },
+        {
+            "id": f"{prefix}_sdr",
+            "label": f"{label}: force SDR",
+            "type": "boolean",
+            "default": sdr_default,
+            "help_text": "Takes precedence over Allow HDR.",
+        },
+        {
+            "id": f"{prefix}_deint",
+            "label": f"{label}: force deinterlace",
+            "type": "boolean",
+            "default": deint_default,
+        },
+    ]
 
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.1.0-dev.6"
+    version = "0.1.0-dev.7"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
@@ -36,30 +83,45 @@ class Plugin:
     fields = [
         {"id": "stream_1_enabled", "label": "Enable Stream Profile 1", "type": "boolean", "default": True},
         {"id": "stream_1_name", "label": "Stream Profile 1 name", "type": "string", "default": "FFmpeg Smart"},
+        *policy_fields(
+            "stream_1",
+            "Stream Profile 1",
+            ten_bit_default=True,
+            hdr_default=True,
+        ),
         {
             "id": "stream_1_options",
             "label": "Stream Profile 1 options",
             "type": "string",
             "default": "",
-            "help_text": "Optional ffmpeg-smart flags, for example: -vc h264 -maxres 1080 -maxbr 8M -maxchan 2",
+            "help_text": "Additional flags, for example: -vc h264 -maxres 1080 -maxbr 8M -maxchan 2",
         },
         {"id": "stream_2_enabled", "label": "Enable Stream Profile 2", "type": "boolean", "default": False},
-        {"id": "stream_2_name", "label": "Stream Profile 2 name", "type": "string", "default": "FFmpeg Smart 2"},
+        {"id": "stream_2_name", "label": "Stream Profile 2 name", "type": "string", "default": ""},
+        *policy_fields("stream_2", "Stream Profile 2"),
         {
             "id": "stream_2_options",
             "label": "Stream Profile 2 options",
             "type": "string",
-            "default": "-vc h264 -maxres 1080 -maxbr 8M -maxchan 2",
+            "default": "",
         },
         {"id": "output_1_enabled", "label": "Enable Output Profile 1", "type": "boolean", "default": True},
-        {"id": "output_1_name", "label": "Output Profile 1 name", "type": "string", "default": "FFmpeg Smart - Adaptive"},
-        {"id": "output_1_options", "label": "Output Profile 1 options", "type": "string", "default": ""},
-        {"id": "output_2_enabled", "label": "Enable Output Profile 2", "type": "boolean", "default": True},
-        {"id": "output_2_name", "label": "Output Profile 2 name", "type": "string", "default": "FFmpeg Smart - 720p 2M Stereo"},
-        {"id": "output_2_options", "label": "Output Profile 2 options", "type": "string", "default": "-vc h264 -maxres 720 -maxbr 2M -maxchan 2"},
-        {"id": "output_3_enabled", "label": "Enable Output Profile 3", "type": "boolean", "default": True},
-        {"id": "output_3_name", "label": "Output Profile 3 name", "type": "string", "default": "FFmpeg Smart - 1080p 8M Stereo"},
-        {"id": "output_3_options", "label": "Output Profile 3 options", "type": "string", "default": "-vc h264 -maxres 1080 -maxbr 8M -maxchan 2"},
+        {"id": "output_1_name", "label": "Output Profile 1 name", "type": "string", "default": "FFMpeg Smart - 720p Mobile"},
+        *policy_fields(
+            "output_1",
+            "Output Profile 1",
+            sdr_default=True,
+            deint_default=True,
+        ),
+        {"id": "output_1_options", "label": "Output Profile 1 options", "type": "string", "default": "-maxres 720 -maxbr 2M -maxchan 2"},
+        {"id": "output_2_enabled", "label": "Enable Output Profile 2", "type": "boolean", "default": False},
+        {"id": "output_2_name", "label": "Output Profile 2 name", "type": "string", "default": ""},
+        *policy_fields("output_2", "Output Profile 2"),
+        {"id": "output_2_options", "label": "Output Profile 2 options", "type": "string", "default": ""},
+        {"id": "output_3_enabled", "label": "Enable Output Profile 3", "type": "boolean", "default": False},
+        {"id": "output_3_name", "label": "Output Profile 3 name", "type": "string", "default": ""},
+        *policy_fields("output_3", "Output Profile 3"),
+        {"id": "output_3_options", "label": "Output Profile 3 options", "type": "string", "default": ""},
         {
             "id": "remove_missing_profiles",
             "label": "Remove disabled or renamed managed profiles",
@@ -67,6 +129,30 @@ class Plugin:
             "default": True,
         },
         {"id": "update_existing", "label": "Update existing managed profiles", "type": "boolean", "default": True},
+        {
+            "id": "flag_reference_video",
+            "label": "Other flags: video and limits",
+            "type": "info",
+            "description": "-vc h264|hevc selects output codec; -maxres 720 limits vertical resolution; -maxbr 2M limits video bitrate; -maxchan 2 limits audio channels.",
+        },
+        {
+            "id": "flag_reference_hardware",
+            "label": "Other flags: hardware selection",
+            "type": "info",
+            "description": "-accel qsv|vaapi|software overrides acceleration; -device, -dri-device, -qsv-device, or -vaapi-device /dev/dri/renderD128 selects a specific device.",
+        },
+        {
+            "id": "flag_reference_policy",
+            "label": "Managed policy flags",
+            "type": "info",
+            "description": "The controls above generate -10bit, -hdr, -sdr, and -deint. Force SDR overrides Allow HDR. If a policy flag is entered in Additional options, Install / Update moves it to the matching checkbox and removes the duplicate.",
+        },
+        {
+            "id": "flag_reference_managed",
+            "label": "Input and maintenance flags",
+            "type": "info",
+            "description": "-i and -user_agent are added by the plugin. Use Rebuild Hardware Cache instead of putting --recache or --recache-only in a profile.",
+        },
         {
             "id": "profile_note",
             "label": "Profile behavior",
@@ -132,7 +218,16 @@ class Plugin:
         settings = context.get("settings") or {}
         logger = context.get("logger")
         if action == "install_profiles":
-            return self._install_profiles(settings, logger)
+            normalized_settings, normalized_flags = self._normalize_policy_settings(settings)
+            result = self._install_profiles(normalized_settings, logger)
+            if normalized_flags:
+                self._save_normalized_settings(normalized_settings)
+                result["normalized_policy_flags"] = normalized_flags
+                result["message"] += (
+                    " Policy flags were moved from Additional options to their "
+                    "checkboxes; refresh the settings page to see the changes."
+                )
+            return result
         if action == "remove_profiles":
             return self._remove_profiles(settings, logger)
         if action == "rebuild_cache":
@@ -152,7 +247,7 @@ class Plugin:
     def _stream_definitions(self, settings):
         defaults = {
             1: (True, "FFmpeg Smart", ""),
-            2: (False, "FFmpeg Smart 2", "-vc h264 -maxres 1080 -maxbr 8M -maxchan 2"),
+            2: (False, "", ""),
         }
         definitions = []
         for slot, (enabled, default_name, default_options) in defaults.items():
@@ -161,7 +256,9 @@ class Plugin:
             name = str(settings.get(f"stream_{slot}_name") or default_name).strip()
             if not name:
                 raise ValueError(f"Stream Profile {slot} name cannot be empty")
-            options = self._validate_options(
+            options = self._profile_options(
+                settings,
+                f"stream_{slot}",
                 str(settings.get(f"stream_{slot}_options", default_options) or ""),
                 f"Stream Profile {slot} options",
             )
@@ -180,9 +277,9 @@ class Plugin:
 
     def _output_definitions(self, settings):
         defaults = {
-            1: (True, "FFmpeg Smart - Adaptive", ""),
-            2: (True, "FFmpeg Smart - 720p 2M Stereo", "-vc h264 -maxres 720 -maxbr 2M -maxchan 2"),
-            3: (True, "FFmpeg Smart - 1080p 8M Stereo", "-vc h264 -maxres 1080 -maxbr 8M -maxchan 2"),
+            1: (True, "FFMpeg Smart - 720p Mobile", "-maxres 720 -maxbr 2M -maxchan 2"),
+            2: (False, "", ""),
+            3: (False, "", ""),
         }
         definitions = []
         for slot, (enabled, default_name, default_options) in defaults.items():
@@ -191,7 +288,9 @@ class Plugin:
             name = str(settings.get(f"output_{slot}_name") or default_name).strip()
             if not name:
                 raise ValueError(f"Output Profile {slot} name cannot be empty")
-            options = self._validate_options(
+            options = self._profile_options(
+                settings,
+                f"output_{slot}",
                 str(settings.get(f"output_{slot}_options", default_options) or ""),
                 f"Output Profile {slot} options",
             )
@@ -223,6 +322,68 @@ class Plugin:
         if invalid:
             raise ValueError(f"{label} cannot contain {invalid}")
         return options.strip()
+
+    @staticmethod
+    def _normalize_policy_settings(settings):
+        normalized = dict(settings or {})
+        flag_fields = {
+            "-10bit": "10bit",
+            "-hdr": "hdr",
+            "-sdr": "sdr",
+            "-deint": "deint",
+            "-deinterlace": "deint",
+        }
+        moved = []
+        for prefix in POLICY_DEFAULTS:
+            options_key = f"{prefix}_options"
+            options = str(normalized.get(options_key, "") or "")
+            try:
+                tokens = shlex.split(options)
+            except ValueError:
+                # The enabled profile's normal validation will report invalid
+                # quoting; disabled draft profiles should not block installs.
+                continue
+            remaining = []
+            for token in tokens:
+                field_suffix = flag_fields.get(token)
+                if field_suffix is None:
+                    remaining.append(token)
+                    continue
+                normalized[f"{prefix}_{field_suffix}"] = True
+                moved.append(f"{prefix}:{token}")
+            if len(remaining) != len(tokens):
+                normalized[options_key] = " ".join(shlex.quote(token) for token in remaining)
+        return normalized, moved
+
+    @staticmethod
+    def _save_normalized_settings(settings):
+        from apps.plugins.models import PluginConfig
+
+        config = PluginConfig.objects.get(key="ffmpeg_smart_profiles")
+        config.settings = settings
+        config.save(update_fields=["settings", "updated_at"])
+
+    @classmethod
+    def _profile_options(cls, settings, prefix, additional_options, label):
+        settings, _ = cls._normalize_policy_settings(settings)
+        options = cls._validate_options(settings.get(f"{prefix}_options", additional_options), label)
+        generated = []
+        defaults = POLICY_DEFAULTS[prefix]
+
+        if settings.get(f"{prefix}_10bit", defaults["10bit"]):
+            generated.append("-10bit")
+
+        allow_hdr = bool(settings.get(f"{prefix}_hdr", defaults["hdr"]))
+        force_sdr = bool(settings.get(f"{prefix}_sdr", defaults["sdr"]))
+        if force_sdr:
+            generated.append("-sdr")
+        elif allow_hdr:
+            generated.append("-hdr")
+
+        if settings.get(f"{prefix}_deint", defaults["deint"]):
+            generated.append("-deint")
+
+        return " ".join(part for part in (options, *generated) if part)
 
     @staticmethod
     def _join_parameters(base, options):

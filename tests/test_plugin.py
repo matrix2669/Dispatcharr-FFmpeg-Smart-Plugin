@@ -72,16 +72,21 @@ class ProfileDefinitionTests(unittest.TestCase):
         rebuild = next(action for action in plugin.actions if action["id"] == "rebuild_cache")
         self.assertIn("4–8 minutes for 2 detected GPUs", rebuild["confirm"]["message"])
 
-    def test_defaults_create_one_stream_and_three_script_output_profiles(self):
+    def test_defaults_create_mobile_stream_and_output_profiles(self):
         plugin = Plugin()
 
         streams = plugin._stream_definitions({})
         outputs = plugin._output_definitions({})
 
         self.assertEqual([profile["name"] for profile in streams], ["FFmpeg Smart"])
-        self.assertEqual(len(outputs), 3)
+        self.assertIn("-10bit", streams[0]["parameters"])
+        self.assertIn("-hdr", streams[0]["parameters"])
+        self.assertEqual([profile["name"] for profile in outputs], ["FFMpeg Smart - 720p Mobile"])
         self.assertTrue(all(profile["command"].endswith("ffmpeg-smart.sh") for profile in outputs))
         self.assertTrue(all(profile["parameters"].startswith("-i pipe:0") for profile in outputs))
+        self.assertIn("-maxres 720 -maxbr 2M -maxchan 2", outputs[0]["parameters"])
+        self.assertIn("-sdr", outputs[0]["parameters"])
+        self.assertIn("-deint", outputs[0]["parameters"])
 
     def test_slots_can_be_disabled_renamed_and_reconfigured(self):
         plugin = Plugin()
@@ -91,6 +96,7 @@ class ProfileDefinitionTests(unittest.TestCase):
             "stream_2_name": "Mobile Stream",
             "stream_2_options": "-vc h264 -maxres 720",
             "output_1_enabled": False,
+            "output_2_enabled": True,
             "output_2_name": "Mobile Output",
             "output_2_options": "-vc h264 -maxres 480 -maxbr 1M",
             "output_3_enabled": False,
@@ -103,6 +109,74 @@ class ProfileDefinitionTests(unittest.TestCase):
         self.assertIn("-maxres 720", streams[0]["parameters"])
         self.assertEqual(outputs[0]["name"], "Mobile Output")
         self.assertIn("-maxbr 1M", outputs[0]["parameters"])
+
+    def test_policy_checkboxes_generate_flags_and_sdr_overrides_hdr(self):
+        plugin = Plugin()
+        outputs = plugin._output_definitions(
+            {
+                "output_1_10bit": True,
+                "output_1_hdr": True,
+                "output_1_sdr": True,
+                "output_1_deint": True,
+                "output_2_enabled": False,
+                "output_3_enabled": False,
+            }
+        )
+
+        parameters = outputs[0]["parameters"]
+        self.assertIn("-10bit", parameters)
+        self.assertIn("-sdr", parameters)
+        self.assertNotIn("-hdr", parameters)
+        self.assertIn("-deint", parameters)
+
+    def test_legacy_policy_flags_are_absorbed_by_checkbox_defaults(self):
+        plugin = Plugin()
+        normalized, moved = plugin._normalize_policy_settings(
+            {"stream_1_options": "-10bit -hdr -maxres 1080"}
+        )
+        streams = plugin._stream_definitions(
+            {"stream_1_options": "-10bit -hdr -maxres 1080"}
+        )
+        outputs = plugin._output_definitions(
+            {"output_1_options": "-maxres 720 -sdr -deint"}
+        )
+
+        self.assertEqual(streams[0]["parameters"].count("-10bit"), 1)
+        self.assertEqual(streams[0]["parameters"].count("-hdr"), 1)
+        self.assertEqual(outputs[0]["parameters"].count("-sdr"), 1)
+        self.assertEqual(outputs[0]["parameters"].count("-deint"), 1)
+        self.assertEqual(normalized["stream_1_options"], "-maxres 1080")
+        self.assertTrue(normalized["stream_1_10bit"])
+        self.assertTrue(normalized["stream_1_hdr"])
+        self.assertEqual(moved, ["stream_1:-10bit", "stream_1:-hdr"])
+
+    def test_install_persists_normalized_policy_controls(self):
+        plugin = Plugin()
+        install_result = {
+            "status": "ok",
+            "message": "Installed profiles. Restart Dispatcharr.",
+        }
+        with (
+            patch.object(plugin, "_install_profiles", return_value=install_result),
+            patch.object(plugin, "_save_normalized_settings") as save_settings,
+        ):
+            result = plugin.run(
+                "install_profiles",
+                {},
+                {
+                    "settings": {
+                        "output_2_options": "-maxres 1080 -10bit -hdr -sdr -deinterlace"
+                    }
+                },
+            )
+
+        saved = save_settings.call_args.args[0]
+        self.assertEqual(saved["output_2_options"], "-maxres 1080")
+        self.assertTrue(saved["output_2_10bit"])
+        self.assertTrue(saved["output_2_hdr"])
+        self.assertTrue(saved["output_2_sdr"])
+        self.assertTrue(saved["output_2_deint"])
+        self.assertIn("refresh the settings page", result["message"])
 
 
 class CapabilityStatusTests(unittest.TestCase):
