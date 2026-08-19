@@ -17,7 +17,7 @@ spec.loader.exec_module(module)
 manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 plugin = module.Plugin()
 
-assert plugin.version == "0.1.0-dev.7"
+assert plugin.version == "0.1.0"
 assert manifest["version"] == plugin.version
 assert (PLUGIN_DIR / "ffmpeg-smart.sh").is_file()
 

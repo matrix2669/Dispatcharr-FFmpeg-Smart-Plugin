@@ -72,7 +72,7 @@ def policy_fields(
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.1.0-dev.7"
+    version = "0.1.0"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."

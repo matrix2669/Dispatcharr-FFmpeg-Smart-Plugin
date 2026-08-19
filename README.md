@@ -2,12 +2,12 @@
 
 Native Dispatcharr plugin that bundles `ffmpeg-smart.sh`, creates managed Stream/Output Profiles, and can rebuild the GPU capability and concurrent-capacity cache from the Plugins page.
 
-## Development installation
+## Installation
 
-Add the development registry in **Plugins → Plugin Repositories**:
+Add the Matrix2669 plugin registry in **Plugins → Plugin Repositories**:
 
 ```text
-https://raw.githubusercontent.com/matrix2669/dispatcharr-plugins/dev-test/manifest.json
+https://raw.githubusercontent.com/matrix2669/dispatcharr-plugins/main/manifest.json
 ```
 
 Install **FFmpeg Smart Profiles**, enable it, then run **Install or Update Profiles**.
