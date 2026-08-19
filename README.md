@@ -42,6 +42,19 @@ The plugin cannot restart Dispatcharr by itself in a standard container deployme
 - `bash`, `ffmpeg`, `ffprobe`, `jq`, and GNU `timeout`
 - `/dev/dri/renderD*` mapped into the Dispatcharr container for QSV/VAAPI
 
+## Bundled wrapper updates
+
+`matrix2669/ffmpeg-asr` is the source of truth for `ffmpeg-smart.sh`. The plugin records the exact source commit and SHA-256 checksum in `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json`. CI verifies that the bundled copy is byte-for-byte identical to that immutable source.
+
+The daily **Sync FFmpeg Smart wrapper** workflow, which can also be run manually, checks `ffmpeg-asr/main`. When the wrapper changes, it updates the bundled copy and source metadata, runs validation, and opens a pull request for review. Existing plugin releases remain pinned and never change silently.
+
+To synchronize locally:
+
+```bash
+scripts/sync-ffmpeg-smart.sh main
+scripts/check-ffmpeg-smart-source.sh
+```
+
 ## License
 
 MIT

@@ -1,0 +1,42 @@
+name: Verify bundled FFmpeg Smart source
+
+on:
+  push:
+    paths:
+      - "ffmpeg-smart-profiles/ffmpeg-smart.sh"
+      - "ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json"
+      - "scripts/check-ffmpeg-smart-source.sh"
+      - "scripts/sync-ffmpeg-smart.sh"
+      - "tests/**"
+      - ".github/workflows/ffmpeg-smart-sync.yml"
+      - ".github/workflows/ffmpeg-smart-verify.yml"
+  pull_request:
+    paths:
+      - "ffmpeg-smart-profiles/ffmpeg-smart.sh"
+      - "ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json"
+      - "scripts/check-ffmpeg-smart-source.sh"
+      - "scripts/sync-ffmpeg-smart.sh"
+      - "tests/**"
+      - ".github/workflows/ffmpeg-smart-sync.yml"
+      - ".github/workflows/ffmpeg-smart-verify.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify pinned wrapper source
+        run: scripts/check-ffmpeg-smart-source.sh
+      - name: Run plugin tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Validate plugin files
+        run: |
+          python3 -m py_compile ffmpeg-smart-profiles/plugin.py tests/validate_dispatcharr.py
+          python3 -m json.tool ffmpeg-smart-profiles/plugin.json >/dev/null
+          python3 -m json.tool ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json >/dev/null
+          bash -n ffmpeg-smart-profiles/ffmpeg-smart.sh
+          bash -n scripts/check-ffmpeg-smart-source.sh
+          bash -n scripts/sync-ffmpeg-smart.sh

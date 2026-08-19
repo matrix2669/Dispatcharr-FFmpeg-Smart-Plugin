@@ -1,0 +1,60 @@
+name: Sync FFmpeg Smart wrapper
+
+on:
+  schedule:
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Sync from ffmpeg-asr main
+        run: scripts/sync-ffmpeg-smart.sh main
+      - name: Check for an update
+        id: changes
+        run: |
+          if git diff --quiet -- ffmpeg-smart-profiles/ffmpeg-smart.sh ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json; then
+            echo "changed=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >>"$GITHUB_OUTPUT"
+          fi
+      - name: Validate synchronized files
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          scripts/check-ffmpeg-smart-source.sh
+          python3 -m unittest discover -s tests -v
+          python3 -m json.tool ffmpeg-smart-profiles/plugin.json >/dev/null
+          bash -n ffmpeg-smart-profiles/ffmpeg-smart.sh
+      - name: Open update pull request
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          source_commit="$(jq -r '.commit' ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json)"
+          short_commit="${source_commit:0:7}"
+          branch="automation/sync-ffmpeg-smart-$short_commit"
+          existing_pr="$(gh pr list --base main --head "$branch" --state open --json url --jq '.[0].url // empty')"
+          if [[ -n "$existing_pr" ]]; then
+            echo "Update pull request already exists: $existing_pr"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add ffmpeg-smart-profiles/ffmpeg-smart.sh ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json
+          git commit -m "Sync ffmpeg-smart.sh from ffmpeg-asr $short_commit"
+          git push --force origin "HEAD:refs/heads/$branch"
+          gh pr create \
+            --base main \
+            --head "$branch" \
+            --title "Sync ffmpeg-smart.sh from ffmpeg-asr $short_commit" \
+            --body "Updates the bundled wrapper to matrix2669/ffmpeg-asr@$source_commit. The source checksum and plugin validation completed successfully."
