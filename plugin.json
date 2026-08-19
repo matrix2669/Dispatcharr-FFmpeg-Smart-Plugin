@@ -1,0 +1,85 @@
+{
+  "name": "FFmpeg Smart Profiles",
+  "version": "0.1.0-dev.1",
+  "description": "Installs FFmpeg Smart stream/output profiles and manages hardware capacity cache rebuilds.",
+  "author": "matrix2669",
+  "help_url": "https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin",
+  "fields": [
+    {
+      "id": "stream_profile_name",
+      "label": "Stream profile name",
+      "type": "string",
+      "default": "FFmpeg Smart"
+    },
+    {
+      "id": "install_passthrough_output",
+      "label": "Install passthrough output profile",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "id": "install_720p_output",
+      "label": "Install 720p output profile",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "id": "install_1080p_output",
+      "label": "Install 1080p output profile",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "id": "update_existing",
+      "label": "Update existing managed profiles",
+      "type": "boolean",
+      "default": true,
+      "help_text": "Only profiles already pointing to ffmpeg-smart.sh or matching this plugin's native FFmpeg templates are updated."
+    },
+    {
+      "id": "profile_note",
+      "label": "Output profile behavior",
+      "type": "info",
+      "description": "The stream profile uses ffmpeg-smart.sh. Output profiles receive live MPEG-TS on stdin and therefore use native FFmpeg commands; ffmpeg-smart.sh cannot safely probe and reopen pipe:0."
+    }
+  ],
+  "actions": [
+    {
+      "id": "install_profiles",
+      "label": "Install or Update Profiles",
+      "description": "Create the selected Stream Profile and Output Profiles.",
+      "button_label": "Install / Update",
+      "button_color": "blue"
+    },
+    {
+      "id": "rebuild_cache",
+      "label": "Rebuild Hardware Cache",
+      "description": "Run FFmpeg Smart hardware capability and real-concurrency benchmarks in the background.",
+      "button_label": "Start Benchmark",
+      "button_color": "orange",
+      "confirm": {
+        "required": true,
+        "title": "Rebuild hardware cache?",
+        "message": "This temporarily places a heavy concurrent transcode load on every visible GPU."
+      }
+    },
+    {
+      "id": "benchmark_status",
+      "label": "Benchmark Status",
+      "description": "Show benchmark state and recent log output.",
+      "button_label": "Check Status"
+    },
+    {
+      "id": "remove_profiles",
+      "label": "Remove Managed Profiles",
+      "description": "Remove only unlocked profiles matching this plugin's managed definitions.",
+      "button_label": "Remove Profiles",
+      "button_color": "red",
+      "confirm": {
+        "required": true,
+        "title": "Remove managed profiles?",
+        "message": "Channels using these profiles may need to be reassigned first."
+      }
+    }
+  ]
+}
