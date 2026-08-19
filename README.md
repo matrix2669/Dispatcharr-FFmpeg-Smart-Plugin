@@ -25,7 +25,7 @@ Profile installation is idempotent. Locked profiles, duplicate names, and same-n
 
 ## Hardware cache
 
-**Rebuild Hardware Cache** starts `ffmpeg-smart.sh --recache-only` in the background. This is an intentionally heavy operation: it runs real concurrent transcodes against each visible GPU. **Benchmark Status** reports current state and the last 30 log lines.
+**Rebuild Hardware Cache** first creates a benchmark lock, stops active Dispatcharr transcoding streams, disconnects their current viewers, and waits for teardown to complete. New FFmpeg Smart transcodes are rejected until benchmarking ends, while proxy-only streams continue running. Both input Stream Profile transcodes and native Output Profile transcodes are detected when clearing existing work. The plugin then starts `ffmpeg-smart.sh --recache-only` in the background. This is an intentionally heavy operation: it runs real concurrent transcodes against each visible GPU. If a transcode cannot be stopped within 15 seconds, the benchmark is not started. The lock is removed automatically at completion and stale locks recover automatically. **Benchmark Status** reports current state and the last 30 log lines.
 
 ## Requirements
 

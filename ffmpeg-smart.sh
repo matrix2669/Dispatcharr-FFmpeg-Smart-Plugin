@@ -4,10 +4,11 @@ set -euo pipefail
 
 LOG_PREFIX="[ffmpeg-smart]"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="recache-only-v20"
+VERSION="benchmark-lock-v21"
 CAPACITY_BENCHMARK_VERSION="concurrency-1.2-v1"
 CACHE_FILE="$SCRIPT_DIR/.capabilities.cache"
 PROBE_SAMPLE="$SCRIPT_DIR/probe-sample.mkv"
+BENCHMARK_LOCK_FILE="$SCRIPT_DIR/.benchmark.lock"
 PROBE_SAMPLE_URL="https://repo.jellyfin.org/archive/jellyfish/media/jellyfish-3-mbps-hd-hevc-10bit.mkv"
 
 DRI_DEVICE="${DRI_DEVICE:-}"
@@ -879,6 +880,29 @@ while [[ $# -gt 0 ]]; do
         *) shift ;;
     esac
 done
+
+benchmark_lock_active() {
+    local lock_pid=""
+    [[ -e "$BENCHMARK_LOCK_FILE" ]] || return 1
+    lock_pid="$(head -n 1 "$BENCHMARK_LOCK_FILE" 2>/dev/null || true)"
+    if [[ "$lock_pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$lock_pid" 2>/dev/null; then
+        return 0
+    fi
+    if [[ ! "$lock_pid" =~ ^[1-9][0-9]*$ ]] &&
+       ! find "$BENCHMARK_LOCK_FILE" -mmin +1 -print -quit 2>/dev/null | grep -q .; then
+        return 0
+    fi
+    rm -f -- "$BENCHMARK_LOCK_FILE"
+    return 1
+}
+
+if [[ "$RECACHE_ONLY" == "true" ]]; then
+    echo "$$" > "$BENCHMARK_LOCK_FILE"
+    trap 'rm -f -- "$BENCHMARK_LOCK_FILE"' EXIT
+elif benchmark_lock_active; then
+    echo "$LOG_PREFIX Hardware benchmark in progress; refusing to start a new transcode" >&2
+    exit 75
+fi
 
 if [[ -n "$MAX_RES" ]]; then
     if [[ ! "$MAX_RES" =~ ^[0-9]+$ ]] || [[ "$MAX_RES" -le 0 ]]; then

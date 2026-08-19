@@ -24,7 +24,7 @@ manager = PluginManager.get()
 registry = manager.discover_plugins(sync_db=True, force_reload=True)
 discovered = registry[PLUGIN_KEY]
 assert discovered.name == "FFmpeg Smart Profiles"
-assert discovered.version == "0.1.0-dev.1"
+assert discovered.version == "0.1.0-dev.3"
 
 with transaction.atomic():
     config = PluginConfig.objects.get(key=PLUGIN_KEY)

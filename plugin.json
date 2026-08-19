@@ -1,6 +1,6 @@
 {
   "name": "FFmpeg Smart Profiles",
-  "version": "0.1.0-dev.1",
+  "version": "0.1.0-dev.3",
   "description": "Installs FFmpeg Smart stream/output profiles and manages hardware capacity cache rebuilds.",
   "author": "matrix2669",
   "help_url": "https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin",
@@ -60,7 +60,7 @@
       "confirm": {
         "required": true,
         "title": "Rebuild hardware cache?",
-        "message": "This temporarily places a heavy concurrent transcode load on every visible GPU."
+        "message": "This stops active FFmpeg Smart transcodes, blocks new ones until the benchmark finishes, and places a heavy concurrent load on every visible GPU. Proxy-only streams continue running."
       }
     },
     {

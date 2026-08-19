@@ -1,6 +1,7 @@
 import os
 import signal
 import subprocess
+import time
 from pathlib import Path
 
 
@@ -9,11 +10,12 @@ SCRIPT_PATH = PLUGIN_DIR / "ffmpeg-smart.sh"
 RUNTIME_DIR = PLUGIN_DIR / "runtime"
 PID_FILE = RUNTIME_DIR / "recache.pid"
 LOG_FILE = RUNTIME_DIR / "recache.log"
+BENCHMARK_LOCK_FILE = PLUGIN_DIR / ".benchmark.lock"
 
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.1.0-dev.1"
+    version = "0.1.0-dev.3"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
@@ -39,7 +41,7 @@ class Plugin:
             "confirm": {
                 "required": True,
                 "title": "Rebuild hardware cache?",
-                "message": "This temporarily places a heavy concurrent transcode load on every visible GPU.",
+                "message": "This stops active FFmpeg Smart transcodes, blocks new ones until the benchmark finishes, and places a heavy concurrent load on every visible GPU. Proxy-only streams continue running.",
             },
         },
         {"id": "benchmark_status", "label": "Benchmark Status", "button_label": "Check Status"},
@@ -249,22 +251,93 @@ class Plugin:
         if pid and self._pid_is_running(pid):
             return {"status": "running", "message": f"Benchmark is already running (PID {pid})."}
 
-        log_handle = LOG_FILE.open("w", encoding="utf-8")
         try:
-            process = subprocess.Popen(
-                [str(SCRIPT_PATH), "--recache-only"],
-                stdin=subprocess.DEVNULL,
-                stdout=log_handle,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-                close_fds=True,
-            )
-        finally:
-            log_handle.close()
+            BENCHMARK_LOCK_FILE.write_text("starting\n", encoding="utf-8")
+            stopped = self._stop_active_streams(logger)
+            log_handle = LOG_FILE.open("w", encoding="utf-8")
+            try:
+                process = subprocess.Popen(
+                    [str(SCRIPT_PATH), "--recache-only"],
+                    stdin=subprocess.DEVNULL,
+                    stdout=log_handle,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                    close_fds=True,
+                )
+            finally:
+                log_handle.close()
+        except Exception:
+            BENCHMARK_LOCK_FILE.unlink(missing_ok=True)
+            raise
         PID_FILE.write_text(str(process.pid), encoding="utf-8")
         if logger:
             logger.info("Started FFmpeg Smart cache rebuild PID %s", process.pid)
-        return {"status": "queued", "message": f"Hardware benchmark started (PID {process.pid})."}
+        return {
+            "status": "queued",
+            "message": (
+                f"Stopped {stopped} active transcode stream(s), blocked new FFmpeg "
+                f"Smart transcodes, and started the hardware benchmark (PID {process.pid})."
+            ),
+            "stopped_streams": stopped,
+        }
+
+    @staticmethod
+    def _stop_active_streams(logger):
+        from apps.proxy.live_proxy.server import ProxyServer
+        from apps.proxy.live_proxy.services.channel_service import ChannelService
+
+        proxy_server = ProxyServer.get_instance()
+        redis_client = proxy_server.redis_client
+        if not redis_client:
+            raise RuntimeError("Redis is unavailable; active streams cannot be stopped safely")
+
+        channel_ids = Plugin._active_transcode_channel_ids(redis_client)
+        if not channel_ids:
+            return 0
+
+        if logger:
+            logger.warning(
+                "Stopping %s active Dispatcharr stream(s) before hardware benchmark",
+                len(channel_ids),
+            )
+        ChannelService.stop_channels(channel_ids)
+
+        deadline = time.monotonic() + 15
+        remaining = channel_ids
+        while remaining and time.monotonic() < deadline:
+            active = set(Plugin._active_transcode_channel_ids(redis_client))
+            remaining = [channel_id for channel_id in remaining if channel_id in active]
+            if remaining:
+                time.sleep(0.25)
+
+        if remaining:
+            raise RuntimeError(
+                "Could not stop all active streams before benchmarking: "
+                + ", ".join(remaining)
+            )
+        return len(channel_ids)
+
+    @staticmethod
+    def _active_transcode_channel_ids(redis_client):
+        prefix = "live:channel:"
+        input_suffix = ":transcode_active"
+        output_marker = ":output:mpegts:p"
+        output_suffix = ":state"
+        channel_ids = set()
+
+        for raw_key in redis_client.scan_iter(match=f"{prefix}*{input_suffix}"):
+            key = raw_key.decode() if isinstance(raw_key, bytes) else str(raw_key)
+            if key.startswith(prefix) and key.endswith(input_suffix):
+                channel_ids.add(key[len(prefix):-len(input_suffix)])
+
+        for raw_key in redis_client.scan_iter(
+            match=f"{prefix}*{output_marker}*{output_suffix}"
+        ):
+            key = raw_key.decode() if isinstance(raw_key, bytes) else str(raw_key)
+            if key.startswith(prefix) and output_marker in key and key.endswith(output_suffix):
+                channel_ids.add(key[len(prefix):].split(output_marker, 1)[0])
+
+        return sorted(filter(None, channel_ids))
 
     def _benchmark_status(self):
         pid = self._read_pid()
