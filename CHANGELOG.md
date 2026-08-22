@@ -4,6 +4,12 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ## [Unreleased]
 
+## [0.2.0-beta.2] - 2026-08-22
+
+### Changed
+
+- Republish the persistent-state candidate with corrected canonical-wrapper source documentation and complete registry-update, recache, restart, and `pipe:0` validation evidence.
+
 ## [0.2.0-beta.1] - 2026-08-22
 
 ### Added
@@ -63,6 +69,7 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 - Recorded final live capacity evidence at the canonical wrapper's 1.2x threshold: Arc A310 18 and UHD 770 15. These values are environment-specific and are not plugin defaults.
 - Verified the `v0.1.0` tagged tree installs from the stable plugin directory.
 
-[Unreleased]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.1...HEAD
+[Unreleased]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.2...HEAD
+[0.2.0-beta.2]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.1...v0.2.0-beta.2
 [0.2.0-beta.1]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.1.0...v0.2.0-beta.1
 [0.1.0]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/releases/tag/v0.1.0

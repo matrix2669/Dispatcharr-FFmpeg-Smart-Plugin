@@ -31,7 +31,7 @@ This ledger records why every current long-lived or work branch exists and prese
 - Purpose: integrate and validate the next plugin version before stable promotion to `main`.
 - Base: synchronized with `main` after the approved administrative promotion.
 - Intended target: `main` after future version work is reviewed and approved.
-- Current state: integrates persistent external state and required-cache errors for `v0.2.0-beta.1`.
+- Current state: integrates persistent external state and required-cache errors for corrected candidate `v0.2.0-beta.2`.
 - Validation: 17 unit tests, Python/JSON/shell checks, immutable wrapper pin verification, repeat synchronization, stable runtime layout, and installed Dispatcharr validation pass. The existing cache and probe sample remained unchanged outside the replaced plugin directory, and missing/stale cache requests return identified exit-78 errors.
-- Publication state: beta source tag only; no GitHub Release or distributable ZIP is authorized. The `dispatcharr-plugins:dev` registry may advertise this immutable beta.
+- Publication state: corrected beta source tag only; no GitHub Release or distributable ZIP is authorized. The `dispatcharr-plugins:dev` registry may advertise this immutable beta after the complete live gate passes.
 - Last verified at: `2026-08-22`.
