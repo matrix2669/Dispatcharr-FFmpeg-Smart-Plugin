@@ -15,7 +15,6 @@ This ledger records why every current long-lived or work branch exists and prese
 |---|---|---|---|---|---|
 | `main` | long-lived | active | initial project history | stable releases | Production-ready plugin source and GitHub Releases. |
 | `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version and canonical wrapper updates. |
-| `fix/persistent-state-errors` | work | active | `dev` | `dev` | Persist runtime state across plugin replacement and surface missing-cache failures clearly. |
 
 ## Branch records
 
@@ -32,16 +31,7 @@ This ledger records why every current long-lived or work branch exists and prese
 - Purpose: integrate and validate the next plugin version before stable promotion to `main`.
 - Base: synchronized with `main` after the approved administrative promotion.
 - Intended target: `main` after future version work is reviewed and approved.
-- Current state: synchronized with the approved `main` baseline; ready to integrate the next plugin version.
-- Validation: 14 unit tests pass; Python compilation, plugin/source JSON, both GitHub workflow files, wrapper/synchronization shell syntax, offline and remote source-pin checks, version agreement, 14-ADR structure, referenced commits, `v0.1.0` stable-directory layout, and Git whitespace all pass. Repeating synchronization against `ffmpeg-asr/main` reports the wrapper already current and makes no additional changes.
-- Publication state: the administrative baseline is promoted without creating a new plugin tag, GitHub Release, ZIP, or registry update.
+- Current state: integrates persistent external state and required-cache errors for `v0.2.0-beta.1`.
+- Validation: 17 unit tests, Python/JSON/shell checks, immutable wrapper pin verification, repeat synchronization, stable runtime layout, and installed Dispatcharr validation pass. The existing cache and probe sample remained unchanged outside the replaced plugin directory, and missing/stale cache requests return identified exit-78 errors.
+- Publication state: beta source tag only; no GitHub Release or distributable ZIP is authorized. The `dispatcharr-plugins:dev` registry may advertise this immutable beta.
 - Last verified at: `2026-08-22`.
-
-### `fix/persistent-state-errors`
-
-- Purpose: move mutable cache/benchmark state to `/data/ffmpeg_smart_profiles`, introduce a stable plugin launcher, and make normal streams fail with an identified recovery message when the required capability cache is unavailable.
-- Base: `dev` at `3993a44`.
-- Intended target: `dev`.
-- Canonical dependency: `ffmpeg-asr@d0793ca2b121e82b50267ede5d810893bcca027f` (`v1.1.0-beta.1`).
-- Validation: 17 plugin unit tests and all static checks pass; the immutable `v1.1.0-beta.1` source pin and repeat synchronization pass; installed-container checks preserve the existing cache/sample checksums, read status as the Dispatcharr user, migrate both managed profiles idempotently, and return exit 78 with an identified missing-cache error. The preserved legacy cache is correctly identified as stale; a confirmed recache and Dispatcharr restart remain before normal live-stream validation. Version metadata is prepared for `v0.2.0-beta.1`.
-- Started: `2026-08-22`.
