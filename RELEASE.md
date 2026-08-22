@@ -62,6 +62,7 @@ After licensing is explicitly resolved:
    ```text
    ffmpeg-smart-profiles/
    ├── FFMPEG_SMART_SOURCE.json
+   ├── ffmpeg-smart-plugin.sh
    ├── ffmpeg-smart.sh
    ├── plugin.json
    └── plugin.py

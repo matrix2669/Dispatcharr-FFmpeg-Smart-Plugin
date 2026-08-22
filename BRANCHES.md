@@ -42,6 +42,6 @@ This ledger records why every current long-lived or work branch exists and prese
 - Purpose: move mutable cache/benchmark state to `/data/ffmpeg_smart_profiles`, introduce a stable plugin launcher, and make normal streams fail with an identified recovery message when the required capability cache is unavailable.
 - Base: `dev` at `3993a44`.
 - Intended target: `dev`.
-- Canonical dependency: `ffmpeg-asr@37bd0a9b16748a28f2144981fe1f315c1f01aa8f`.
-- Validation: 17 plugin unit tests and all static checks pass; the immutable source pin and repeat synchronization pass; installed-container checks preserve the existing cache/sample checksums, read status as the Dispatcharr user, migrate both managed profiles idempotently, and return exit 78 with an identified missing-cache error. The preserved legacy cache is correctly identified as stale because its fingerprint predates wrapper 1.0.0; a confirmed recache and Dispatcharr restart remain before normal live-stream validation.
+- Canonical dependency: `ffmpeg-asr@d0793ca2b121e82b50267ede5d810893bcca027f` (`v1.1.0-beta.1`).
+- Validation: 17 plugin unit tests and all static checks pass; the immutable `v1.1.0-beta.1` source pin and repeat synchronization pass; installed-container checks preserve the existing cache/sample checksums, read status as the Dispatcharr user, migrate both managed profiles idempotently, and return exit 78 with an identified missing-cache error. The preserved legacy cache is correctly identified as stale; a confirmed recache and Dispatcharr restart remain before normal live-stream validation. Version metadata is prepared for `v0.2.0-beta.1`.
 - Started: `2026-08-22`.
