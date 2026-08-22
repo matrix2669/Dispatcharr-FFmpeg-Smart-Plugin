@@ -18,7 +18,7 @@ Install **FFmpeg Smart Profiles**, enable it, then run **Install or Update Profi
 - Up to two independently enabled and renamed Stream Profiles.
 - Up to three independently enabled and renamed Output Profiles.
 
-Every managed profile points to the bundled `ffmpeg-smart.sh`. Output Profiles use its pipe-safe `-i pipe:0` mode, which samples the stream for probing and prepends the sampled packets when transcoding starts.
+Every managed profile points to the bundled `ffmpeg-smart-plugin.sh` launcher. The launcher keeps mutable state in `/data/ffmpeg_smart_profiles` and then executes the bundled `ffmpeg-smart.sh`. Output Profiles use its pipe-safe `-i pipe:0` mode, which samples the stream for probing and prepends the sampled packets when transcoding starts.
 
 Every slot has an enable checkbox, editable profile name, checkboxes for 10-bit, HDR, SDR, and deinterlacing, plus editable additional `ffmpeg-smart` options. If Allow HDR and Force SDR are both checked, Force SDR takes precedence and only `-sdr` is written to the profile. Running **Install or Update Profiles** reconciles renamed or disabled managed profiles when the corresponding cleanup setting is enabled. Existing development profiles that used the native `ffmpeg` command are migrated to the script when their names match the original bundled templates.
 
@@ -34,7 +34,11 @@ The plugin cannot restart Dispatcharr by itself in a standard container deployme
 
 ## Hardware cache
 
-**Rebuild Hardware Cache** first creates a benchmark lock, stops active Dispatcharr transcoding streams, disconnects their current viewers, and waits for teardown to complete. New FFmpeg Smart transcodes are rejected until benchmarking ends, while proxy-only streams continue running. Both input Stream Profile transcodes and Output Profile transcodes are detected when clearing existing work. The confirmation estimates runtime from the number of visible DRM GPUs. The plugin then starts `ffmpeg-smart.sh --recache-only` in the background. This is an intentionally heavy operation: it runs real concurrent transcodes against each visible GPU. If a transcode cannot be stopped within 15 seconds, the benchmark is not started. The lock is removed automatically at completion and stale locks recover automatically. **Benchmark Status** reports active progress and the latest log line while running, cached acceleration/codec and primary/secondary device details whenever available, and the last 30 log lines.
+The capability cache, probe sample, benchmark lock, PID, and log live under `/data/ffmpeg_smart_profiles`, outside the replaceable `/data/plugins/ffmpeg_smart_profiles` install directory. Plugin updates therefore cannot delete benchmark results or in-progress status. The data directory may be retained across plugin reinstalls and removed manually only when FFmpeg Smart state is no longer wanted.
+
+Managed profiles require a valid cache. If it is missing, unreadable, or stale for the visible hardware, the launcher exits with code 78 and writes a clearly identified `[ffmpeg-smart] ERROR [capability-cache-...]` message to FFmpeg's stderr. Run **Rebuild Hardware Cache** and check **Benchmark Status** before retrying the stream. This avoids an unexplained media-probe or hardware failure and does not start an automatic, disruptive benchmark from a viewer request.
+
+**Rebuild Hardware Cache** first creates a benchmark lock, stops active Dispatcharr transcoding streams, disconnects their current viewers, and waits for teardown to complete. New FFmpeg Smart transcodes are rejected until benchmarking ends, while proxy-only streams continue running. Both input Stream Profile transcodes and Output Profile transcodes are detected when clearing existing work. The confirmation estimates runtime from the number of visible DRM GPUs. The plugin then starts `ffmpeg-smart-plugin.sh --recache-only` in the background. This is an intentionally heavy operation: it runs real concurrent transcodes against each visible GPU. If a transcode cannot be stopped within 15 seconds, the benchmark is not started. The lock is removed automatically at completion and stale locks recover automatically. **Benchmark Status** reports active progress and the latest log line while running, cached acceleration/codec and primary/secondary device details whenever available, and the last 30 log lines.
 
 ## Requirements
 

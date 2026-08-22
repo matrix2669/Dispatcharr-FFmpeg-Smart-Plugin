@@ -6,9 +6,28 @@ LOG_PREFIX="[ffmpeg-smart]"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VERSION="1.0.0"
 CAPACITY_BENCHMARK_VERSION="concurrency-1.2-v1"
-CACHE_FILE="$SCRIPT_DIR/.capabilities.cache"
-PROBE_SAMPLE="$SCRIPT_DIR/probe-sample.mkv"
-BENCHMARK_LOCK_FILE="$SCRIPT_DIR/.benchmark.lock"
+STATE_DIR="${FFMPEG_SMART_STATE_DIR:-$SCRIPT_DIR}"
+REQUIRE_CACHE_VALUE="${FFMPEG_SMART_REQUIRE_CACHE:-false}"
+case "$REQUIRE_CACHE_VALUE" in
+    true|TRUE|True|1|yes|YES|Yes) REQUIRE_CACHE=true ;;
+    false|FALSE|False|0|no|NO|No|'') REQUIRE_CACHE=false ;;
+    *)
+        echo "$LOG_PREFIX ERROR [configuration]: FFMPEG_SMART_REQUIRE_CACHE must be true or false" >&2
+        exit 64
+        ;;
+esac
+if ! mkdir -p -- "$STATE_DIR" 2>/dev/null; then
+    echo "$LOG_PREFIX ERROR [state-directory]: Cannot create persistent state directory: $STATE_DIR" >&2
+    exit 73
+fi
+STATE_DIR="$(cd "$STATE_DIR" && pwd)"
+if [[ ! -w "$STATE_DIR" ]]; then
+    echo "$LOG_PREFIX ERROR [state-directory]: Persistent state directory is not writable: $STATE_DIR" >&2
+    exit 73
+fi
+CACHE_FILE="$STATE_DIR/.capabilities.cache"
+PROBE_SAMPLE="$STATE_DIR/probe-sample.mkv"
+BENCHMARK_LOCK_FILE="$STATE_DIR/.benchmark.lock"
 PROBE_SAMPLE_URL="https://repo.jellyfin.org/archive/jellyfish/media/jellyfish-3-mbps-hd-hevc-10bit.mkv"
 
 DRI_DEVICE="${DRI_DEVICE:-}"
@@ -762,12 +781,24 @@ probe_capabilities() {
 }
 
 load_cache() {
-    [[ -f "$CACHE_FILE" ]] || return 1
-    source "$CACHE_FILE" || return 1
+    [[ -f "$CACHE_FILE" ]] || return 2
+    source "$CACHE_FILE" || return 3
     local current_fp
     current_fp=$(get_hw_fingerprint)
-    [[ "$HW_FINGERPRINT" == "$current_fp" ]] || return 1
+    [[ "${HW_FINGERPRINT:-}" == "$current_fp" ]] || return 4
     return 0
+}
+
+required_cache_error() {
+    local cache_status="$1"
+    local error_code="capability-cache-unavailable"
+    local detail="cannot be loaded"
+    case "$cache_status" in
+        2) error_code="capability-cache-missing"; detail="is missing" ;;
+        3) error_code="capability-cache-invalid"; detail="is invalid or unreadable" ;;
+        4) error_code="capability-cache-stale"; detail="does not match the current hardware or policy" ;;
+    esac
+    echo "$LOG_PREFIX ERROR [$error_code]: Required capability cache $detail: $CACHE_FILE. Run the integration's Rebuild Hardware Cache action or ffmpeg-smart.sh --recache-only before starting streams." >&2
 }
 
 save_cache() {
@@ -924,7 +955,15 @@ if [[ -n "$MAX_BITRATE_INPUT" ]]; then
     fi
 fi
 
-if [[ "$RECACHE" == "true" ]] || ! load_cache 2>/dev/null; then
+cache_status=0
+if [[ "$RECACHE" != "true" ]]; then
+    load_cache 2>/dev/null || cache_status=$?
+fi
+if [[ "$RECACHE" != "true" && "$cache_status" -ne 0 && "$REQUIRE_CACHE" == "true" ]]; then
+    required_cache_error "$cache_status"
+    exit 78
+fi
+if [[ "$RECACHE" == "true" || "$cache_status" -ne 0 ]]; then
     save_cache
     echo "$LOG_PREFIX v$VERSION | Probed: accel=$BEST_ACCEL codec=$BEST_CODEC 10bit=$SUPPORTS_10BIT_ENCODE hdr=$SUPPORTS_10BIT_ENCODE" >&2
 else

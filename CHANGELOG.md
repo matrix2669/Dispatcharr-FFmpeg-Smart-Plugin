@@ -6,12 +6,15 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ### Added
 
+- Add a plugin launcher that identifies missing, invalid, and hardware-stale capability caches as `ffmpeg-smart` errors with recovery guidance.
 - Add exact `ffmpeg-asr` source metadata with a full commit and SHA-256 checksum.
 - Add offline/remote source verification, idempotent synchronization tooling, daily/manual update checks, and reviewable synchronization pull requests.
 - Add complete project guidance, branch tracking, architecture decisions, release rules, and a canonical `VERSION` file.
 
 ### Changed
 
+- Store the capability cache, probe sample, benchmark lock, PID, and log under persistent `/data/ffmpeg_smart_profiles` state instead of the replaceable plugin install directory.
+- Point new and existing managed profiles at the launcher while continuing to recognize legacy direct `ffmpeg-smart.sh` profiles for migration and removal.
 - Adopt the standalone `main`/`dev` source workflow and retire the historical `dev-test` branch after migration verification.
 - Target automated canonical-wrapper update pull requests at `dev` for normal integration and review.
 - Avoid source-pin-only pull requests when `ffmpeg-asr` advances without changing the wrapper bytes.

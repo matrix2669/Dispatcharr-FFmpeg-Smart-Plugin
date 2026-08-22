@@ -1,4 +1,6 @@
 import json
+import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -89,7 +91,7 @@ class ProfileDefinitionTests(unittest.TestCase):
         self.assertIn("-10bit", streams[0]["parameters"])
         self.assertIn("-hdr", streams[0]["parameters"])
         self.assertEqual([profile["name"] for profile in outputs], ["FFMpeg Smart - 720p Mobile"])
-        self.assertTrue(all(profile["command"].endswith("ffmpeg-smart.sh") for profile in outputs))
+        self.assertTrue(all(profile["command"].endswith("ffmpeg-smart-plugin.sh") for profile in outputs))
         self.assertTrue(all(profile["parameters"].startswith("-i pipe:0") for profile in outputs))
         self.assertIn("-maxres 720 -maxbr 2M -maxchan 2", outputs[0]["parameters"])
         self.assertIn("-sdr", outputs[0]["parameters"])
@@ -242,6 +244,40 @@ class CapabilityStatusTests(unittest.TestCase):
         self.assertIn("Cached capabilities while rebuild is active", result["message"])
 
 
+class PersistentStateTests(unittest.TestCase):
+    def test_default_state_is_outside_replaceable_plugin_directory(self):
+        import plugin
+
+        self.assertEqual(plugin.STATE_DIR, Path("/data/ffmpeg_smart_profiles"))
+        self.assertEqual(plugin.CACHE_FILE, plugin.STATE_DIR / ".capabilities.cache")
+        self.assertEqual(plugin.BENCHMARK_LOCK_FILE, plugin.STATE_DIR / ".benchmark.lock")
+        self.assertEqual(plugin.RUNTIME_DIR, plugin.STATE_DIR / "runtime")
+
+    def test_legacy_and_launcher_commands_are_managed(self):
+        self.assertTrue(Plugin._is_managed_script("/old/plugin/ffmpeg-smart.sh"))
+        self.assertTrue(Plugin._is_managed_script("/new/plugin/ffmpeg-smart-plugin.sh"))
+        self.assertFalse(Plugin._is_managed_script("ffmpeg"))
+
+    def test_launcher_reports_missing_cache_as_ffmpeg_smart_error(self):
+        launcher = REPO_ROOT / "ffmpeg-smart-profiles" / "ffmpeg-smart-plugin.sh"
+        with TemporaryDirectory() as temp_dir:
+            environment = os.environ.copy()
+            environment["FFMPEG_SMART_STATE_DIR"] = temp_dir
+            result = subprocess.run(
+                [str(launcher), "-i", "/unavailable/input.ts"],
+                env=environment,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 78)
+        self.assertIn("[ffmpeg-smart] ERROR [capability-cache-missing]", result.stderr)
+        self.assertIn("Rebuild Hardware Cache", result.stderr)
+
+
 class ReleaseMetadataTests(unittest.TestCase):
     def test_all_version_sources_agree(self):
         version = (REPO_ROOT / "VERSION").read_text(encoding="utf-8").strip()
@@ -259,6 +295,7 @@ class ReleaseMetadataTests(unittest.TestCase):
 
         for filename in (
             "FFMPEG_SMART_SOURCE.json",
+            "ffmpeg-smart-plugin.sh",
             "ffmpeg-smart.sh",
             "plugin.json",
             "plugin.py",

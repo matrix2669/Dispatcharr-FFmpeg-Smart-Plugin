@@ -468,6 +468,7 @@ The tagged tree and installable archive contain runtime files beneath the stable
 ```text
 ffmpeg-smart-profiles/
 ├── FFMPEG_SMART_SOURCE.json
+├── ffmpeg-smart-plugin.sh
 ├── ffmpeg-smart.sh
 ├── plugin.json
 └── plugin.py
@@ -630,3 +631,42 @@ Release preparation includes a licensing gate before packaging. Registry and doc
 - Related `ffmpeg-asr` ADR-015
 - `ffmpeg-asr` licensing review and upstream MIT-license contribution attempt
 - Existing plugin tag: `v0.1.0` at `1581f3f`
+
+---
+
+# ADR-015: Keep mutable runtime state outside the plugin install directory
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-22
+
+## Decision
+
+Store the capability cache, probe sample, benchmark lock, background PID, and benchmark log beneath `/data/ffmpeg_smart_profiles`, not beneath `/data/plugins/ffmpeg_smart_profiles`.
+
+Managed profiles execute `ffmpeg-smart-plugin.sh`. This small plugin-owned launcher sets the persistent state directory, requires a valid prebuilt cache for normal stream requests, and then executes the vendored canonical wrapper. The plugin continues recognizing legacy profiles that point directly at `ffmpeg-smart.sh`, so **Install or Update Profiles** can migrate them.
+
+When the cache is missing, unreadable, or stale for the current hardware or benchmark policy, the canonical wrapper exits before probing media with exit code 78 and one `[ffmpeg-smart] ERROR [capability-cache-...]` message that directs the operator to **Rebuild Hardware Cache**. Explicit recache commands remain allowed. Do not manufacture a malformed FFmpeg command merely to obtain an FFmpeg-branded error.
+
+## Reason
+
+Dispatcharr replaces the complete plugin install directory during an update. Cache and benchmark files stored there were therefore deleted even though they represented installation state rather than plugin code. An explicit wrapper error is more attributable and actionable than allowing the stream to fail later during probing or hardware initialization.
+
+## Alternatives considered
+
+- Keep state in the plugin directory and restore it after updates. Rejected because the old directory may already be gone before new plugin code runs.
+- Automatically benchmark when a viewer starts a stream. Rejected because benchmarking is disruptive, stops active transcodes, and must remain an explicit confirmed action.
+- Emit an intentionally invalid FFmpeg invocation. Rejected because it hides the real owner and can produce misleading diagnostics.
+
+## Consequences
+
+Plugin removal does not automatically delete persistent FFmpeg Smart state. Operators may remove `/data/ffmpeg_smart_profiles` manually after uninstalling when they no longer need it. The launcher and plugin status paths must remain aligned, and packaging tests must include the launcher. Existing installations should copy a still-available legacy cache into the persistent directory before their first update to this implementation or rebuild it afterward.
+
+## Provenance
+
+- Canonical wrapper: `ffmpeg-asr@37bd0a9b16748a28f2144981fe1f315c1f01aa8f`
+- User-reported plugin update state loss on 2026-08-22

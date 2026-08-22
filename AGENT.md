@@ -8,6 +8,7 @@ This repository owns the `FFmpeg Smart Profiles` plugin for Dispatcharr. The plu
 
 - `ffmpeg-smart-profiles/plugin.json` declares Dispatcharr settings and actions.
 - `ffmpeg-smart-profiles/plugin.py` is the Dispatcharr integration layer. It owns profile definitions, settings migration, safe database reconciliation, active-transcode coordination, benchmark lifecycle, and status reporting.
+- `ffmpeg-smart-profiles/ffmpeg-smart-plugin.sh` is the plugin-specific launcher. It selects persistent state under `/data/ffmpeg_smart_profiles`, requires an operator-built cache for normal streams, and executes the canonical wrapper.
 - `ffmpeg-smart-profiles/ffmpeg-smart.sh` is a vendored runtime dependency. Its canonical source is `matrix2669/ffmpeg-asr`; do not develop wrapper behavior independently in this repository.
 - `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json` pins the wrapper's full source commit and SHA-256 checksum.
 - `scripts/check-ffmpeg-smart-source.sh` verifies the local checksum and, unless `--offline` is used, the exact remote source bytes.
@@ -21,10 +22,10 @@ Data flow:
 
 1. Dispatcharr loads `plugin.json` and `plugin.py` from the stable `ffmpeg-smart-profiles/` directory.
 2. **Install or Update Profiles** converts saved settings into two possible Stream Profile slots and three possible Output Profile slots.
-3. Stream Profiles pass `{streamUrl}` and `{userAgent}` to the wrapper. Output Profiles pass Dispatcharr's non-seekable MPEG-TS input as `pipe:0`.
-4. The wrapper resolves stream policy, capabilities, and GPU scheduling, then returns MPEG-TS on standard output.
-5. **Rebuild Hardware Cache** creates the shared benchmark lock, stops active Dispatcharr transcodes, and launches `ffmpeg-smart.sh --recache-only` in the background.
-6. **Benchmark Status** reads the background PID, log, and capability cache without starting new work.
+3. Stream Profiles pass `{streamUrl}` and `{userAgent}` to the launcher. Output Profiles pass Dispatcharr's non-seekable MPEG-TS input as `pipe:0`.
+4. The launcher sets persistent state and required-cache policy, then the wrapper resolves stream policy, capabilities, and GPU scheduling and returns MPEG-TS on standard output.
+5. **Rebuild Hardware Cache** creates the shared benchmark lock, stops active Dispatcharr transcodes, and launches `ffmpeg-smart-plugin.sh --recache-only` in the background.
+6. **Benchmark Status** reads the background PID, log, and capability cache from `/data/ffmpeg_smart_profiles` without starting new work.
 
 ## Ownership boundaries
 
@@ -36,6 +37,7 @@ Data flow:
 ## Non-negotiable rules
 
 - Keep the plugin self-contained; the installed archive must include `ffmpeg-smart.sh` and must not depend on a Git submodule or a second repository checkout.
+- Keep mutable runtime state outside the replaceable plugin directory. The launcher, plugin status, and recache orchestration must share `/data/ffmpeg_smart_profiles` unless an explicit test override is supplied.
 - Never edit the vendored wrapper as an independent implementation. Change and validate `ffmpeg-asr` first, publish its canonical commit, then synchronize this repository through the pin workflow.
 - Never silently update an existing tag, Release, archive, or installed plugin version. Wrapper changes require a new plugin version before registry publication.
 - Profile installation must remain idempotent and transactional. Do not overwrite locked profiles, duplicate names, or same-name profiles owned by another command.
@@ -98,6 +100,7 @@ python3 -m py_compile ffmpeg-smart-profiles/plugin.py tests/validate_dispatcharr
 python3 -m json.tool ffmpeg-smart-profiles/plugin.json >/dev/null
 python3 -m json.tool ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json >/dev/null
 bash -n ffmpeg-smart-profiles/ffmpeg-smart.sh
+bash -n ffmpeg-smart-profiles/ffmpeg-smart-plugin.sh
 bash -n scripts/check-ffmpeg-smart-source.sh
 bash -n scripts/sync-ffmpeg-smart.sh
 scripts/check-ffmpeg-smart-source.sh --offline

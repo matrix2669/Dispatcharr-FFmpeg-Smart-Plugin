@@ -11,11 +11,13 @@ from pathlib import Path
 
 PLUGIN_DIR = Path(__file__).resolve().parent
 SCRIPT_PATH = PLUGIN_DIR / "ffmpeg-smart.sh"
-RUNTIME_DIR = PLUGIN_DIR / "runtime"
+LAUNCHER_PATH = PLUGIN_DIR / "ffmpeg-smart-plugin.sh"
+STATE_DIR = Path(os.environ.get("FFMPEG_SMART_STATE_DIR", "/data/ffmpeg_smart_profiles"))
+RUNTIME_DIR = STATE_DIR / "runtime"
 PID_FILE = RUNTIME_DIR / "recache.pid"
 LOG_FILE = RUNTIME_DIR / "recache.log"
-BENCHMARK_LOCK_FILE = PLUGIN_DIR / ".benchmark.lock"
-CACHE_FILE = PLUGIN_DIR / ".capabilities.cache"
+BENCHMARK_LOCK_FILE = STATE_DIR / ".benchmark.lock"
+CACHE_FILE = STATE_DIR / ".capabilities.cache"
 LEGACY_OUTPUT_NAMES = {
     "FFmpeg Smart - Passthrough",
     "FFmpeg Smart - 720p 2M Stereo",
@@ -157,7 +159,7 @@ class Plugin:
             "id": "profile_note",
             "label": "Profile behavior",
             "type": "info",
-            "description": "All managed Stream and Output Profiles use the bundled ffmpeg-smart.sh. Output Profiles use its pipe-safe input mode.",
+            "description": "All managed profiles use the bundled FFmpeg Smart launcher and persistent state in /data/ffmpeg_smart_profiles. A missing or stale capability cache is reported as an ffmpeg-smart error until Rebuild Hardware Cache succeeds.",
         },
     ]
 
@@ -265,7 +267,7 @@ class Plugin:
             definitions.append(
                 {
                     "name": name,
-                    "command": str(SCRIPT_PATH),
+                    "command": str(LAUNCHER_PATH),
                     "parameters": self._join_parameters(
                         '-i "{streamUrl}" -user_agent "{userAgent}"', options
                     ),
@@ -297,7 +299,7 @@ class Plugin:
             definitions.append(
                 {
                     "name": name,
-                    "command": str(SCRIPT_PATH),
+                    "command": str(LAUNCHER_PATH),
                     "parameters": self._join_parameters("-i pipe:0", options),
                 }
             )
@@ -391,7 +393,7 @@ class Plugin:
 
     @staticmethod
     def _is_managed_script(command):
-        return Path(command).name == SCRIPT_PATH.name
+        return Path(command).name in {SCRIPT_PATH.name, LAUNCHER_PATH.name}
 
     def _install_profiles(self, settings, logger):
         from django.db import transaction
@@ -532,7 +534,6 @@ class Plugin:
 
     def _start_recache(self, logger):
         self._ensure_script()
-        RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
         pid = self._read_pid()
         if pid and self._pid_is_running(pid):
             return {"status": "running", "message": f"Benchmark is already running (PID {pid})."}
@@ -543,7 +544,7 @@ class Plugin:
             log_handle = LOG_FILE.open("w", encoding="utf-8")
             try:
                 process = subprocess.Popen(
-                    [str(SCRIPT_PATH), "--recache-only"],
+                    [str(LAUNCHER_PATH), "--recache-only"],
                     stdin=subprocess.DEVNULL,
                     stdout=log_handle,
                     stderr=subprocess.STDOUT,
@@ -726,7 +727,8 @@ class Plugin:
             if len(stat_fields) > 2 and stat_fields[2] == "Z":
                 return False
             cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ")
-            if str(SCRIPT_PATH).encode() not in cmdline or b"--recache-only" not in cmdline:
+            commands = (str(SCRIPT_PATH).encode(), str(LAUNCHER_PATH).encode())
+            if not any(command in cmdline for command in commands) or b"--recache-only" not in cmdline:
                 return False
             os.kill(pid, 0)
             return True
@@ -735,9 +737,19 @@ class Plugin:
 
     @staticmethod
     def _ensure_script():
-        if not SCRIPT_PATH.is_file():
-            raise RuntimeError(f"Bundled script is missing: {SCRIPT_PATH}")
-        SCRIPT_PATH.chmod(SCRIPT_PATH.stat().st_mode | 0o111)
+        for script in (SCRIPT_PATH, LAUNCHER_PATH):
+            if not script.is_file():
+                raise RuntimeError(f"Bundled script is missing: {script}")
+            script.chmod(script.stat().st_mode | 0o111)
+        try:
+            RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+            probe = RUNTIME_DIR / f".write-test-{os.getpid()}-{time.monotonic_ns()}"
+            probe.write_text("ok\n", encoding="utf-8")
+            probe.unlink()
+        except OSError as exc:
+            raise RuntimeError(
+                f"FFmpeg Smart state directory is not writable: {STATE_DIR}: {exc}"
+            ) from exc
 
     @staticmethod
     def _result_message(result):

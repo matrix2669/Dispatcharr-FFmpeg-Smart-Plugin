@@ -46,7 +46,7 @@
       "label": "Update existing managed profiles",
       "type": "boolean",
       "default": true,
-      "help_text": "Only profiles already pointing to ffmpeg-smart.sh or matching this plugin's native FFmpeg templates are updated."
+      "help_text": "Only profiles already pointing to an FFmpeg Smart managed script or matching this plugin's native FFmpeg templates are updated."
     },
     {
       "id": "flag_reference_video",
@@ -74,9 +74,9 @@
     },
     {
       "id": "profile_note",
-      "label": "Output profile behavior",
+      "label": "Profile behavior",
       "type": "info",
-      "description": "All managed Stream and Output Profiles use the bundled ffmpeg-smart.sh. Output Profiles use its pipe-safe input mode."
+      "description": "All managed profiles use the bundled FFmpeg Smart launcher and persistent state in /data/ffmpeg_smart_profiles. A missing or stale capability cache is reported as an ffmpeg-smart error until Rebuild Hardware Cache succeeds."
     }
   ],
   "actions": [
