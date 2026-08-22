@@ -4,7 +4,7 @@ Native Dispatcharr plugin that bundles `ffmpeg-smart.sh`, creates managed Stream
 
 ## Installation
 
-Add the Matrix2669 plugin registry in **Plugins → Plugin Repositories**:
+Add the matrix2669 plugin registry in **Plugins → Plugin Repositories**:
 
 ```text
 https://raw.githubusercontent.com/matrix2669/dispatcharr-plugins/main/manifest.json
@@ -55,6 +55,19 @@ scripts/sync-ffmpeg-smart.sh main
 scripts/check-ffmpeg-smart-source.sh
 ```
 
+## Project documentation
+
+- `AGENT.md` defines architecture, ownership boundaries, development rules, compatibility gates, and validation.
+- `BRANCHES.md` records why every current branch exists.
+- `DECISIONS.md` preserves architectural rationale and superseded approaches.
+- `CHANGELOG.md` records user-visible history.
+- `RELEASE.md` defines version, tag, registry, packaging, and release procedures.
+- `VERSION` is the canonical plugin version and must match both plugin declarations.
+
+The source repository uses `main` for production-ready Releases and `dev` for next-version integration. Immutable beta and completed stable tags feed the `dispatcharr-plugins:dev` registry. The stable registry changes only after an explicitly approved GitHub Release.
+
+The existing `v0.1.0` Release predates the inherited-wrapper licensing review. New GitHub Releases and distributable plugin ZIPs remain blocked until the licensing of the inherited `ffmpeg-smart.sh` source is explicitly resolved; see `DECISIONS.md` and `RELEASE.md`.
+
 ## License
 
-MIT
+matrix2669-authored plugin code is MIT licensed. The bundled wrapper retains the licensing provenance of its canonical `ffmpeg-asr` source; see `DECISIONS.md` for the current distribution boundary.

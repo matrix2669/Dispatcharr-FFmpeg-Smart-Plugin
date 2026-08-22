@@ -1,3 +1,4 @@
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -7,6 +8,9 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ffmpeg-smart-profiles"))
 
 from plugin import Plugin
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class FakeRedis:
@@ -236,6 +240,30 @@ class CapabilityStatusTests(unittest.TestCase):
         self.assertEqual(result["status"], "running")
         self.assertIn("Latest progress: Testing 18 concurrent streams", result["message"])
         self.assertIn("Cached capabilities while rebuild is active", result["message"])
+
+
+class ReleaseMetadataTests(unittest.TestCase):
+    def test_all_version_sources_agree(self):
+        version = (REPO_ROOT / "VERSION").read_text(encoding="utf-8").strip()
+        manifest = json.loads(
+            (REPO_ROOT / "ffmpeg-smart-profiles" / "plugin.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        self.assertEqual(version, Plugin.version)
+        self.assertEqual(version, manifest["version"])
+
+    def test_runtime_files_use_stable_plugin_directory(self):
+        runtime_dir = REPO_ROOT / "ffmpeg-smart-profiles"
+
+        for filename in (
+            "FFMPEG_SMART_SOURCE.json",
+            "ffmpeg-smart.sh",
+            "plugin.json",
+            "plugin.py",
+        ):
+            self.assertTrue((runtime_dir / filename).is_file(), filename)
 
 
 if __name__ == "__main__":

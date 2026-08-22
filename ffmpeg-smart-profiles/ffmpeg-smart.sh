@@ -4,7 +4,7 @@ set -euo pipefail
 
 LOG_PREFIX="[ffmpeg-smart]"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="pipe-input-v22"
+VERSION="1.0.0"
 CAPACITY_BENCHMARK_VERSION="concurrency-1.2-v1"
 CACHE_FILE="$SCRIPT_DIR/.capabilities.cache"
 PROBE_SAMPLE="$SCRIPT_DIR/probe-sample.mkv"

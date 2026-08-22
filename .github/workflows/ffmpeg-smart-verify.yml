@@ -5,6 +5,9 @@ on:
     paths:
       - "ffmpeg-smart-profiles/ffmpeg-smart.sh"
       - "ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json"
+      - "ffmpeg-smart-profiles/plugin.json"
+      - "ffmpeg-smart-profiles/plugin.py"
+      - "VERSION"
       - "scripts/check-ffmpeg-smart-source.sh"
       - "scripts/sync-ffmpeg-smart.sh"
       - "tests/**"
@@ -14,6 +17,9 @@ on:
     paths:
       - "ffmpeg-smart-profiles/ffmpeg-smart.sh"
       - "ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json"
+      - "ffmpeg-smart-profiles/plugin.json"
+      - "ffmpeg-smart-profiles/plugin.py"
+      - "VERSION"
       - "scripts/check-ffmpeg-smart-source.sh"
       - "scripts/sync-ffmpeg-smart.sh"
       - "tests/**"

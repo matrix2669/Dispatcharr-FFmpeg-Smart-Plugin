@@ -23,6 +23,7 @@ done
 
 source_repo="$(jq -r '.repository' "$SOURCE_METADATA")"
 source_path="$(jq -r '.path' "$SOURCE_METADATA")"
+recorded_sha="$(jq -r '.sha256' "$SOURCE_METADATA")"
 source_git_url="https://github.com/$source_repo.git"
 
 if [[ "$SOURCE_REF" =~ ^[0-9a-f]{40}$ ]]; then
@@ -51,6 +52,11 @@ source_url="https://raw.githubusercontent.com/$source_repo/$source_commit/$sourc
 curl --fail --silent --show-error --location "$source_url" --output "$source_copy"
 bash -n "$source_copy"
 source_sha="$(sha256_file "$source_copy")"
+
+if [[ "$source_sha" == "$recorded_sha" ]] && cmp -s "$source_copy" "$BUNDLED_SCRIPT"; then
+    echo "Bundled ffmpeg-smart.sh is already current at SHA-256 $source_sha"
+    exit 0
+fi
 
 install -m 0755 "$source_copy" "$BUNDLED_SCRIPT"
 jq \

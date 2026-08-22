@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: main
+          ref: dev
           fetch-depth: 0
       - name: Sync from ffmpeg-asr main
         run: scripts/sync-ffmpeg-smart.sh main
@@ -42,7 +42,7 @@ jobs:
           source_commit="$(jq -r '.commit' ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json)"
           short_commit="${source_commit:0:7}"
           branch="automation/sync-ffmpeg-smart-$short_commit"
-          existing_pr="$(gh pr list --base main --head "$branch" --state open --json url --jq '.[0].url // empty')"
+          existing_pr="$(gh pr list --base dev --head "$branch" --state open --json url --jq '.[0].url // empty')"
           if [[ -n "$existing_pr" ]]; then
             echo "Update pull request already exists: $existing_pr"
             exit 0
@@ -54,7 +54,7 @@ jobs:
           git commit -m "Sync ffmpeg-smart.sh from ffmpeg-asr $short_commit"
           git push --force origin "HEAD:refs/heads/$branch"
           gh pr create \
-            --base main \
+            --base dev \
             --head "$branch" \
             --title "Sync ffmpeg-smart.sh from ffmpeg-asr $short_commit" \
             --body "Updates the bundled wrapper to matrix2669/ffmpeg-asr@$source_commit. The source checksum and plugin validation completed successfully."
