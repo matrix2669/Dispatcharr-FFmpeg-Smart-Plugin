@@ -20,7 +20,7 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 - Adopt the standalone `main`/`dev` source workflow and retire the historical `dev-test` branch after migration verification.
 - Target automated canonical-wrapper update pull requests at `dev` for normal integration and review.
 - Avoid source-pin-only pull requests when `ffmpeg-asr` advances without changing the wrapper bytes.
-- Synchronize the bundled wrapper to `ffmpeg-asr@d521be29d5f77313ad8b7b3dcf772136eb7ce703`, adopting its semantic internal version `1.0.0` without changing runtime policy.
+- Synchronize the bundled wrapper to `ffmpeg-asr@d0793ca2b121e82b50267ede5d810893bcca027f` (`v1.1.0-beta.1`) with persistent-state and required-cache support.
 - Update GitHub workflows to the current official checkout action used by the repository.
 - Require a fresh official Dispatcharr contract review whenever the supported, minimum, tested, or deployed Dispatcharr version changes.
 - Record the inherited-wrapper licensing gate for future Releases and distributable ZIPs.
