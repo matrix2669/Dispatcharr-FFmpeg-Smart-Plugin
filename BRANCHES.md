@@ -32,6 +32,6 @@ This ledger records why every current long-lived or work branch exists and prese
 - Base: synchronized with `main` after the approved administrative promotion.
 - Intended target: `main` after future version work is reviewed and approved.
 - Current state: integrates persistent external state and required-cache errors for corrected candidate `v0.2.0-beta.2`.
-- Validation: 17 unit tests, Python/JSON/shell checks, immutable wrapper pin verification, repeat synchronization, stable runtime layout, and installed Dispatcharr validation pass. The existing cache and probe sample remained unchanged outside the replaced plugin directory, and missing/stale cache requests return identified exit-78 errors.
-- Publication state: corrected beta source tag only; no GitHub Release or distributable ZIP is authorized. The `dispatcharr-plugins:dev` registry may advertise this immutable beta after the complete live gate passes.
+- Validation: 17 unit tests, Python/JSON/shell checks, immutable wrapper pin verification, repeat synchronization, and stable runtime layout pass. Dispatcharr's managed dev-registry update from recorded `0.1.0` to `0.2.0-beta.2` preserved external cache/sample checksums across plugin-directory replacement. Missing/stale caches return identified exit-78 errors. A confirmed plugin recache measured A310 capacity 18 and UHD 770 capacity 15; a full restart rediscovered beta.2; and a 10-second 4K30 MPEG-TS `pipe:0` test produced complete 1280×720 HEVC output at approximately 1.83 Mbps.
+- Publication state: immutable corrected beta tag and `dispatcharr-plugins:dev` advertisement only; no GitHub Release or distributable ZIP is authorized.
 - Last verified at: `2026-08-22`.

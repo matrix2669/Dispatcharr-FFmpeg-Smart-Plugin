@@ -10,6 +10,12 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 - Republish the persistent-state candidate with corrected canonical-wrapper source documentation and complete registry-update, recache, restart, and `pipe:0` validation evidence.
 
+### Validation
+
+- Updated the installed test plugin through Dispatcharr's managed dev-registry path from recorded version `0.1.0`; capability-cache and probe-sample checksums remained identical across directory replacement.
+- Rebuilt the two-GPU cache through the plugin action at the 1.2x stability floor: Arc A310 capacity 18 and UHD 770 capacity 15.
+- Restarted Dispatcharr and verified beta.2 discovery, persisted settings/management metadata, and a complete 10-second 4K30 MPEG-TS `pipe:0` input producing 10 seconds of 1280×720 HEVC output at approximately 1.83 Mbps through the A310.
+
 ## [0.2.0-beta.1] - 2026-08-22
 
 ### Added
