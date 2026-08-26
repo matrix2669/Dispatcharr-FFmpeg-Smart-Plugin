@@ -36,7 +36,7 @@ This ledger records why every current long-lived or work branch exists and prese
 - Intended target: `main` after future version work is reviewed and approved.
 - Current state: integrates the beta.5 in-UI inherited-default reference on top of the beta.4 scoped FFmpeg controls and the pinned `ffmpeg-asr v1.1.0-beta.3` wrapper.
 - Validation: 26 plugin unit tests, exact help/schema parity for all 25 advanced mode fields, Python/JSON/shell checks, immutable wrapper pin verification, profile-generation regressions, and whitespace validation pass. Earlier beta.2 live Dispatcharr and `pipe:0` validation remains applicable because beta.5 does not change wrapper or profile-generation behavior.
-- Publication state: `v0.2.0-beta.5` tag and `dispatcharr-plugins:dev` advertisement pending; no GitHub Release, stable-registry change, or distributable ZIP is authorized.
+- Publication state: immutable `v0.2.0-beta.5` is tagged and advertised through `dispatcharr-plugins:dev`; no GitHub Release, stable-registry change, or distributable ZIP is authorized.
 - Last verified at: `2026-08-25`.
 
 ### `feature/additional-ffmpeg-options`
@@ -68,9 +68,9 @@ This ledger records why every current long-lived or work branch exists and prese
 - Purpose: make each Inherit choice understandable without requiring users to inspect the wrapper source or infer what Replace removes.
 - Base: `dev` at `1de8e3c`.
 - Intended target: `dev` as a new immutable beta after plugin-only UI/documentation validation.
-- Result: plugin source commit `c1f2dbe` merged into `dev` at `42a0da0`; the reviewed integration-ledger commit will be the beta.5 tag target.
+- Result: plugin source commit `c1f2dbe` merged into `dev` at `42a0da0`; annotated tag `v0.2.0-beta.5` resolves to reviewed integration commit `6fb786d` and is advertised through `dispatcharr-plugins:dev`.
 - Scope: advanced-field help text, managed-default reference documentation, schema parity tests, version/release metadata, and the durable UI decision.
 - Exclusions: no dropdown-driven sibling-field mutation because Dispatcharr exposes no dependent-field hook; no wrapper behavior, saved-option migration, profile-generation, hardware policy, stable registry, GitHub Release, or Dispatcharr core change.
 - Related work: canonical defaults remain owned by pinned `ffmpeg-asr v1.1.0-beta.3`.
-- Validation: 26 plugin unit tests, exact default text for all five profile slots, generated settings-schema parity, Python/JSON/shell checks, offline and remote source-pin verification, existing profile-generation regressions, and `git diff --check` pass on the feature branch. Tag-archive validation remains required after `dev` integration.
+- Validation: 26 plugin unit tests, exact default text for all five profile slots, generated settings-schema parity, Python/JSON/shell checks, offline and remote source-pin verification, existing profile-generation regressions, tag archive/runtime layout inspection, and `git diff --check` pass. The published tag dereferences to `6fb786d`, the exact GitHub archive reports beta.5, and the `dev` verification workflow completed successfully.
 - Last verified at: `2026-08-25`.
