@@ -17,6 +17,7 @@ This ledger records why every current long-lived or work branch exists and prese
 | `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version and canonical wrapper updates. |
 | `feature/additional-ffmpeg-options` | feature | merged | `dev` | `dev` | Add per-profile raw FFmpeg arguments and correct apply-profile restart feedback. |
 | `feature/scoped-ffmpeg-options` | feature | merged | `dev` | `dev` | Expose phase-scoped Smart FFmpeg defaults and expert overrides for every managed profile. |
+| `feature/degraded-proxy-fallback` | feature | active | `dev` | `dev` | Preserve basic stream-copy service and re-notify after every degraded invocation while Smart capabilities are unavailable. |
 | `fix/show-advanced-defaults` | fix | merged | `dev` | `dev` | Show the exact static defaults and runtime-derived default formulas beside every advanced scope control. |
 | `fix/launcher-permissions-cache-status` | fix | merged | `dev` | `dev` | Make registry installs launch reliably and report cache validity rather than file existence alone. |
 
@@ -86,4 +87,16 @@ This ledger records why every current long-lived or work branch exists and prese
 - Exclusions: no automatic disruptive benchmark, no Dispatcharr request-routing or failover core change, no stable registry, GitHub Release, or distributable ZIP.
 - Reported evidence: after a plugin reinstall the scripts lacked execute permission; a normal stream then emitted the wrapper's hardware-stale cache error, while Benchmark Status treated the cache as valid because the file still existed.
 - Validation: 34 plugin unit tests pass, including a simulated `0644` ZIP extraction, enabled-plugin load repair to `0755`, direct launcher execution, canonical cache-status handling, persistent-notification create/clear behavior, and profile restart semantics. Python/JSON/shell checks, immutable beta.4 wrapper verification and idempotent synchronization, workspace reconciliation, exact tag/archive inspection, GitHub workflows, and `git diff --check` pass. The live beta.5 instance and cached pre-publication registry state were verified separately; beta.6 installation remains pending.
+- Started: `2026-08-26`.
+
+### `feature/degraded-proxy-fallback`
+
+- Purpose: use the canonical wrapper's opt-in degraded stream-copy proxy whenever the required cache is unusable or a hardware benchmark is active, while keeping the cause visible in Dispatcharr's persistent notification center.
+- Base: `dev` at `1b902d8be3def5c28e45aa6a2df5a5161ce810db` after refreshing project governance and remote state.
+- Intended target: `dev` after the canonical wrapper change is committed, pinned, synchronized, and the complete plugin gate passes.
+- Scope: launcher opt-in, canonical wrapper synchronization, per-invocation fallback marker monitoring, dismissal reset, notification wording, tests, documentation, and update-description coordination.
+- Exclusions: no CPU transcode fallback, automatic benchmark, Dispatcharr retry-routing or core change, stable registry, GitHub Release, or distributable ZIP.
+- Related work: canonical `ffmpeg-asr` branch `feature/degraded-proxy-fallback` and registry branch `feature/ffmpeg-smart-update-disclaimer`.
+- Canonical source: commit `4ff4a386f8d0511ec1228708c74eeacda745da04`, recorded and verified at SHA-256 `6319094e9495f60050f523f11c2d01caea8634fa026d75e92f85f42e9719dcd5`.
+- Validation: 37 plugin tests pass, including launcher fallback, unique marker tokens, same-token deduplication, dismissal reset on later invocations, persistent-notification cleanup, and watcher lifecycle. Python/JSON/shell checks, offline and remote canonical-source verification, idempotent synchronization, workspace validation, and `git diff --check` pass. Live Dispatcharr fallback and notification reactivation remain pending.
 - Started: `2026-08-26`.

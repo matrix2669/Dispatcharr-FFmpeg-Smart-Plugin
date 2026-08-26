@@ -16,6 +16,16 @@ case "$REQUIRE_CACHE_VALUE" in
         exit 64
         ;;
 esac
+CACHE_FALLBACK_VALUE="${FFMPEG_SMART_CACHE_FALLBACK:-none}"
+case "$CACHE_FALLBACK_VALUE" in
+    proxy) CACHE_FALLBACK="proxy" ;;
+    none|'') CACHE_FALLBACK="none" ;;
+    *)
+        echo "$LOG_PREFIX ERROR [configuration]: FFMPEG_SMART_CACHE_FALLBACK must be none or proxy" >&2
+        exit 64
+        ;;
+esac
+FALLBACK_MARKER="${FFMPEG_SMART_FALLBACK_MARKER:-}"
 if ! mkdir -p -- "$STATE_DIR" 2>/dev/null; then
     echo "$LOG_PREFIX ERROR [state-directory]: Cannot create persistent state directory: $STATE_DIR" >&2
     exit 73
@@ -1137,6 +1147,58 @@ validate_runtime_mapping() {
 
 resolve_static_ffmpeg_args
 
+if [[ "$RECACHE_ONLY" != "true" ]]; then
+    if [[ -z "$URL" ]]; then
+        echo "$LOG_PREFIX ERROR: No stream URL provided" >&2
+        exit 1
+    fi
+    if [[ "$URL" =~ ^https?:// ]]; then
+        [[ -n "$AGENT" ]] && UA_ARGS=(-user_agent "$AGENT") || UA_ARGS=()
+        NET_ARGS=(-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 30 -rw_timeout 15000000)
+    else
+        UA_ARGS=()
+        NET_ARGS=()
+    fi
+else
+    UA_ARGS=()
+    NET_ARGS=()
+fi
+
+record_fallback_invocation() {
+    [[ -n "$FALLBACK_MARKER" ]] || return 0
+    local marker_dir marker_temp token
+    marker_dir="${FALLBACK_MARKER%/*}"
+    [[ "$marker_dir" != "$FALLBACK_MARKER" ]] || marker_dir="."
+    if ! mkdir -p -- "$marker_dir" 2>/dev/null; then
+        echo "$LOG_PREFIX WARNING [degraded-proxy-marker]: Cannot record fallback invocation at $FALLBACK_MARKER" >&2
+        return 0
+    fi
+    marker_temp="$(mktemp "${FALLBACK_MARKER}.XXXXXX" 2>/dev/null || true)"
+    token="$$-${marker_temp##*.}"
+    if [[ -z "$marker_temp" ]] ||
+       ! printf '%s\n' "$token" > "$marker_temp" 2>/dev/null ||
+       ! mv -f -- "$marker_temp" "$FALLBACK_MARKER" 2>/dev/null; then
+        [[ -z "$marker_temp" ]] || rm -f -- "$marker_temp"
+        echo "$LOG_PREFIX WARNING [degraded-proxy-marker]: Cannot record fallback invocation at $FALLBACK_MARKER" >&2
+    fi
+}
+
+run_degraded_proxy() {
+    local reason="$1"
+    record_fallback_invocation
+    echo "$LOG_PREFIX WARNING [degraded-proxy]: $reason; bypassing FFmpeg Smart policy and hardware acceleration with basic FFmpeg stream copy" >&2
+    exec ffmpeg \
+        ${UA_ARGS[@]+"${UA_ARGS[@]}"} \
+        ${NET_ARGS[@]+"${NET_ARGS[@]}"} \
+        ${FFMPEG_INPUT_ARGS[@]+"${FFMPEG_INPUT_ARGS[@]}"} \
+        -i "$URL" \
+        ${FFMPEG_MAP_ARGS[@]+"${FFMPEG_MAP_ARGS[@]}"} \
+        -c copy \
+        ${FFMPEG_MUX_ARGS[@]+"${FFMPEG_MUX_ARGS[@]}"} \
+        -f mpegts \
+        pipe:1
+}
+
 benchmark_lock_active() {
     local lock_pid=""
     [[ -e "$BENCHMARK_LOCK_FILE" ]] || return 1
@@ -1156,6 +1218,9 @@ if [[ "$RECACHE_ONLY" == "true" ]]; then
     echo "$$" > "$BENCHMARK_LOCK_FILE"
     trap 'rm -f -- "$BENCHMARK_LOCK_FILE"' EXIT
 elif benchmark_lock_active; then
+    if [[ "$RECACHE" != "true" && "$CACHE_FALLBACK" == "proxy" ]]; then
+        run_degraded_proxy "Hardware benchmark is in progress"
+    fi
     echo "$LOG_PREFIX Hardware benchmark in progress; refusing to start a new transcode" >&2
     exit 75
 fi
@@ -1185,6 +1250,15 @@ if [[ "$RECACHE" != "true" ]]; then
     load_cache 2>/dev/null || cache_status=$?
 fi
 if [[ "$RECACHE" != "true" && "$cache_status" -ne 0 && "$REQUIRE_CACHE" == "true" ]]; then
+    if [[ "$CACHE_FALLBACK" == "proxy" ]]; then
+        case "$cache_status" in
+            2) cache_fallback_reason="Hardware capability cache is missing" ;;
+            3) cache_fallback_reason="Hardware capability cache is invalid or unreadable" ;;
+            4) cache_fallback_reason="Hardware capability cache does not match the current hardware or policy" ;;
+            *) cache_fallback_reason="Hardware capability cache is unavailable" ;;
+        esac
+        run_degraded_proxy "$cache_fallback_reason"
+    fi
     required_cache_error "$cache_status"
     exit 78
 fi
@@ -1239,10 +1313,6 @@ if [[ -z "$ALLOW_HDR" ]]; then
     fi
 fi
 
-if [[ -z "$URL" ]]; then
-    echo "$LOG_PREFIX ERROR: No stream URL provided" >&2
-    exit 1
-fi
 case "$ACCEL" in
     qsv|vaapi|nvenc|v4l2m2m|videotoolbox|software) ;;
     *) echo "$LOG_PREFIX ERROR: Unknown accel type: $ACCEL (use: qsv, vaapi, nvenc, v4l2m2m, videotoolbox, software)" >&2; exit 1 ;;
@@ -1251,14 +1321,6 @@ case "$VCODEC_OUT" in
     h264|hevc) ;;
     *) echo "$LOG_PREFIX ERROR: Unknown video codec: $VCODEC_OUT (use: h264, hevc)" >&2; exit 1 ;;
 esac
-
-if [[ "$URL" =~ ^https?:// ]]; then
-    [[ -n "$AGENT" ]] && UA_ARGS=(-user_agent "$AGENT") || UA_ARGS=()
-    NET_ARGS=(-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 30 -rw_timeout 15000000)
-else
-    UA_ARGS=()
-    NET_ARGS=()
-fi
 
 PIPE_INPUT=false
 PIPE_CAPTURE=""
