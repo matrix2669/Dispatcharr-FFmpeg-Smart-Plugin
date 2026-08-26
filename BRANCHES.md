@@ -18,7 +18,6 @@ This ledger records why every current long-lived or work branch exists and prese
 | `feature/additional-ffmpeg-options` | feature | merged | `dev` | `dev` | Add per-profile raw FFmpeg arguments and correct apply-profile restart feedback. |
 | `feature/scoped-ffmpeg-options` | feature | merged | `dev` | `dev` | Expose phase-scoped Smart FFmpeg defaults and expert overrides for every managed profile. |
 | `fix/show-advanced-defaults` | fix | merged | `dev` | `dev` | Show the exact static defaults and runtime-derived default formulas beside every advanced scope control. |
-| `feature/session-completion-remote-checkpoint` | governance | integrated; retained | `dev` at `093d1f2` | `dev` | Reconcile the mandatory session-end GitHub checkpoint rule without changing plugin behavior or distribution. |
 
 ## Branch records
 
@@ -75,14 +74,3 @@ This ledger records why every current long-lived or work branch exists and prese
 - Related work: canonical defaults remain owned by pinned `ffmpeg-asr v1.1.0-beta.3`.
 - Validation: 26 plugin unit tests, exact default text for all five profile slots, generated settings-schema parity, Python/JSON/shell checks, offline and remote source-pin verification, existing profile-generation regressions, tag archive/runtime layout inspection, and `git diff --check` pass. The published tag dereferences to `6fb786d`, the exact GitHub archive reports beta.5, and the `dev` verification workflow completed successfully.
 - Last verified at: `2026-08-25`.
-
-### `feature/session-completion-remote-checkpoint`
-
-- Purpose: inherit the workspace rule that every session checkpoints all in-scope work on its owning GitHub branch while keeping integration and publication separate.
-- Base: `dev` at `093d1f28dd0ff2c2ebedf0ed8faa46f1f5615465`.
-- Intended target: `dev`; integration was explicitly approved on `2026-08-26` after review.
-- Scope: `AGENT.md`, `WORKSPACE-STANDARDS.yaml`, and this branch record.
-- Exclusions: plugin runtime, wrapper pin, version, tag, registry, Release, ZIP, licensing, or deployment changes.
-- Validation: 26 unit tests, Python compilation, both JSON parses, four shell syntax checks, offline and immutable-remote wrapper checksum checks, workspace standards validation, exact changed-path review, and `git diff --check` pass; no plugin, wrapper, version, registry, release, or deployment behavior changed.
-- Current state: integrated into `dev`; the feature ref is retained pending separate branch-cleanup authority.
-- Started: `2026-08-26`.
