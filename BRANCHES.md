@@ -17,7 +17,7 @@ This ledger records why every current long-lived or work branch exists and prese
 | `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version and canonical wrapper updates. |
 | `feature/additional-ffmpeg-options` | feature | merged | `dev` | `dev` | Add per-profile raw FFmpeg arguments and correct apply-profile restart feedback. |
 | `feature/scoped-ffmpeg-options` | feature | merged | `dev` | `dev` | Expose phase-scoped Smart FFmpeg defaults and expert overrides for every managed profile. |
-| `fix/show-advanced-defaults` | fix | active | `dev` | `dev` | Show the exact static defaults and runtime-derived default formulas beside every advanced scope control. |
+| `fix/show-advanced-defaults` | fix | merged | `dev` | `dev` | Show the exact static defaults and runtime-derived default formulas beside every advanced scope control. |
 
 ## Branch records
 
@@ -34,9 +34,9 @@ This ledger records why every current long-lived or work branch exists and prese
 - Purpose: integrate and validate the next plugin version before stable promotion to `main`.
 - Base: synchronized with `main` after the approved administrative promotion.
 - Intended target: `main` after future version work is reviewed and approved.
-- Current state: integrates persistent external state and required-cache errors for corrected candidate `v0.2.0-beta.2`, plus mandatory workspace standards reconciliation guidance.
-- Validation: 17 unit tests, Python/JSON/shell checks, immutable wrapper pin verification, repeat synchronization, and stable runtime layout pass. Dispatcharr's managed dev-registry update from recorded `0.1.0` to `0.2.0-beta.2` preserved external cache/sample checksums across plugin-directory replacement. Missing/stale caches return identified exit-78 errors. A confirmed plugin recache measured A310 capacity 18 and UHD 770 capacity 15; a full restart rediscovered beta.2; and a 10-second 4K30 MPEG-TS `pipe:0` test produced complete 1280×720 HEVC output at approximately 1.83 Mbps.
-- Publication state: immutable corrected beta tag and `dispatcharr-plugins:dev` advertisement only; no GitHub Release or distributable ZIP is authorized.
+- Current state: integrates the beta.5 in-UI inherited-default reference on top of the beta.4 scoped FFmpeg controls and the pinned `ffmpeg-asr v1.1.0-beta.3` wrapper.
+- Validation: 26 plugin unit tests, exact help/schema parity for all 25 advanced mode fields, Python/JSON/shell checks, immutable wrapper pin verification, profile-generation regressions, and whitespace validation pass. Earlier beta.2 live Dispatcharr and `pipe:0` validation remains applicable because beta.5 does not change wrapper or profile-generation behavior.
+- Publication state: `v0.2.0-beta.5` tag and `dispatcharr-plugins:dev` advertisement pending; no GitHub Release, stable-registry change, or distributable ZIP is authorized.
 - Last verified at: `2026-08-25`.
 
 ### `feature/additional-ffmpeg-options`
@@ -68,6 +68,7 @@ This ledger records why every current long-lived or work branch exists and prese
 - Purpose: make each Inherit choice understandable without requiring users to inspect the wrapper source or infer what Replace removes.
 - Base: `dev` at `1de8e3c`.
 - Intended target: `dev` as a new immutable beta after plugin-only UI/documentation validation.
+- Result: plugin source commit `c1f2dbe` merged into `dev` at `42a0da0`; the reviewed integration-ledger commit will be the beta.5 tag target.
 - Scope: advanced-field help text, managed-default reference documentation, schema parity tests, version/release metadata, and the durable UI decision.
 - Exclusions: no dropdown-driven sibling-field mutation because Dispatcharr exposes no dependent-field hook; no wrapper behavior, saved-option migration, profile-generation, hardware policy, stable registry, GitHub Release, or Dispatcharr core change.
 - Related work: canonical defaults remain owned by pinned `ffmpeg-asr v1.1.0-beta.3`.
