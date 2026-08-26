@@ -579,10 +579,17 @@ class CacheNotificationTests(unittest.TestCase):
                 self.delete_count += 1
 
         class FakeNotification:
-            def __init__(self, manager, action_data):
+            def __init__(self, manager, notification_key, defaults):
                 self.manager = manager
-                self.action_data = action_data
+                self.id = 1
+                self.notification_key = notification_key
+                self.created_at = None
                 self.dismissals = FakeDismissals()
+                self.apply(defaults)
+
+            def apply(self, defaults):
+                for key, value in defaults.items():
+                    setattr(self, key, value)
 
             def delete(self):
                 self.manager.current = None
@@ -601,9 +608,9 @@ class CacheNotificationTests(unittest.TestCase):
             def update_or_create(self, notification_key, defaults):
                 created = self.current is None
                 if created:
-                    self.current = FakeNotification(self, defaults["action_data"])
+                    self.current = FakeNotification(self, notification_key, defaults)
                 else:
-                    self.current.action_data = defaults["action_data"]
+                    self.current.apply(defaults)
                 self.defaults = defaults
                 self.key = notification_key
                 return self.current, created
@@ -644,6 +651,7 @@ class CacheNotificationTests(unittest.TestCase):
             self.assertEqual(manager.defaults["action_data"]["cache_status"], "stale")
             self.assertTrue(manager.defaults["admin_only"])
             self.assertEqual(len(sent), 1)
+            self.assertFalse(sent[-1]["is_dismissed"])
 
             with patch.object(
                 Plugin,
@@ -659,6 +667,11 @@ class CacheNotificationTests(unittest.TestCase):
                 Plugin._sync_cache_notification(fallback_token="fallback-1")
                 self.assertEqual(manager.current.dismissals.delete_count, 1)
                 self.assertEqual(len(sent), 2)
+                self.assertFalse(sent[-1]["is_dismissed"])
+                self.assertEqual(
+                    sent[-1]["notification_key"],
+                    plugin.CACHE_NOTIFICATION_KEY,
+                )
 
                 Plugin._sync_cache_notification(fallback_token="fallback-1")
                 self.assertEqual(manager.current.dismissals.delete_count, 1)

@@ -21,6 +21,7 @@ This ledger records why every current long-lived or work branch exists and prese
 | `fix/show-advanced-defaults` | fix | merged | `dev` | `dev` | Show the exact static defaults and runtime-derived default formulas beside every advanced scope control. |
 | `fix/launcher-permissions-cache-status` | fix | merged | `dev` | `dev` | Make registry installs launch reliably and report cache validity rather than file existence alone. |
 | `fix/beta7-canonical-validation` | fix | merged | `dev` | `dev` | Repin beta.7 behavior to the corrective green canonical wrapper tag without moving published tags. |
+| `fix/persistent-fallback-reactivation` | fix | active | `dev` | `dev` | Restore dismissed degraded warnings in the notification center instead of showing only a toast. |
 
 ## Branch records
 
@@ -113,4 +114,15 @@ This ledger records why every current long-lived or work branch exists and prese
 - Related work: canonical `ffmpeg-asr v1.1.0-beta.6` at `aeff09204000f58aa6fdd3a14781935f77a0823a`, created after beta.5 workflows exposed a stale scoped-command test expectation.
 - Result: source commit `e75d017` merged into `dev` at `5e5f5e6`; immutable tag `v0.2.0-beta.8` resolves to reviewed integration commit `5309b16ae2440f36238fa5a5426cf2e2ecc9f918` and is advertised through `dispatcharr-plugins:dev`.
 - Validation: all 37 plugin tests, Python compilation, JSON parsing, shell syntax, exact offline and remote canonical-source verification, idempotent synchronization, workspace validation, feature run `33015666374`, dev run `33015773661`, tag run `33015811503`, immutable archive/source-pin inspection, registry run `33016050222`, public raw-manifest agreement, and `git diff --check` pass. Installed-update validation remains pending.
+- Started: `2026-08-26`.
+
+### `fix/persistent-fallback-reactivation`
+
+- Purpose: correct the live beta.8 behavior where a new degraded fallback invocation produced a toast but did not immediately restore a dismissed persistent notification-center entry.
+- Base: `dev` at `bd4ece75c8e6a0dd5e1e96e0ddd316a7b7f01400` after refreshing the exact published beta.8 development head.
+- Intended target: `dev`, followed by corrective immutable tag `v0.2.0-beta.9` and `dispatcharr-plugins:dev` publication.
+- Scope: explicit active notification WebSocket serialization, dismissal-reactivation regression coverage, beta.9 metadata, changelog, ADR-021 clarification, and this branch ledger.
+- Exclusions: no canonical wrapper, fallback routing, FFmpeg command, cache, benchmark, profile, hardware, stable registry, GitHub Release, distributable ZIP, or Dispatcharr core change.
+- Dispatcharr evidence: official `v0.29.0` commit `d9abece081c9edf637d4c3fdd41443eb993a3c08` stores notifications durably but its model-to-WebSocket payload omits `is_dismissed`; the frontend merges by notification key and therefore preserves an old `true` value while independently showing a high-priority toast.
+- Validation: official Dispatcharr v0.29.0 model/WebSocket/store review, all 37 plugin tests including explicit `is_dismissed: false` reactivation, Python compilation, JSON parsing, shell syntax, exact offline and remote canonical-source verification, idempotent synchronization, workspace validation, complete-diff review, and `git diff --check` pass. GitHub, immutable archive, registry, and installed beta.9 reactivation validation remain pending; live beta.8 already confirms degraded stream-copy service itself works.
 - Started: `2026-08-26`.
