@@ -42,9 +42,9 @@ This ledger records why every current long-lived or work branch exists and prese
 - Purpose: add a separate Additional FFmpeg options field to every managed profile and make Install or Update report a restart only when it creates a profile.
 - Base: current `dev` at `ef35687`.
 - Intended target: `dev` after the canonical wrapper change is committed, synchronized, and validated.
-- Result: plugin source commit `ca1e3b2` merged into `dev` at `1a9f201`; `dev` is the tagged source for `v0.2.0-beta.3`.
+- Result: plugin source commit `ca1e3b2` merged into `dev` at `1a9f201`; annotated tag `v0.2.0-beta.3` resolves to reviewed integration commit `59f1c20`.
 - Scope: plugin settings/schema mirrors, profile parameter generation, conditional restart results, tests, user/developer documentation, decision history, and the immutable wrapper source pin.
 - Exclusions: removal restart behavior, hardware-cache policy, registry publication, version/tag changes, and GitHub Release creation.
 - Related work: canonical `ffmpeg-asr` branch `feature/additional-ffmpeg-options`.
-- Validation: 20 plugin unit tests, generated-profile and settings-schema parity checks, Python/JSON/shell validation, exact comparison with canonical `ffmpeg-asr v1.1.0-beta.2`, offline and remote source-pin verification, repeat synchronization, and `git diff --check` pass for plugin candidate `v0.2.0-beta.3`.
+- Validation: 20 plugin unit tests, generated-profile and settings-schema parity checks, Python/JSON/shell validation, exact comparison with canonical `ffmpeg-asr v1.1.0-beta.2`, offline and remote source-pin verification, repeat synchronization, tag-archive layout, and `git diff --check` pass for `v0.2.0-beta.3`; the published `dev` workflow completed successfully.
 - Last verified at: `2026-08-25`.
