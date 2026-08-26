@@ -472,6 +472,7 @@ class CapabilityStatusTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "error")
         self.assertEqual(result["cache_status"], "stale")
+        self.assertIn("Status check completed. Hardware recheck required", result["message"])
         self.assertIn("does not match", result["message"])
         self.assertIn("Run Rebuild Hardware Cache", result["message"])
         self.assertIn("Previous cached capabilities (not usable)", result["message"])
@@ -623,10 +624,10 @@ class CacheNotificationTests(unittest.TestCase):
             {"objects": manager, "Source": type("Source", (), {"SYSTEM": "system"})},
         )
         models_module.SystemNotification = notification_class
-        sent = []
+        refreshes = []
         cleared = []
         utils_module = types.ModuleType("core.utils")
-        utils_module.send_websocket_notification = sent.append
+        utils_module.send_websocket_update = lambda *args: refreshes.append(args)
         utils_module.send_notification_dismissed = cleared.append
         core_module = types.ModuleType("core")
 
@@ -650,8 +651,15 @@ class CacheNotificationTests(unittest.TestCase):
             self.assertEqual(manager.key, plugin.CACHE_NOTIFICATION_KEY)
             self.assertEqual(manager.defaults["action_data"]["cache_status"], "stale")
             self.assertTrue(manager.defaults["admin_only"])
-            self.assertEqual(len(sent), 1)
-            self.assertFalse(sent[-1]["is_dismissed"])
+            self.assertEqual(manager.current.dismissals.delete_count, 1)
+            self.assertEqual(
+                refreshes[-1],
+                ("updates", "update", {"type": "notifications_cleared"}),
+            )
+
+            Plugin._sync_cache_notification()
+            self.assertEqual(manager.current.dismissals.delete_count, 2)
+            self.assertEqual(len(refreshes), 2)
 
             with patch.object(
                 Plugin,
@@ -665,21 +673,16 @@ class CacheNotificationTests(unittest.TestCase):
                 },
             ):
                 Plugin._sync_cache_notification(fallback_token="fallback-1")
-                self.assertEqual(manager.current.dismissals.delete_count, 1)
-                self.assertEqual(len(sent), 2)
-                self.assertFalse(sent[-1]["is_dismissed"])
-                self.assertEqual(
-                    sent[-1]["notification_key"],
-                    plugin.CACHE_NOTIFICATION_KEY,
-                )
+                self.assertEqual(manager.current.dismissals.delete_count, 3)
+                self.assertEqual(len(refreshes), 3)
 
                 Plugin._sync_cache_notification(fallback_token="fallback-1")
-                self.assertEqual(manager.current.dismissals.delete_count, 1)
-                self.assertEqual(len(sent), 2)
+                self.assertEqual(manager.current.dismissals.delete_count, 3)
+                self.assertEqual(len(refreshes), 3)
 
                 Plugin._sync_cache_notification(fallback_token="fallback-2")
-                self.assertEqual(manager.current.dismissals.delete_count, 2)
-                self.assertEqual(len(sent), 3)
+                self.assertEqual(manager.current.dismissals.delete_count, 4)
+                self.assertEqual(len(refreshes), 4)
                 self.assertEqual(
                     manager.defaults["action_data"]["fallback_token"],
                     "fallback-2",
@@ -690,6 +693,7 @@ class CacheNotificationTests(unittest.TestCase):
 
         self.assertIsNone(manager.current)
         self.assertEqual(cleared, [plugin.CACHE_NOTIFICATION_KEY])
+        self.assertEqual(len(refreshes), 5)
 
     def test_fallback_marker_syncs_only_new_invocation_tokens(self):
         with (

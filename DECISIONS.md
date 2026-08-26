@@ -934,7 +934,9 @@ When a required cache is missing, invalid, stale, or unavailable, or while the h
 
 Change the persistent notification to state that FFmpeg Smart and hardware acceleration are being bypassed until a required hardware capability scan succeeds. Monitor the fallback marker while the enabled plugin is loaded. Every distinct fallback invocation token must clear dismissals for the fixed `ffmpeg-smart-hardware-cache` notification and send a new WebSocket notification, even if the cache state itself has not changed. A user's dismissal therefore lasts only until another managed profile actually invokes degraded fallback.
 
-The reactivation WebSocket payload must explicitly set `is_dismissed` to `false`. Dispatcharr v0.29.0 merges WebSocket notifications into its browser store by `notification_key`; deleting the database dismissal alone leaves the store's prior `is_dismissed: true` value intact because the core model-to-WebSocket payload omits that field. A high-priority toast may appear in addition to the restored notification-center entry, but it is not the durable notice.
+After clearing dismissals, broadcast Dispatcharr v0.29.0's built-in `notifications_cleared` WebSocket event. Its frontend handler immediately fetches the authoritative, user-specific notification API, so persistent state is restored without depending on a model/dict merge in the browser. Use the same refresh after plugin load, manual Benchmark Status, a new fallback invocation, and notification removal. Beta.9's explicit `is_dismissed: false` merge is superseded because live validation showed that the database state was correct but the browser still required a refresh.
+
+Dispatcharr v0.29.0 colors every successfully completed plugin action popup green and does not inspect the plugin's returned `result.status`. Benchmark Status remains a successful read-only action even when it reports that the cache is unhealthy. Clarify that distinction in the action description and result wording; do not raise a false HTTP/server error merely to force a red popup.
 
 Successful cache validation deletes the persistent notification. Rebuild completion, manual Benchmark Status, and plugin load continue synchronizing the same authoritative cache state.
 
@@ -944,7 +946,7 @@ Dispatcharr calls the managed profile command, not a plugin action, when a viewe
 
 Pure stream copy does not use the GPU decode, filter, or encode paths measured by the hardware scan. It has limited CPU, memory, and network cost and matches the existing decision to leave proxy-only Dispatcharr streams running during benchmarking. This keeps streams available while making the degraded state explicit.
 
-A database-backed notification can remain dismissed indefinitely if only its contents are updated. The wrapper invocation marker bridges the profile process to the loaded plugin so a new degraded call becomes an explicit re-notification event.
+A database-backed notification can remain dismissed indefinitely if only its contents are updated. The wrapper invocation marker bridges the profile process to the loaded plugin so a new degraded call becomes an explicit re-notification event. The browser must then refresh from the authoritative API because a pushed object merge alone did not reliably reactivate the entry in live beta.9 validation.
 
 ## Alternatives considered
 
@@ -961,4 +963,5 @@ The notification watcher must stop cleanly on plugin unload and tolerate multipl
 
 - Operator-approved degraded fallback and notification persistence requirements, 2026-08-26
 - Operator live validation: fallback streamed successfully, but a dismissed warning returned only as a toast because the browser retained its dismissed state, 2026-08-26
+- Operator live validation: beta.9 persisted reactivation in the database but the notification appeared only after a browser refresh; post-install Benchmark Status also exposed Dispatcharr's green action-completion color for an unhealthy result, 2026-08-26
 - Canonical decision: `ffmpeg-asr` ADR-020

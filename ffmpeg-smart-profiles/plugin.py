@@ -192,7 +192,7 @@ def advanced_ffmpeg_fields(prefix, label):
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.2.0-beta.9"
+    version = "0.2.0-beta.10"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
@@ -324,7 +324,15 @@ class Plugin:
                 "message": "This stops active FFmpeg Smart transcodes, routes new managed starts through basic FFmpeg stream copy until the benchmark finishes, and places a heavy concurrent load on every visible GPU. Proxy-only streams continue running.",
             },
         },
-        {"id": "benchmark_status", "label": "Benchmark Status", "button_label": "Check Status"},
+        {
+            "id": "benchmark_status",
+            "label": "Benchmark Status",
+            "description": (
+                "Run a read-only check. Dispatcharr's popup color confirms the "
+                "check completed; the message reports cache health."
+            ),
+            "button_label": "Check Status",
+        },
         {
             "id": "remove_profiles",
             "label": "Remove Managed Profiles",
@@ -1039,7 +1047,8 @@ class Plugin:
         else:
             status = "error"
             message = (
-                cache_detail
+                "Status check completed. Hardware recheck required: "
+                + cache_detail
                 + " Managed profiles use basic stream copy. Run Rebuild Hardware Cache to restore FFmpeg Smart and hardware acceleration."
             )
             if capabilities:
@@ -1085,31 +1094,11 @@ class Plugin:
             ),
         }
 
-    @staticmethod
-    def _notification_websocket_payload(notification):
-        return {
-            "id": notification.id,
-            "notification_key": notification.notification_key,
-            "notification_type": notification.notification_type,
-            "priority": notification.priority,
-            "title": notification.title,
-            "message": notification.message,
-            "action_data": notification.action_data,
-            "is_active": notification.is_active,
-            "admin_only": notification.admin_only,
-            "created_at": (
-                notification.created_at.isoformat()
-                if notification.created_at
-                else None
-            ),
-            "is_dismissed": False,
-        }
-
     @classmethod
     def _sync_cache_notification(cls, fallback_token=None):
         try:
             from core.models import SystemNotification
-            from core.utils import send_notification_dismissed, send_websocket_notification
+            from core.utils import send_notification_dismissed, send_websocket_update
 
             state = cls._cache_notification_state()
             existing = SystemNotification.objects.filter(
@@ -1119,6 +1108,11 @@ class Plugin:
                 if existing:
                     existing.delete()
                     send_notification_dismissed(CACHE_NOTIFICATION_KEY)
+                    send_websocket_update(
+                        "updates",
+                        "update",
+                        {"type": "notifications_cleared"},
+                    )
                 return
 
             previous_action_data = (existing.action_data or {}) if existing else {}
@@ -1149,11 +1143,18 @@ class Plugin:
             fallback_advanced = bool(
                 fallback_token and fallback_token != previous_fallback_token
             )
-            if created or previous_state != state["state"] or fallback_advanced:
-                if not created:
-                    notification.dismissals.all().delete()
-                send_websocket_notification(
-                    cls._notification_websocket_payload(notification)
+            should_reactivate = bool(
+                created
+                or previous_state != state["state"]
+                or fallback_advanced
+                or fallback_token is None
+            )
+            if should_reactivate:
+                notification.dismissals.all().delete()
+                send_websocket_update(
+                    "updates",
+                    "update",
+                    {"type": "notifications_cleared"},
                 )
         except Exception:
             logger.debug(
