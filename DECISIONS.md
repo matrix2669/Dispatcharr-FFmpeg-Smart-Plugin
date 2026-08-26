@@ -911,3 +911,51 @@ Until Dispatcharr adds non-retryable maintenance handling, benchmark-time viewer
 - Operator reports: stripped executable bits, stale-cache false health, and a viewer start during a hardware scan, 2026-08-26
 - Live Dispatcharr `v0.29.0` evidence: scan PID `10972` began at `19:12:05Z`; a new viewer requested a managed channel at `19:12:29Z`; the benchmark lock caused rapid retries and alternate-stream cycling until the scan completed
 - Canonical decision: `ffmpeg-asr` ADR-019
+
+---
+
+# ADR-021: Preserve degraded proxy service and re-notify on every fallback invocation
+
+## Status
+
+Accepted; supersedes ADR-015's mandatory cache-error exit and ADR-020's benchmark-time refusal for plugin-managed streams
+
+## Date
+
+2026-08-26
+
+## Decision
+
+Keep every managed profile pointed at the plugin-owned `ffmpeg-smart-plugin.sh` launcher. The launcher enables the canonical wrapper's opt-in degraded proxy mode and sets a per-invocation marker beneath `/data/ffmpeg_smart_profiles/runtime`. Dispatcharr therefore follows this path:
+
+`managed profile -> ffmpeg-smart-plugin.sh -> ffmpeg-smart.sh -> Smart processing or degraded FFmpeg stream copy`
+
+When a required cache is missing, invalid, stale, or unavailable, or while the hardware benchmark lock is active, the wrapper bypasses FFmpeg Smart policy and hardware acceleration and runs a basic stream-copy MPEG-TS proxy. It must not fall back to CPU transcoding. The existing input, mapping, and mux expert scopes remain effective; Smart video and audio policy scopes do not apply because codecs are copied.
+
+Change the persistent notification to state that FFmpeg Smart and hardware acceleration are being bypassed until a required hardware capability scan succeeds. Monitor the fallback marker while the enabled plugin is loaded. Every distinct fallback invocation token must clear dismissals for the fixed `ffmpeg-smart-hardware-cache` notification and send a new WebSocket notification, even if the cache state itself has not changed. A user's dismissal therefore lasts only until another managed profile actually invokes degraded fallback.
+
+Successful cache validation deletes the persistent notification. Rebuild completion, manual Benchmark Status, and plugin load continue synchronizing the same authoritative cache state.
+
+## Reason
+
+Dispatcharr calls the managed profile command, not a plugin action, when a viewer starts a stream. The launcher is already that command and immediately replaces itself with the canonical wrapper, so it is the correct integration boundary for enabling canonical behavior without duplicating FFmpeg logic in Python.
+
+Pure stream copy does not use the GPU decode, filter, or encode paths measured by the hardware scan. It has limited CPU, memory, and network cost and matches the existing decision to leave proxy-only Dispatcharr streams running during benchmarking. This keeps streams available while making the degraded state explicit.
+
+A database-backed notification can remain dismissed indefinitely if only its contents are updated. The wrapper invocation marker bridges the profile process to the loaded plugin so a new degraded call becomes an explicit re-notification event.
+
+## Alternatives considered
+
+- Put fallback logic in `plugin.py`. Rejected because profile execution does not call a Python plugin action and the canonical wrapper owns FFmpeg behavior.
+- Point profiles directly at a native `ffmpeg` command. Rejected because it would lose the automatic transition back to Smart processing after cache recovery and bypass the canonical ownership boundary.
+- Re-show the notification on a timer without a new invocation. Rejected because dismissal should remain meaningful until degraded behavior is used again.
+- Keep rejecting benchmark-time starts. Superseded because a stream-copy proxy does not consume the hardware encode capacity being measured and avoids misleading source-failure retries.
+
+## Consequences
+
+The notification watcher must stop cleanly on plugin unload and tolerate multiple Dispatcharr processes without creating duplicate database notifications. Marker state is a wake-up signal only; cache validity remains authoritative through the canonical `--cache-status` interface. Source tests must prove launcher opt-in, degraded notification wording, unique-token dismissal reset, same-token deduplication, valid-cache cleanup, and watcher shutdown.
+
+## Provenance
+
+- Operator-approved degraded fallback and notification persistence requirements, 2026-08-26
+- Canonical decision: `ffmpeg-asr` ADR-020

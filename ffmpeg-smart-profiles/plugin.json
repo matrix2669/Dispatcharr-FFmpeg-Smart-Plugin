@@ -1,6 +1,6 @@
 {
   "name": "FFmpeg Smart Profiles",
-  "version": "0.2.0-beta.6",
+  "version": "0.2.0-beta.7",
   "description": "Installs FFmpeg Smart stream/output profiles and manages hardware capacity cache rebuilds.",
   "author": "matrix2669",
   "help_url": "https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin",
@@ -132,7 +132,7 @@
       "id": "profile_note",
       "label": "Profile behavior",
       "type": "info",
-      "description": "All managed profiles use the bundled FFmpeg Smart launcher and persistent state in /data/ffmpeg_smart_profiles. A missing or stale capability cache is reported as an ffmpeg-smart error until Rebuild Hardware Cache succeeds."
+      "description": "All managed profiles use the bundled FFmpeg Smart launcher and persistent state in /data/ffmpeg_smart_profiles. When a required hardware scan is pending or active, profiles use basic FFmpeg stream copy and bypass Smart policy and hardware acceleration until Rebuild Hardware Cache succeeds."
     }
   ],
   "actions": [
@@ -157,7 +157,7 @@
       "confirm": {
         "required": true,
         "title": "Rebuild hardware cache?",
-        "message": "This stops active FFmpeg Smart transcodes, blocks new ones until the benchmark finishes, and places a heavy concurrent load on every visible GPU. Proxy-only streams continue running. Runtime is approximately 1–2 minutes for one GPU and 2–4 minutes per GPU when multiple GPUs are detected; the enabled plugin shows a detected-GPU estimate."
+        "message": "This stops active FFmpeg Smart transcodes, routes new managed starts through basic FFmpeg stream copy until the benchmark finishes, and places a heavy concurrent load on every visible GPU. Proxy-only streams continue running. Runtime is approximately 1–2 minutes for one GPU and 2–4 minutes per GPU when multiple GPUs are detected; the enabled plugin shows a detected-GPU estimate."
       }
     },
     {

@@ -5,6 +5,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import threading
 import types
 import unittest
 from pathlib import Path
@@ -540,7 +541,8 @@ class CacheNotificationTests(unittest.TestCase):
         ):
             running = Plugin._cache_notification_state()
         self.assertEqual(running["state"], "running")
-        self.assertIn("in progress", running["title"])
+        self.assertIn("acceleration bypassed", running["title"])
+        self.assertIn("scan is in progress", running["message"])
 
         with (
             patch.object(Plugin, "_read_pid", return_value=None),
@@ -552,7 +554,8 @@ class CacheNotificationTests(unittest.TestCase):
         ):
             stale = Plugin._cache_notification_state()
         self.assertEqual(stale["state"], "stale")
-        self.assertIn("scan required", stale["title"])
+        self.assertIn("acceleration bypassed", stale["title"])
+        self.assertIn("basic FFmpeg stream copy", stale["message"])
 
         with (
             patch.object(Plugin, "_read_pid", return_value=None),
@@ -567,13 +570,13 @@ class CacheNotificationTests(unittest.TestCase):
     def test_persistent_notification_is_created_and_cleared(self):
         class FakeDismissals:
             def __init__(self):
-                self.deleted = False
+                self.delete_count = 0
 
             def all(self):
                 return self
 
             def delete(self):
-                self.deleted = True
+                self.delete_count += 1
 
         class FakeNotification:
             def __init__(self, manager, action_data):
@@ -597,7 +600,10 @@ class CacheNotificationTests(unittest.TestCase):
 
             def update_or_create(self, notification_key, defaults):
                 created = self.current is None
-                self.current = FakeNotification(self, defaults["action_data"])
+                if created:
+                    self.current = FakeNotification(self, defaults["action_data"])
+                else:
+                    self.current.action_data = defaults["action_data"]
                 self.defaults = defaults
                 self.key = notification_key
                 return self.current, created
@@ -639,11 +645,78 @@ class CacheNotificationTests(unittest.TestCase):
             self.assertTrue(manager.defaults["admin_only"])
             self.assertEqual(len(sent), 1)
 
+            with patch.object(
+                Plugin,
+                "_cache_notification_state",
+                return_value={
+                    "state": "stale",
+                    "notification_type": "warning",
+                    "priority": "high",
+                    "title": "FFmpeg Smart hardware acceleration bypassed",
+                    "message": "Run the hardware scan.",
+                },
+            ):
+                Plugin._sync_cache_notification(fallback_token="fallback-1")
+                self.assertEqual(manager.current.dismissals.delete_count, 1)
+                self.assertEqual(len(sent), 2)
+
+                Plugin._sync_cache_notification(fallback_token="fallback-1")
+                self.assertEqual(manager.current.dismissals.delete_count, 1)
+                self.assertEqual(len(sent), 2)
+
+                Plugin._sync_cache_notification(fallback_token="fallback-2")
+                self.assertEqual(manager.current.dismissals.delete_count, 2)
+                self.assertEqual(len(sent), 3)
+                self.assertEqual(
+                    manager.defaults["action_data"]["fallback_token"],
+                    "fallback-2",
+                )
+
             with patch.object(Plugin, "_cache_notification_state", return_value=None):
                 Plugin._sync_cache_notification()
 
         self.assertIsNone(manager.current)
         self.assertEqual(cleared, [plugin.CACHE_NOTIFICATION_KEY])
+
+    def test_fallback_marker_syncs_only_new_invocation_tokens(self):
+        with (
+            patch.object(
+                Plugin,
+                "_read_fallback_marker",
+                side_effect=["fallback-1", "fallback-1", "fallback-2"],
+            ),
+            patch.object(Plugin, "_sync_cache_notification") as sync,
+        ):
+            token = Plugin._sync_fallback_marker(None)
+            token = Plugin._sync_fallback_marker(token)
+            token = Plugin._sync_fallback_marker(token)
+
+        self.assertEqual(token, "fallback-2")
+        self.assertEqual(
+            [call.kwargs for call in sync.call_args_list],
+            [
+                {"fallback_token": "fallback-1"},
+                {"fallback_token": "fallback-2"},
+            ],
+        )
+
+    def test_notification_watcher_is_singleton_and_stops_cleanly(self):
+        entered = threading.Event()
+
+        def wait_for_stop(stop_event):
+            entered.set()
+            stop_event.wait(5)
+
+        with patch.object(Plugin, "_watch_fallback_invocations", side_effect=wait_for_stop):
+            Plugin._start_notification_watcher()
+            self.assertTrue(entered.wait(1))
+            first_thread = Plugin._notification_watcher_thread
+            Plugin._start_notification_watcher()
+            self.assertIs(Plugin._notification_watcher_thread, first_thread)
+            Plugin._stop_notification_watcher()
+
+        self.assertFalse(first_thread.is_alive())
+        self.assertIsNone(Plugin._notification_watcher_thread)
 
 
 class PersistentStateTests(unittest.TestCase):
@@ -676,6 +749,12 @@ class PersistentStateTests(unittest.TestCase):
             launcher.chmod(0o644)
             wrapper.chmod(0o644)
 
+            fake_bin = Path(temp_dir) / "bin"
+            fake_bin.mkdir()
+            fake_ffmpeg = fake_bin / "ffmpeg"
+            fake_ffmpeg.write_text("#!/bin/bash\nprintf 'proxy output\\n'\n", encoding="utf-8")
+            fake_ffmpeg.chmod(0o755)
+
             spec = importlib.util.spec_from_file_location("installed_mode_repair_test", plugin_path)
             installed_module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(installed_module)
@@ -684,6 +763,7 @@ class PersistentStateTests(unittest.TestCase):
             self.assertEqual(launcher.stat().st_mode & 0o777, 0o755)
             environment = os.environ.copy()
             environment["FFMPEG_SMART_STATE_DIR"] = str(state_dir)
+            environment["PATH"] = f"{fake_bin}{os.pathsep}{environment['PATH']}"
             result = subprocess.run(
                 [str(launcher), "-i", "/unavailable/input.ts"],
                 env=environment,
@@ -693,10 +773,20 @@ class PersistentStateTests(unittest.TestCase):
                 text=True,
                 check=False,
             )
+            marker_exists = (state_dir / "runtime" / "fallback-invocation").is_file()
 
-        self.assertEqual(result.returncode, 78)
-        self.assertIn("[ffmpeg-smart] ERROR [capability-cache-missing]", result.stderr)
-        self.assertIn("Rebuild Hardware Cache", result.stderr)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("[ffmpeg-smart] WARNING [degraded-proxy]", result.stderr)
+        self.assertIn("proxy output", result.stdout)
+        self.assertTrue(marker_exists)
+
+    def test_launcher_enables_degraded_proxy_and_invocation_marker(self):
+        launcher = (REPO_ROOT / "ffmpeg-smart-profiles" / "ffmpeg-smart-plugin.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("FFMPEG_SMART_CACHE_FALLBACK", launcher)
+        self.assertIn("FFMPEG_SMART_FALLBACK_MARKER", launcher)
+        self.assertIn("runtime/fallback-invocation", launcher)
 
     def test_script_check_repairs_execute_bits(self):
         with TemporaryDirectory() as temp_dir:

@@ -4,6 +4,22 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ## [Unreleased]
 
+## [0.2.0-beta.7] - 2026-08-26
+
+### Added
+
+- Keep managed streams available through a basic FFmpeg `-c copy` proxy while the hardware cache is missing, invalid, stale, unavailable, or being rebuilt.
+- Re-display the persistent degraded-mode notification after every new fallback invocation if an administrator dismissed it while the condition remained unresolved.
+
+### Changed
+
+- Synchronize the bundled wrapper to canonical `ffmpeg-asr@4fafc8b5af300d6e47413cfb9cf8409fef7c2201` (`v1.1.0-beta.5`) with opt-in degraded proxy and invocation-marker support.
+- Explain that FFmpeg Smart policy and hardware acceleration are bypassed until a required capability scan succeeds.
+
+### Safety
+
+- Use stream copy only during degraded operation; do not silently substitute CPU transcoding or alter the GPU benchmark policy.
+
 ## [0.2.0-beta.6] - 2026-08-26
 
 ### Added

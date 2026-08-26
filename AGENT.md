@@ -57,7 +57,7 @@ Data flow:
 - Show each advanced scope's complete inherited default or runtime-derived formula in the mode field's help text. Keep the adjacent options field blank for user-owned Add/Replace text; Dispatcharr does not provide a dependent-field hook that can safely populate it when the mode changes.
 - Force SDR takes precedence over Allow HDR. Generate each managed policy flag at most once.
 - All managed Output Profiles must use the pipe-safe wrapper path. Do not replace them with bare `ffmpeg` templates.
-- Hardware benchmarking may stop input- or output-transcoded streams, but proxy-only streams must continue. New FFmpeg Smart transcodes remain blocked until the benchmark lock clears.
+- Hardware benchmarking may stop input- or output-transcoded streams, but proxy-only streams must continue. New managed starts use canonical degraded stream copy until the benchmark lock clears and must not use GPU decode, filtering, or encoding.
 - Do not give the plugin Docker-socket or host-control access merely to restart Dispatcharr. Profile creation and removal return `restart_required` and instruct the operator to restart normally; in-place updates do not require a restart.
 - Recorded GPU capacities are deployment evidence, not portable defaults. Re-measure on materially different hardware or benchmark policy.
 - Preserve the current licensing boundary described in `DECISIONS.md`: the repository's MIT license covers matrix2669-authored plugin work, but it does not independently license inherited wrapper code. Do not publish a new GitHub Release or distributable plugin ZIP until the wrapper's inherited licensing is resolved.
@@ -135,7 +135,7 @@ Behavioral or compatibility changes additionally require applicable live Dispatc
 - a full restart after profile creation or removal, plus an in-place update check that confirms no restart is requested;
 - a real `pipe:0` Output Profile test confirming the opening sample is preserved;
 - benchmark interruption of transcodes while proxy-only streams continue;
-- blocking of new wrapper transcodes while the lock exists;
+- degraded stream-copy routing for new managed starts while the benchmark lock exists, without GPU decode/filter/encode use;
 - background completion, stale-PID handling, and capability status readback;
 - tag archive and manual ZIP layout from a clean extraction.
 

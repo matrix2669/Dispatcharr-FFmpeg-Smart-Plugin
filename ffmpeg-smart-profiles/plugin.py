@@ -20,7 +20,9 @@ PID_FILE = RUNTIME_DIR / "recache.pid"
 LOG_FILE = RUNTIME_DIR / "recache.log"
 BENCHMARK_LOCK_FILE = STATE_DIR / ".benchmark.lock"
 CACHE_FILE = STATE_DIR / ".capabilities.cache"
+FALLBACK_MARKER_FILE = RUNTIME_DIR / "fallback-invocation"
 CACHE_NOTIFICATION_KEY = "ffmpeg-smart-hardware-cache"
+NOTIFICATION_WATCH_INTERVAL = 1.0
 logger = logging.getLogger(__name__)
 
 
@@ -190,13 +192,16 @@ def advanced_ffmpeg_fields(prefix, label):
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.2.0-beta.6"
+    version = "0.2.0-beta.7"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
     )
     author = "matrix2669"
     help_url = "https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin"
+    _notification_watcher_lock = threading.Lock()
+    _notification_watcher_thread = None
+    _notification_watcher_stop_event = None
 
     fields = [
         {"id": "stream_1_enabled", "label": "Enable Stream Profile 1", "type": "boolean", "default": True},
@@ -292,7 +297,7 @@ class Plugin:
             "id": "profile_note",
             "label": "Profile behavior",
             "type": "info",
-            "description": "All managed profiles use the bundled FFmpeg Smart launcher and persistent state in /data/ffmpeg_smart_profiles. A missing or stale capability cache is reported as an ffmpeg-smart error until Rebuild Hardware Cache succeeds.",
+            "description": "All managed profiles use the bundled FFmpeg Smart launcher and persistent state in /data/ffmpeg_smart_profiles. When a required hardware scan is pending or active, profiles use basic FFmpeg stream copy and bypass Smart policy and hardware acceleration until Rebuild Hardware Cache succeeds.",
         },
     ]
 
@@ -316,7 +321,7 @@ class Plugin:
             "confirm": {
                 "required": True,
                 "title": "Rebuild hardware cache?",
-                "message": "This stops active FFmpeg Smart transcodes, blocks new ones until the benchmark finishes, and places a heavy concurrent load on every visible GPU. Proxy-only streams continue running.",
+                "message": "This stops active FFmpeg Smart transcodes, routes new managed starts through basic FFmpeg stream copy until the benchmark finishes, and places a heavy concurrent load on every visible GPU. Proxy-only streams continue running.",
             },
         },
         {"id": "benchmark_status", "label": "Benchmark Status", "button_label": "Check Status"},
@@ -350,6 +355,7 @@ class Plugin:
                 action["confirm"]["message"] += f" Estimated runtime: {estimate}."
         if os.environ.get("DJANGO_SETTINGS_MODULE"):
             self._sync_cache_notification()
+            self._start_notification_watcher()
 
     def run(self, action: str, params: dict, context: dict):
         settings = context.get("settings") or {}
@@ -374,6 +380,7 @@ class Plugin:
         return {"status": "error", "message": f"Unknown action: {action}"}
 
     def stop(self, context: dict):
+        type(self)._stop_notification_watcher()
         pid = self._read_pid()
         if pid and self._pid_is_running(pid):
             try:
@@ -920,8 +927,9 @@ class Plugin:
         return {
             "status": "queued",
             "message": (
-                f"Stopped {stopped} active transcode stream(s), blocked new FFmpeg "
-                f"Smart transcodes, and started the hardware benchmark (PID {process.pid})."
+                f"Stopped {stopped} active transcode stream(s), routed new managed "
+                f"starts through basic FFmpeg stream copy, and started the hardware "
+                f"benchmark (PID {process.pid})."
             ),
             "stopped_streams": stopped,
         }
@@ -1030,7 +1038,10 @@ class Plugin:
                 message += " " + capabilities["summary"]
         else:
             status = "error"
-            message = cache_detail + " Run Rebuild Hardware Cache before using FFmpeg Smart profiles."
+            message = (
+                cache_detail
+                + " Managed profiles use basic stream copy. Run Rebuild Hardware Cache to restore FFmpeg Smart and hardware acceleration."
+            )
             if capabilities:
                 message += " Previous cached capabilities (not usable): " + capabilities["summary"]
         self._sync_cache_notification()
@@ -1051,11 +1062,11 @@ class Plugin:
                 "state": "running",
                 "notification_type": "info",
                 "priority": "high",
-                "title": "FFmpeg Smart hardware scan in progress",
+                "title": "FFmpeg Smart hardware acceleration bypassed",
                 "message": (
-                    "FFmpeg Smart managed streams are temporarily unavailable while "
-                    "the hardware cache is rebuilt. New starts may be rejected until "
-                    "the scan completes."
+                    "A hardware capability scan is in progress. Managed profiles are "
+                    "using basic FFmpeg stream copy and bypassing FFmpeg Smart policy "
+                    "and hardware acceleration until the scan completes successfully."
                 ),
             }
 
@@ -1066,15 +1077,16 @@ class Plugin:
             "state": cache_status,
             "notification_type": "warning",
             "priority": "high",
-            "title": "FFmpeg Smart hardware scan required",
+            "title": "FFmpeg Smart hardware acceleration bypassed",
             "message": (
-                f"{cache_detail} Open FFmpeg Smart Profiles in Plugins and run "
-                "Rebuild Hardware Cache before using managed profiles."
+                f"{cache_detail} Managed profiles are using basic FFmpeg stream copy "
+                "and bypassing FFmpeg Smart policy and hardware acceleration. Open "
+                "FFmpeg Smart Profiles in Plugins and run Rebuild Hardware Cache."
             ),
         }
 
     @classmethod
-    def _sync_cache_notification(cls):
+    def _sync_cache_notification(cls, fallback_token=None):
         try:
             from core.models import SystemNotification
             from core.utils import send_notification_dismissed, send_websocket_notification
@@ -1089,7 +1101,17 @@ class Plugin:
                     send_notification_dismissed(CACHE_NOTIFICATION_KEY)
                 return
 
-            previous_state = (existing.action_data or {}).get("cache_status") if existing else None
+            previous_action_data = (existing.action_data or {}) if existing else {}
+            previous_state = previous_action_data.get("cache_status")
+            previous_fallback_token = previous_action_data.get("fallback_token")
+            effective_fallback_token = fallback_token or previous_fallback_token
+            action_data = {
+                "plugin_key": "ffmpeg_smart_profiles",
+                "plugin_action": "rebuild_cache",
+                "cache_status": state["state"],
+            }
+            if effective_fallback_token:
+                action_data["fallback_token"] = effective_fallback_token
             notification, created = SystemNotification.objects.update_or_create(
                 notification_key=CACHE_NOTIFICATION_KEY,
                 defaults={
@@ -1098,17 +1120,16 @@ class Plugin:
                     "source": SystemNotification.Source.SYSTEM,
                     "title": state["title"],
                     "message": state["message"],
-                    "action_data": {
-                        "plugin_key": "ffmpeg_smart_profiles",
-                        "plugin_action": "rebuild_cache",
-                        "cache_status": state["state"],
-                    },
+                    "action_data": action_data,
                     "is_active": True,
                     "admin_only": True,
                     "expires_at": None,
                 },
             )
-            if created or previous_state != state["state"]:
+            fallback_advanced = bool(
+                fallback_token and fallback_token != previous_fallback_token
+            )
+            if created or previous_state != state["state"] or fallback_advanced:
                 if not created:
                     notification.dismissals.all().delete()
                 send_websocket_notification(notification)
@@ -1117,6 +1138,67 @@ class Plugin:
                 "Could not synchronize FFmpeg Smart cache notification",
                 exc_info=True,
             )
+
+    @staticmethod
+    def _read_fallback_marker():
+        try:
+            return FALLBACK_MARKER_FILE.read_text(encoding="utf-8").strip() or None
+        except OSError:
+            return None
+
+    @classmethod
+    def _sync_fallback_marker(cls, previous_token):
+        token = cls._read_fallback_marker()
+        if token and token != previous_token:
+            cls._sync_cache_notification(fallback_token=token)
+            return token
+        return previous_token
+
+    @classmethod
+    def _watch_fallback_invocations(cls, stop_event):
+        last_token = None
+        while not stop_event.is_set():
+            try:
+                from django.db import close_old_connections
+
+                close_old_connections()
+                last_token = cls._sync_fallback_marker(last_token)
+                close_old_connections()
+            except Exception:
+                logger.debug(
+                    "Could not monitor FFmpeg Smart degraded proxy invocations",
+                    exc_info=True,
+                )
+            stop_event.wait(NOTIFICATION_WATCH_INTERVAL)
+
+    @classmethod
+    def _start_notification_watcher(cls):
+        with cls._notification_watcher_lock:
+            thread = cls._notification_watcher_thread
+            if thread and thread.is_alive():
+                return
+            stop_event = threading.Event()
+            thread = threading.Thread(
+                target=cls._watch_fallback_invocations,
+                args=(stop_event,),
+                name="ffmpeg-smart-fallback-notification",
+                daemon=True,
+            )
+            cls._notification_watcher_stop_event = stop_event
+            cls._notification_watcher_thread = thread
+            thread.start()
+
+    @classmethod
+    def _stop_notification_watcher(cls):
+        with cls._notification_watcher_lock:
+            stop_event = cls._notification_watcher_stop_event
+            thread = cls._notification_watcher_thread
+            cls._notification_watcher_stop_event = None
+            cls._notification_watcher_thread = None
+        if stop_event:
+            stop_event.set()
+        if thread and thread is not threading.current_thread():
+            thread.join(timeout=NOTIFICATION_WATCH_INTERVAL + 1.0)
 
     @staticmethod
     def _cache_status():
