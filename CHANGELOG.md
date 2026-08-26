@@ -4,6 +4,18 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ## [Unreleased]
 
+## [0.2.0-beta.11] - 2026-08-26
+
+### Fixed
+
+- Preserve MPEG-TS-compatible subtitle, data, and attachment streams selected by Map All or typed mappings by explicitly stream-copying those auxiliary stream types on normal Smart video-copy and video-transcode paths.
+- Keep the hardware benchmark lock present until the top-level recache process exits so new managed starts reliably use degraded stream copy for the complete recheck instead of returning to normal Smart policy after a benchmark subshell exits.
+
+### Changed
+
+- Synchronize the bundled wrapper to canonical `ffmpeg-asr v1.1.0-beta.7` at exact commit `6a735d61113646153aef5bf1a1c0a5667b1331e9` and SHA-256 `51e981c57b6cc7757d5f2a4cb7322ea913238f15119ab50fbf61eb2ae89d3d5d`.
+- Clarify Map All's auxiliary-stream copy and MPEG-TS compatibility boundary in every mapping field.
+
 ## [0.2.0-beta.10] - 2026-08-26
 
 ### Fixed

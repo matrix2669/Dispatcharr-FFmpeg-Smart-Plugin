@@ -869,6 +869,29 @@ class ReleaseMetadataTests(unittest.TestCase):
         ):
             self.assertTrue((runtime_dir / filename).is_file(), filename)
 
+    def test_bundled_wrapper_copies_mapped_auxiliary_streams(self):
+        wrapper = (
+            REPO_ROOT / "ffmpeg-smart-profiles" / "ffmpeg-smart.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "MAPPED_AUXILIARY_CODEC_ARGS=(-c:s copy -c:d copy -c:t copy)",
+            wrapper,
+        )
+        self.assertEqual(
+            wrapper.count('"${MAPPED_AUXILIARY_CODEC_ARGS[@]}"'),
+            2,
+        )
+
+    def test_bundled_wrapper_keeps_benchmark_lock_owner_scoped(self):
+        wrapper = (
+            REPO_ROOT / "ffmpeg-smart-profiles" / "ffmpeg-smart.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('[[ "${BASH_SUBSHELL:-0}" -eq 0 ]] || return 0', wrapper)
+        self.assertIn('BENCHMARK_LOCK_OWNER_PID="$$"', wrapper)
+        self.assertIn("trap cleanup_benchmark_lock EXIT", wrapper)
+
 
 if __name__ == "__main__":
     unittest.main()
