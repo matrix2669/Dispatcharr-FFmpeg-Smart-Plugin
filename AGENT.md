@@ -77,6 +77,12 @@ Record every current branch in `BRANCHES.md` before substantive work. Before del
 
 The synchronization workflow targets `dev`. Wrapper-update pull requests must pass plugin validation and human review. Promote the exact tested plugin state to `main`; do not bypass `dev` by silently syncing canonical wrapper changes into production.
 
+## Session completion and remote continuity
+
+GitHub is the authoritative continuation source. Start by fetching `origin` and resume from the exact remote head of the branch that owns the change. A repository-change request authorizes checkpoint commits and pushes to an isolated feature or fix branch. Before ending or handing off a session, preserve unrelated work, update branch/decision/validation records, run the applicable gates, commit every in-scope committable change, push every local commit, and verify through a fresh remote query that the exact GitHub head matches the intended local checkpoint. Incomplete work is pushed as explicit WIP with failures or unavailable validation recorded; never commit credentials, runtime state, excluded artifacts, or unrelated changes merely to clean the worktree.
+
+The checkpoint does not authorize merging into `dev` or `main`, synchronizing a new canonical wrapper into a release, tagging, changing a registry channel, releasing, distributing a ZIP, deploying, force-pushing, or deleting a branch. Report the work branch, `dev` integration, source pin, tag, registry, Release, and deployment states separately.
+
 ## Version and distribution requirements
 
 - `VERSION`, `Plugin.version`, `plugin.json`, the changelog version, and the Git tag must agree.
