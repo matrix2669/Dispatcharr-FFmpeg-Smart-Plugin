@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import shlex
 from pathlib import Path
 
 
@@ -17,7 +18,7 @@ spec.loader.exec_module(module)
 manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 plugin = module.Plugin()
 
-assert plugin.version == "0.2.0-beta.3"
+assert plugin.version == "0.2.0-beta.4"
 assert manifest["version"] == plugin.version
 assert (PLUGIN_DIR / "ffmpeg-smart.sh").is_file()
 assert (PLUGIN_DIR / "ffmpeg-smart-plugin.sh").is_file()
@@ -45,9 +46,35 @@ with_ffmpeg_options = plugin._output_definitions(
         "output_3_enabled": False,
     }
 )[0]["parameters"]
-assert "-ffmpeg-option -metadata" in with_ffmpeg_options
-assert "-ffmpeg-option 'service_name=Mobile feed'" in with_ffmpeg_options
-assert "-ffmpeg-option -muxdelay -ffmpeg-option 0" in with_ffmpeg_options
+assert "-ffmpeg-mux-mode add" in with_ffmpeg_options
+assert "-ffmpeg-mux-option -metadata" in with_ffmpeg_options
+assert "-ffmpeg-mux-option 'service_name=Mobile feed'" in with_ffmpeg_options
+assert "-ffmpeg-mux-option -muxdelay -ffmpeg-mux-option 0" in with_ffmpeg_options
+
+advanced = plugin._stream_definitions(
+    {
+        "stream_1_ffmpeg_input_mode": "replace",
+        "stream_1_ffmpeg_input_options": "-fflags +discardcorrupt+genpts+nobuffer",
+        "stream_1_ffmpeg_mapping_mode": "all",
+        "stream_1_ffmpeg_video_mode": "add",
+        "stream_1_ffmpeg_video_options": (
+            "-g 60 -keyint_min 60 -sc_threshold 0 "
+            "-force_key_frames 'expr:gte(t,n_forced*2)'"
+        ),
+        "stream_1_ffmpeg_audio_mode": "replace",
+        "stream_1_ffmpeg_audio_options": "-c:a ac3",
+        "stream_1_ffmpeg_options_mode": "replace",
+        "stream_1_ffmpeg_options": (
+            "-mpegts_flags +pat_pmt_at_frames+resend_headers+initial_discontinuity"
+        ),
+    }
+)[0]["parameters"]
+advanced_tokens = shlex.split(advanced)
+assert advanced_tokens.index("-ffmpeg-input-mode") < advanced_tokens.index("-ffmpeg-map-mode")
+assert advanced_tokens.index("-ffmpeg-map-mode") < advanced_tokens.index("-ffmpeg-video-mode")
+assert advanced_tokens.index("-ffmpeg-video-mode") < advanced_tokens.index("-ffmpeg-audio-mode")
+assert advanced_tokens.index("-ffmpeg-audio-mode") < advanced_tokens.index("-ffmpeg-mux-mode")
+assert "expr:gte(t,n_forced*2)" in advanced_tokens
 
 # Force SDR must win without raising an error when both controls are enabled.
 override = plugin._stream_definitions(

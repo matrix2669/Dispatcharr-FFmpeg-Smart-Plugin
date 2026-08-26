@@ -138,7 +138,7 @@ class ProfileDefinitionTests(unittest.TestCase):
         self.assertEqual(outputs[0]["name"], "Mobile Output")
         self.assertIn("-maxbr 1M", outputs[0]["parameters"])
 
-    def test_additional_ffmpeg_options_preserve_argument_boundaries(self):
+    def test_existing_ffmpeg_options_become_mux_additions_and_preserve_boundaries(self):
         plugin = Plugin()
         outputs = plugin._output_definitions(
             {
@@ -155,8 +155,10 @@ class ProfileDefinitionTests(unittest.TestCase):
         passthrough = [
             tokens[index + 1]
             for index, token in enumerate(tokens)
-            if token == "-ffmpeg-option"
+            if token == "-ffmpeg-mux-option"
         ]
+        self.assertIn("-ffmpeg-mux-mode", tokens)
+        self.assertEqual(tokens[tokens.index("-ffmpeg-mux-mode") + 1], "add")
         self.assertEqual(
             passthrough,
             [
@@ -168,10 +170,121 @@ class ProfileDefinitionTests(unittest.TestCase):
             ],
         )
 
-    def test_additional_ffmpeg_options_reject_invalid_quoting(self):
+    def test_scoped_ffmpeg_options_reject_invalid_quoting(self):
         plugin = Plugin()
-        with self.assertRaisesRegex(ValueError, "additional FFmpeg options contains invalid quoting"):
+        with self.assertRaisesRegex(ValueError, "mux options contains invalid quoting"):
             plugin._stream_definitions({"stream_1_ffmpeg_options": "'unterminated"})
+
+    def test_scoped_ffmpeg_options_route_the_advanced_example(self):
+        plugin = Plugin()
+        stream = plugin._stream_definitions(
+            {
+                "stream_1_ffmpeg_input_mode": "replace",
+                "stream_1_ffmpeg_input_options": "-fflags +discardcorrupt+genpts+nobuffer",
+                "stream_1_ffmpeg_mapping_mode": "all",
+                "stream_1_ffmpeg_video_mode": "add",
+                "stream_1_ffmpeg_video_options": (
+                    "-g 60 -keyint_min 60 -sc_threshold 0 "
+                    "-force_key_frames 'expr:gte(t,n_forced*2)'"
+                ),
+                "stream_1_ffmpeg_audio_mode": "replace",
+                "stream_1_ffmpeg_audio_options": "-c:a ac3",
+                "stream_1_ffmpeg_options_mode": "replace",
+                "stream_1_ffmpeg_options": (
+                    "-mpegts_flags "
+                    "+pat_pmt_at_frames+resend_headers+initial_discontinuity"
+                ),
+            }
+        )[0]
+
+        tokens = shlex.split(stream["parameters"])
+        self.assertLess(tokens.index("-ffmpeg-input-mode"), tokens.index("-ffmpeg-map-mode"))
+        self.assertLess(tokens.index("-ffmpeg-map-mode"), tokens.index("-ffmpeg-video-mode"))
+        self.assertLess(tokens.index("-ffmpeg-video-mode"), tokens.index("-ffmpeg-audio-mode"))
+        self.assertLess(tokens.index("-ffmpeg-audio-mode"), tokens.index("-ffmpeg-mux-mode"))
+        self.assertIn("expr:gte(t,n_forced*2)", tokens)
+        self.assertIn("+pat_pmt_at_frames+resend_headers+initial_discontinuity", tokens)
+
+    def test_custom_mapping_accepts_ffmpeg_map_pairs(self):
+        plugin = Plugin()
+        output = plugin._output_definitions(
+            {
+                "output_1_ffmpeg_mapping_mode": "replace",
+                "output_1_ffmpeg_mapping": "-map 0:v:0 -map 0:a:0?",
+            }
+        )[0]
+
+        tokens = shlex.split(output["parameters"])
+        self.assertEqual(
+            [tokens[index + 1] for index, token in enumerate(tokens) if token == "-ffmpeg-map"],
+            ["0:v:0", "0:a:0?"],
+        )
+
+    def test_replace_modes_can_intentionally_remove_non_mapping_defaults(self):
+        plugin = Plugin()
+        stream = plugin._stream_definitions(
+            {
+                "stream_1_ffmpeg_input_mode": "replace",
+                "stream_1_ffmpeg_video_mode": "replace",
+                "stream_1_ffmpeg_audio_mode": "replace",
+                "stream_1_ffmpeg_options_mode": "replace",
+            }
+        )[0]
+
+        tokens = shlex.split(stream["parameters"])
+        self.assertEqual(tokens.count("replace"), 4)
+
+    def test_scoped_options_reject_smart_owned_structure(self):
+        plugin = Plugin()
+        cases = (
+            {"stream_1_ffmpeg_input_options": "-i other.ts"},
+            {"stream_1_ffmpeg_video_options": "-c:v copy"},
+            {"stream_1_ffmpeg_video_options": "-vf scale=1280:720"},
+            {"stream_1_ffmpeg_options": "-f matroska"},
+            {"stream_1_ffmpeg_options": "pipe:1"},
+        )
+        for settings in cases:
+            with self.subTest(settings=settings):
+                with self.assertRaisesRegex(ValueError, "FFmpeg Smart-owned"):
+                    plugin._stream_definitions(settings)
+
+    def test_mapping_modes_reject_incomplete_or_conflicting_values(self):
+        plugin = Plugin()
+        with self.assertRaisesRegex(ValueError, "complete -map"):
+            plugin._stream_definitions(
+                {
+                    "stream_1_ffmpeg_mapping_mode": "replace",
+                    "stream_1_ffmpeg_mapping": "-map",
+                }
+            )
+        with self.assertRaisesRegex(ValueError, "all-stream mapping"):
+            plugin._stream_definitions(
+                {
+                    "stream_1_ffmpeg_mapping_mode": "all",
+                    "stream_1_ffmpeg_mapping": "-map 0:v:0",
+                }
+            )
+        with self.assertRaisesRegex(ValueError, "exactly one positive video"):
+            plugin._stream_definitions(
+                {
+                    "stream_1_ffmpeg_mapping_mode": "replace",
+                    "stream_1_ffmpeg_mapping": "-map 0:a:0?",
+                }
+            )
+        with self.assertRaisesRegex(ValueError, "already inherits one video"):
+            plugin._stream_definitions(
+                {
+                    "stream_1_ffmpeg_mapping_mode": "add",
+                    "stream_1_ffmpeg_mapping": "-map 0:v:1",
+                }
+            )
+        with self.assertRaisesRegex(ValueError, "explicit stream type"):
+            plugin._stream_definitions(
+                {
+                    "stream_1_ffmpeg_mapping_mode": "replace",
+                    "stream_1_ffmpeg_mapping": "-map 0:0",
+                }
+            )
 
     def test_policy_checkboxes_generate_flags_and_sdr_overrides_hdr(self):
         plugin = Plugin()
@@ -347,6 +460,7 @@ class ReleaseMetadataTests(unittest.TestCase):
             [field["id"] for field in Plugin.fields],
             [field["id"] for field in manifest["fields"]],
         )
+        self.assertEqual(Plugin.fields, manifest["fields"])
         self.assertEqual(
             [action["id"] for action in Plugin.actions],
             [action["id"] for action in manifest["actions"]],

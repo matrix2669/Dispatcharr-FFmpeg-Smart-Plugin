@@ -20,9 +20,21 @@ Install **FFmpeg Smart Profiles**, enable it, then run **Install or Update Profi
 
 Every managed profile points to the bundled `ffmpeg-smart-plugin.sh` launcher. The launcher keeps mutable state in `/data/ffmpeg_smart_profiles` and then executes the bundled `ffmpeg-smart.sh`. Output Profiles use its pipe-safe `-i pipe:0` mode, which samples the stream for probing and prepends the sampled packets when transcoding starts.
 
-Every slot has an enable checkbox, editable profile name, checkboxes for 10-bit, HDR, SDR, and deinterlacing, editable additional `ffmpeg-smart` options, and a separate Additional FFmpeg options field. If Allow HDR and Force SDR are both checked, Force SDR takes precedence and only `-sdr` is written to the profile. Running **Install or Update Profiles** reconciles renamed or disabled managed profiles when the corresponding cleanup setting is enabled. Existing development profiles that used the native `ffmpeg` command are migrated to the script when their names match the original bundled templates.
+Every slot has an enable checkbox, editable profile name, checkboxes for 10-bit, HDR, SDR, and deinterlacing, editable additional `ffmpeg-smart` policy options, and scoped advanced FFmpeg controls. If Allow HDR and Force SDR are both checked, Force SDR takes precedence and only `-sdr` is written to the profile. Running **Install or Update Profiles** reconciles renamed or disabled managed profiles when the corresponding cleanup setting is enabled. Existing development profiles that used the native `ffmpeg` command are migrated to the script when their names match the original bundled templates.
 
-The Additional FFmpeg options field accepts normal shell-style quoting, such as `-metadata 'service_name=Mobile feed' -muxdelay 0`. The plugin parses that text without evaluating it and passes each exact token through the wrapper's repeatable `-ffmpeg-option` boundary. These advanced options appear after FFmpeg Smart's managed output settings and can override an earlier managed value, but the final MPEG-TS `pipe:1` output remains fixed.
+The advanced controls retain FFmpeg Smart's hardware benefits while exposing options at the phase where FFmpeg expects them:
+
+- **Input defaults** are placed before `-i` and normally inherit Smart's corruption/timestamp handling.
+- **Stream mapping** normally selects the first video and optional first audio. Map all input streams is available when the input has one video; custom Replace mappings must explicitly select exactly one video and may add audio, subtitle, data, or attachment streams.
+- **Video tuning defaults** apply only when Smart chooses to transcode video and can tune GOP, key frames, rate control, or encoder-specific behavior without replacing Smart's selected encoder or hardware filters.
+- **Audio defaults** apply on both video-copy and video-transcode paths and can replace Smart's AAC/copy decision with a deliberate codec choice.
+- **MPEG-TS/output defaults** apply on both paths before the fixed `-f mpegts pipe:1` contract. The existing beta.3 Additional FFmpeg options field is retained here, and a saved value with Inherit selected behaves as Add.
+
+Each non-mapping group offers **Use FFmpeg Smart default**, **Add to default**, and **Replace default**. Replace may be intentionally blank. Fields accept normal shell-style quoting; the plugin parses with `shlex` without evaluating the text and quotes every wrapper argument independently.
+
+For the Discord-style example, choose Replace for Input and enter `-fflags +discardcorrupt+genpts+nobuffer`; choose Map all input streams; choose Add for Video and enter `-g 60 -keyint_min 60 -sc_threshold 0 -force_key_frames 'expr:gte(t,n_forced*2)'`; choose Replace for Audio and enter `-c:a ac3`; then choose Replace for MPEG-TS/output and enter `-mpegts_flags +pat_pmt_at_frames+resend_headers+initial_discontinuity`.
+
+Do not enter `-user_agent`, `-i`, `-c:v`, hardware/device flags, filter graphs, `-f mpegts`, or `pipe:1`: Smart owns those structural parts. Explicit profile limits still win—`-maxbr` remains the maximum bitrate and `-maxchan` remains the maximum channel count. Other expert combinations are accepted only as far as the installed FFmpeg build and selected encoder support them.
 
 Saved settings from development versions that placed policy flags in the additional-options field remain compatible. On **Install / Update**, the plugin removes those copies, enables their matching checkboxes in persisted settings, and generates each policy flag once. Refresh the settings page after normalization to see the checkbox changes; Dispatcharr does not invoke plugins directly from its settings Save button.
 

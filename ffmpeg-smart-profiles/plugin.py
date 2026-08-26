@@ -30,6 +30,17 @@ POLICY_DEFAULTS = {
     "output_2": {"10bit": False, "hdr": False, "sdr": False, "deint": False},
     "output_3": {"10bit": False, "hdr": False, "sdr": False, "deint": False},
 }
+ADVANCED_MODE_OPTIONS = [
+    {"value": "inherit", "label": "Use FFmpeg Smart default"},
+    {"value": "add", "label": "Add to default"},
+    {"value": "replace", "label": "Replace default"},
+]
+MAPPING_MODE_OPTIONS = [
+    {"value": "inherit", "label": "First video and optional first audio"},
+    {"value": "all", "label": "Map all input streams"},
+    {"value": "add", "label": "Add custom mappings to default"},
+    {"value": "replace", "label": "Replace default mappings"},
+]
 
 
 def policy_fields(
@@ -72,9 +83,89 @@ def policy_fields(
     ]
 
 
+def advanced_ffmpeg_fields(prefix, label):
+    return [
+        {
+            "id": f"{prefix}_ffmpeg_input_mode",
+            "label": f"{label}: input defaults",
+            "type": "select",
+            "default": "inherit",
+            "options": copy.deepcopy(ADVANCED_MODE_OPTIONS),
+            "help_text": "Input options are applied before -i. Replace removes FFmpeg Smart's default -fflags and -err_detect values but keeps URL, user-agent, reconnect, and hardware setup.",
+        },
+        {
+            "id": f"{prefix}_ffmpeg_input_options",
+            "label": f"{label}: input options",
+            "type": "string",
+            "default": "",
+            "help_text": "For example: -fflags +discardcorrupt+genpts+nobuffer. Text with Inherit selected is treated as Add.",
+        },
+        {
+            "id": f"{prefix}_ffmpeg_mapping_mode",
+            "label": f"{label}: stream mapping",
+            "type": "select",
+            "default": "inherit",
+            "options": copy.deepcopy(MAPPING_MODE_OPTIONS),
+            "help_text": "The default maps the first video and optional first audio stream. Smart supports one mapped video per job; All is valid only when the input has one video stream.",
+        },
+        {
+            "id": f"{prefix}_ffmpeg_mapping",
+            "label": f"{label}: custom stream mappings",
+            "type": "string",
+            "default": "",
+            "help_text": "Use typed mappings such as -map 0:v:0 -map 0:a:0?. Replace must select exactly one video; Add already inherits its one video. Use Map all input streams instead of entering -map 0 here.",
+        },
+        {
+            "id": f"{prefix}_ffmpeg_video_mode",
+            "label": f"{label}: video tuning defaults",
+            "type": "select",
+            "default": "inherit",
+            "options": copy.deepcopy(ADVANCED_MODE_OPTIONS),
+            "help_text": "Applies only when video is transcoded. Replace removes managed bitrate, GOP, frame-rate, and encoder tuning, but not Smart's hardware encoder, filters, color policy, or an explicit -maxbr ceiling.",
+        },
+        {
+            "id": f"{prefix}_ffmpeg_video_options",
+            "label": f"{label}: video tuning options",
+            "type": "string",
+            "default": "",
+            "help_text": "For example: -g 60 -keyint_min 60 -sc_threshold 0 -force_key_frames 'expr:gte(t,n_forced*2)'.",
+        },
+        {
+            "id": f"{prefix}_ffmpeg_audio_mode",
+            "label": f"{label}: audio defaults",
+            "type": "select",
+            "default": "inherit",
+            "options": copy.deepcopy(ADVANCED_MODE_OPTIONS),
+            "help_text": "Applies on copy and transcode paths. Replace removes Smart's managed AAC/copy decision, while an explicit -maxchan remains a hard maximum.",
+        },
+        {
+            "id": f"{prefix}_ffmpeg_audio_options",
+            "label": f"{label}: audio options",
+            "type": "string",
+            "default": "",
+            "help_text": "For example: -c:a ac3 or -c:a aac -b:a 256k.",
+        },
+        {
+            "id": f"{prefix}_ffmpeg_options_mode",
+            "label": f"{label}: MPEG-TS/output defaults",
+            "type": "select",
+            "default": "inherit",
+            "options": copy.deepcopy(ADVANCED_MODE_OPTIONS),
+            "help_text": "Applies on copy and transcode paths before the fixed -f mpegts pipe:1 output.",
+        },
+        {
+            "id": f"{prefix}_ffmpeg_options",
+            "label": f"{label}: MPEG-TS/output options",
+            "type": "string",
+            "default": "",
+            "help_text": "For example: -mpegts_flags +pat_pmt_at_frames+resend_headers+initial_discontinuity -muxdelay 0. Existing beta.3 values continue here.",
+        },
+    ]
+
+
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.2.0-beta.3"
+    version = "0.2.0-beta.4"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
@@ -96,15 +187,9 @@ class Plugin:
             "label": "Stream Profile 1 options",
             "type": "string",
             "default": "",
-            "help_text": "Additional flags, for example: -vc h264 -maxres 1080 -maxbr 8M -maxchan 2",
+            "help_text": "Optional ffmpeg-smart flags, for example: -vc h264 -maxres 1080 -maxbr 8M -maxchan 2",
         },
-        {
-            "id": "stream_1_ffmpeg_options",
-            "label": "Stream Profile 1: additional FFmpeg options",
-            "type": "string",
-            "default": "",
-            "help_text": "Advanced output options passed directly to FFmpeg, for example: -metadata 'service_name=Mobile feed' -muxdelay 0",
-        },
+        *advanced_ffmpeg_fields("stream_1", "Stream Profile 1"),
         {"id": "stream_2_enabled", "label": "Enable Stream Profile 2", "type": "boolean", "default": False},
         {"id": "stream_2_name", "label": "Stream Profile 2 name", "type": "string", "default": ""},
         *policy_fields("stream_2", "Stream Profile 2"),
@@ -114,12 +199,7 @@ class Plugin:
             "type": "string",
             "default": "",
         },
-        {
-            "id": "stream_2_ffmpeg_options",
-            "label": "Stream Profile 2: additional FFmpeg options",
-            "type": "string",
-            "default": "",
-        },
+        *advanced_ffmpeg_fields("stream_2", "Stream Profile 2"),
         {"id": "output_1_enabled", "label": "Enable Output Profile 1", "type": "boolean", "default": True},
         {"id": "output_1_name", "label": "Output Profile 1 name", "type": "string", "default": "FFMpeg Smart - 720p Mobile"},
         *policy_fields(
@@ -129,24 +209,30 @@ class Plugin:
             deint_default=True,
         ),
         {"id": "output_1_options", "label": "Output Profile 1 options", "type": "string", "default": "-maxres 720 -maxbr 2M -maxchan 2"},
-        {"id": "output_1_ffmpeg_options", "label": "Output Profile 1: additional FFmpeg options", "type": "string", "default": ""},
+        *advanced_ffmpeg_fields("output_1", "Output Profile 1"),
         {"id": "output_2_enabled", "label": "Enable Output Profile 2", "type": "boolean", "default": False},
         {"id": "output_2_name", "label": "Output Profile 2 name", "type": "string", "default": ""},
         *policy_fields("output_2", "Output Profile 2"),
         {"id": "output_2_options", "label": "Output Profile 2 options", "type": "string", "default": ""},
-        {"id": "output_2_ffmpeg_options", "label": "Output Profile 2: additional FFmpeg options", "type": "string", "default": ""},
+        *advanced_ffmpeg_fields("output_2", "Output Profile 2"),
         {"id": "output_3_enabled", "label": "Enable Output Profile 3", "type": "boolean", "default": False},
         {"id": "output_3_name", "label": "Output Profile 3 name", "type": "string", "default": ""},
         *policy_fields("output_3", "Output Profile 3"),
         {"id": "output_3_options", "label": "Output Profile 3 options", "type": "string", "default": ""},
-        {"id": "output_3_ffmpeg_options", "label": "Output Profile 3: additional FFmpeg options", "type": "string", "default": ""},
+        *advanced_ffmpeg_fields("output_3", "Output Profile 3"),
         {
             "id": "remove_missing_profiles",
             "label": "Remove disabled or renamed managed profiles",
             "type": "boolean",
             "default": True,
         },
-        {"id": "update_existing", "label": "Update existing managed profiles", "type": "boolean", "default": True},
+        {
+            "id": "update_existing",
+            "label": "Update existing managed profiles",
+            "type": "boolean",
+            "default": True,
+            "help_text": "Only profiles already pointing to an FFmpeg Smart managed script or matching this plugin's native FFmpeg templates are updated.",
+        },
         {
             "id": "flag_reference_video",
             "label": "Other flags: video and limits",
@@ -173,9 +259,9 @@ class Plugin:
         },
         {
             "id": "flag_reference_ffmpeg",
-            "label": "Additional FFmpeg options",
+            "label": "Advanced FFmpeg Smart options",
             "type": "info",
-            "description": "Advanced output options are passed after FFmpeg Smart's managed settings and may override them. The MPEG-TS pipe output remains fixed.",
+            "description": "Each profile can inherit, add to, or replace scoped input, video-tuning, audio, and MPEG-TS defaults, plus select default, all-stream, or custom mapping. FFmpeg Smart keeps ownership of the hardware encoder, hardware filters, input, and final MPEG-TS pipe.",
         },
         {
             "id": "profile_note",
@@ -286,9 +372,10 @@ class Plugin:
                 str(settings.get(f"stream_{slot}_options", default_options) or ""),
                 f"Stream Profile {slot} options",
             )
-            ffmpeg_options = self._ffmpeg_options(
-                str(settings.get(f"stream_{slot}_ffmpeg_options", "") or ""),
-                f"Stream Profile {slot} additional FFmpeg options",
+            ffmpeg_options = self._advanced_ffmpeg_parameters(
+                settings,
+                f"stream_{slot}",
+                f"Stream Profile {slot}",
             )
             definitions.append(
                 {
@@ -324,9 +411,10 @@ class Plugin:
                 str(settings.get(f"output_{slot}_options", default_options) or ""),
                 f"Output Profile {slot} options",
             )
-            ffmpeg_options = self._ffmpeg_options(
-                str(settings.get(f"output_{slot}_ffmpeg_options", "") or ""),
-                f"Output Profile {slot} additional FFmpeg options",
+            ffmpeg_options = self._advanced_ffmpeg_parameters(
+                settings,
+                f"output_{slot}",
+                f"Output Profile {slot}",
             )
             definitions.append(
                 {
@@ -358,13 +446,195 @@ class Plugin:
         return options.strip()
 
     @staticmethod
-    def _ffmpeg_options(options, label):
+    def _advanced_tokens(options, label):
         try:
-            tokens = shlex.split(options)
+            return shlex.split(options)
         except ValueError as exc:
             raise ValueError(f"{label} contains invalid quoting: {exc}") from exc
+
+    @staticmethod
+    def _advanced_mode(settings, key, label, *, mapping=False):
+        mode = str(settings.get(key, "inherit") or "inherit")
+        allowed = {"inherit", "add", "replace"}
+        if mapping:
+            allowed.add("all")
+        if mode not in allowed:
+            raise ValueError(
+                f"{label} mode must be one of: {', '.join(sorted(allowed))}"
+            )
+        return mode
+
+    @staticmethod
+    def _validate_advanced_tokens(scope, tokens, label):
+        for token in tokens:
+            option = token.split("=", 1)[0]
+            audio_codec = (
+                option in {"-acodec", "-c:a", "-codec:a"}
+                or option.startswith("-c:a:")
+                or option.startswith("-codec:a:")
+            )
+            if audio_codec:
+                if scope == "audio":
+                    continue
+                raise ValueError(f"{label} cannot contain audio option {option}")
+
+            wrapper_owned = (
+                option
+                in {
+                    "-i",
+                    "-f",
+                    "-map",
+                    "-user_agent",
+                    "-c",
+                    "-codec",
+                    "-vcodec",
+                    "-device",
+                    "-dri-device",
+                    "-dri_device",
+                    "-qsv-device",
+                    "-qsv_device",
+                    "-vaapi-device",
+                    "-vaapi_device",
+                    "-init_hw_device",
+                    "-filter_hw_device",
+                    "-vf",
+                    "-filter",
+                    "-filter_complex",
+                }
+                or option.startswith("-hwaccel")
+                or option.startswith("-c:")
+                or option.startswith("-codec:")
+                or option.startswith("-filter:")
+                or option.startswith("-filter_complex")
+            )
+            if wrapper_owned or token == "pipe:1":
+                raise ValueError(
+                    f"{label} cannot contain FFmpeg Smart-owned option {option}"
+                )
+
+    @classmethod
+    def _mapping_specs(cls, options, label):
+        tokens = cls._advanced_tokens(options, label)
+        if not tokens:
+            return []
+        if "-map" not in tokens:
+            if any(token.startswith("-map") for token in tokens):
+                raise ValueError(f"{label} supports only -map <specifier> pairs")
+            return tokens
+
+        specs = []
+        index = 0
+        while index < len(tokens):
+            if tokens[index] != "-map" or index + 1 >= len(tokens):
+                raise ValueError(f"{label} must contain complete -map <specifier> pairs")
+            specs.append(tokens[index + 1])
+            index += 2
+        return specs
+
+    @staticmethod
+    def _validate_mapping_specs(mode, specs, label):
+        video_selectors = 0
+        for specifier in specs:
+            if not specifier:
+                raise ValueError(f"{label} cannot contain an empty stream specifier")
+            negative = specifier.startswith("-")
+            base = specifier[1:] if negative else specifier
+            video_selector = (
+                base in {"0", "0:v", "0:V", "0:v?", "0:V?"}
+                or base.startswith(("0:v:", "0:V:"))
+            )
+            non_video_selector = bool(
+                re.fullmatch(r"0:[asdt](?::.*|\?)?", base)
+            )
+            if negative and video_selector:
+                raise ValueError(
+                    f"{label} cannot remove video; FFmpeg Smart requires exactly one mapped video"
+                )
+            if negative:
+                if not non_video_selector:
+                    raise ValueError(
+                        f"{label} negative mappings must name an audio, subtitle, data, or attachment stream"
+                    )
+                continue
+            if video_selector:
+                video_selectors += 1
+            elif not non_video_selector:
+                raise ValueError(
+                    f"{label} positive mappings must use input 0 and an explicit stream type"
+                )
+
+        if mode == "add" and video_selectors:
+            raise ValueError(
+                f"{label} Add already inherits one video and cannot add another video mapping"
+            )
+        if mode == "replace" and video_selectors != 1:
+            raise ValueError(
+                f"{label} Replace must contain exactly one positive video mapping"
+            )
+
+    @classmethod
+    def _advanced_ffmpeg_parameters(cls, settings, prefix, label):
+        parameters = []
+        groups = (
+            ("input", "ffmpeg_input_mode", "ffmpeg_input_options", "-ffmpeg-input"),
+            ("video", "ffmpeg_video_mode", "ffmpeg_video_options", "-ffmpeg-video"),
+            ("audio", "ffmpeg_audio_mode", "ffmpeg_audio_options", "-ffmpeg-audio"),
+            ("mux", "ffmpeg_options_mode", "ffmpeg_options", "-ffmpeg-mux"),
+        )
+
+        group_parts = {}
+        for scope, mode_suffix, options_suffix, wrapper_prefix in groups:
+            scoped_parts = []
+            mode = cls._advanced_mode(
+                settings,
+                f"{prefix}_{mode_suffix}",
+                f"{label} {scope}",
+            )
+            tokens = cls._advanced_tokens(
+                str(settings.get(f"{prefix}_{options_suffix}", "") or ""),
+                f"{label} {scope} options",
+            )
+            cls._validate_advanced_tokens(scope, tokens, f"{label} {scope} options")
+            if tokens and mode == "inherit":
+                mode = "add"
+            if mode != "inherit":
+                scoped_parts.append(f"{wrapper_prefix}-mode {mode}")
+            scoped_parts.extend(
+                f"{wrapper_prefix}-option {shlex.quote(token)}" for token in tokens
+            )
+            group_parts[scope] = scoped_parts
+
+        mapping_mode = cls._advanced_mode(
+            settings,
+            f"{prefix}_ffmpeg_mapping_mode",
+            f"{label} mapping",
+            mapping=True,
+        )
+        mapping_specs = cls._mapping_specs(
+            str(settings.get(f"{prefix}_ffmpeg_mapping", "") or ""),
+            f"{label} custom mapping",
+        )
+        if mapping_specs and mapping_mode == "inherit":
+            mapping_mode = "add"
+        if mapping_mode == "all" and mapping_specs:
+            raise ValueError(f"{label} all-stream mapping cannot include custom mappings")
+        if mapping_mode == "replace" and not mapping_specs:
+            raise ValueError(f"{label} replacement mapping requires at least one -map value")
+        cls._validate_mapping_specs(mapping_mode, mapping_specs, f"{label} custom mapping")
+        if mapping_mode != "inherit":
+            parameters.append(f"-ffmpeg-map-mode {mapping_mode}")
+        parameters.extend(
+            f"-ffmpeg-map {shlex.quote(specifier)}" for specifier in mapping_specs
+        )
+
         return " ".join(
-            f"-ffmpeg-option {shlex.quote(token)}" for token in tokens
+            (
+                *group_parts["input"],
+                *parameters,
+                *group_parts["video"],
+                *group_parts["audio"],
+                *group_parts["mux"],
+            )
         )
 
     @staticmethod
