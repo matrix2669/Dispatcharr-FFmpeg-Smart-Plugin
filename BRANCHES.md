@@ -20,6 +20,7 @@ This ledger records why every current long-lived or work branch exists and prese
 | `feature/degraded-proxy-fallback` | feature | merged | `dev` | `dev` | Preserve basic stream-copy service and re-notify after every degraded invocation while Smart capabilities are unavailable. |
 | `fix/show-advanced-defaults` | fix | merged | `dev` | `dev` | Show the exact static defaults and runtime-derived default formulas beside every advanced scope control. |
 | `fix/launcher-permissions-cache-status` | fix | merged | `dev` | `dev` | Make registry installs launch reliably and report cache validity rather than file existence alone. |
+| `fix/beta7-canonical-validation` | fix | active | `dev` | `dev` | Repin beta.7 behavior to the corrective green canonical wrapper tag without moving published tags. |
 
 ## Branch records
 
@@ -100,4 +101,15 @@ This ledger records why every current long-lived or work branch exists and prese
 - Canonical source: tagged beta.5 integration commit `4fafc8b5af300d6e47413cfb9cf8409fef7c2201`, recorded and verified at SHA-256 `c4030ee729caa002e0d6b4e68a5893bd73221be4eb72578a71a83cb3d10aa507`.
 - Result: finalized source commit `61a36f27b546f9f94fdf3b0a3283463ca5da3e42` merged into `dev` at `a982b08`; this reviewed integration is the candidate source for `v0.2.0-beta.7`.
 - Validation: 37 plugin tests pass for beta.7, including launcher fallback, unique marker tokens, same-token deduplication, dismissal reset on later invocations, persistent-notification cleanup, and watcher lifecycle. Python/JSON/shell checks, offline and remote canonical-source verification, idempotent synchronization, workspace validation, and `git diff --check` pass. Live Dispatcharr fallback and notification reactivation remain pending.
+- Started: `2026-08-26`.
+
+### `fix/beta7-canonical-validation`
+
+- Purpose: preserve the approved degraded fallback behavior while repinning the plugin to the corrective canonical wrapper tag whose Linux validation passes.
+- Base: `dev` at `600ba14572ab48f4d920c2cfd7ad4ac9fffce787` after immutable plugin beta.7 and canonical wrapper beta.5 were published.
+- Intended target: `dev`, followed by corrective immutable plugin tag `v0.2.0-beta.8` and `dispatcharr-plugins:dev` publication.
+- Scope: exact canonical wrapper commit/checksum synchronization, beta.8 version and release metadata, changelog, tests, and branch ledger.
+- Exclusions: no plugin fallback, notification, profile, scan, hardware, FFmpeg command, Dispatcharr compatibility, stable registry, GitHub Release, or distributable ZIP behavior change; do not move or replace published beta.7.
+- Related work: canonical `ffmpeg-asr v1.1.0-beta.6` at `aeff09204000f58aa6fdd3a14781935f77a0823a`, created after beta.5 workflows exposed a stale scoped-command test expectation.
+- Validation: all 37 plugin tests, Python compilation, JSON parsing, shell syntax, exact offline and remote canonical-source verification, idempotent synchronization, workspace validation, and `git diff --check` pass. GitHub and installed-update validation remain pending.
 - Started: `2026-08-26`.

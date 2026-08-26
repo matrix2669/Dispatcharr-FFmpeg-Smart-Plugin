@@ -4,7 +4,7 @@ set -euo pipefail
 
 LOG_PREFIX="[ffmpeg-smart]"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="1.1.0-beta.5"
+VERSION="1.1.0-beta.6"
 CAPACITY_BENCHMARK_VERSION="concurrency-1.2-v1"
 STATE_DIR="${FFMPEG_SMART_STATE_DIR:-$SCRIPT_DIR}"
 REQUIRE_CACHE_VALUE="${FFMPEG_SMART_REQUIRE_CACHE:-false}"

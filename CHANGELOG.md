@@ -4,6 +4,16 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ## [Unreleased]
 
+## [0.2.0-beta.8] - 2026-08-26
+
+### Fixed
+
+- Repin the bundled wrapper to corrective canonical `ffmpeg-asr v1.1.0-beta.6`, whose Linux validation accounts for the degraded proxy command path and passes without moving the immutable beta.5 tag.
+
+### Changed
+
+- Synchronize the bundled wrapper to exact commit `aeff09204000f58aa6fdd3a14781935f77a0823a` at SHA-256 `03a5bdc63437fa907353356602d83defba2f46e833a1334b1980deec5103dfb1`; fallback runtime behavior is unchanged from plugin beta.7.
+
 ## [0.2.0-beta.7] - 2026-08-26
 
 ### Added
