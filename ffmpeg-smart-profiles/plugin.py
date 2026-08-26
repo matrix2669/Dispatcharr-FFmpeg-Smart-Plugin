@@ -192,7 +192,7 @@ def advanced_ffmpeg_fields(prefix, label):
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.2.0-beta.8"
+    version = "0.2.0-beta.9"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
@@ -1085,6 +1085,26 @@ class Plugin:
             ),
         }
 
+    @staticmethod
+    def _notification_websocket_payload(notification):
+        return {
+            "id": notification.id,
+            "notification_key": notification.notification_key,
+            "notification_type": notification.notification_type,
+            "priority": notification.priority,
+            "title": notification.title,
+            "message": notification.message,
+            "action_data": notification.action_data,
+            "is_active": notification.is_active,
+            "admin_only": notification.admin_only,
+            "created_at": (
+                notification.created_at.isoformat()
+                if notification.created_at
+                else None
+            ),
+            "is_dismissed": False,
+        }
+
     @classmethod
     def _sync_cache_notification(cls, fallback_token=None):
         try:
@@ -1132,7 +1152,9 @@ class Plugin:
             if created or previous_state != state["state"] or fallback_advanced:
                 if not created:
                     notification.dismissals.all().delete()
-                send_websocket_notification(notification)
+                send_websocket_notification(
+                    cls._notification_websocket_payload(notification)
+                )
         except Exception:
             logger.debug(
                 "Could not synchronize FFmpeg Smart cache notification",

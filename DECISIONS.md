@@ -934,6 +934,8 @@ When a required cache is missing, invalid, stale, or unavailable, or while the h
 
 Change the persistent notification to state that FFmpeg Smart and hardware acceleration are being bypassed until a required hardware capability scan succeeds. Monitor the fallback marker while the enabled plugin is loaded. Every distinct fallback invocation token must clear dismissals for the fixed `ffmpeg-smart-hardware-cache` notification and send a new WebSocket notification, even if the cache state itself has not changed. A user's dismissal therefore lasts only until another managed profile actually invokes degraded fallback.
 
+The reactivation WebSocket payload must explicitly set `is_dismissed` to `false`. Dispatcharr v0.29.0 merges WebSocket notifications into its browser store by `notification_key`; deleting the database dismissal alone leaves the store's prior `is_dismissed: true` value intact because the core model-to-WebSocket payload omits that field. A high-priority toast may appear in addition to the restored notification-center entry, but it is not the durable notice.
+
 Successful cache validation deletes the persistent notification. Rebuild completion, manual Benchmark Status, and plugin load continue synchronizing the same authoritative cache state.
 
 ## Reason
@@ -958,4 +960,5 @@ The notification watcher must stop cleanly on plugin unload and tolerate multipl
 ## Provenance
 
 - Operator-approved degraded fallback and notification persistence requirements, 2026-08-26
+- Operator live validation: fallback streamed successfully, but a dismissed warning returned only as a toast because the browser retained its dismissed state, 2026-08-26
 - Canonical decision: `ffmpeg-asr` ADR-020

@@ -4,6 +4,12 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ## [Unreleased]
 
+## [0.2.0-beta.9] - 2026-08-26
+
+### Fixed
+
+- Restore a dismissed degraded-mode warning in Dispatcharr's notification center immediately after every new fallback invocation by sending `is_dismissed: false` in the websocket notification payload; the high-priority toast may still appear, but it no longer replaces the persistent entry.
+
 ## [0.2.0-beta.8] - 2026-08-26
 
 ### Fixed
