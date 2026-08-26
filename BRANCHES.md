@@ -20,7 +20,7 @@ This ledger records why every current long-lived or work branch exists and prese
 | `feature/degraded-proxy-fallback` | feature | merged | `dev` | `dev` | Preserve basic stream-copy service and re-notify after every degraded invocation while Smart capabilities are unavailable. |
 | `fix/show-advanced-defaults` | fix | merged | `dev` | `dev` | Show the exact static defaults and runtime-derived default formulas beside every advanced scope control. |
 | `fix/launcher-permissions-cache-status` | fix | merged | `dev` | `dev` | Make registry installs launch reliably and report cache validity rather than file existence alone. |
-| `fix/beta7-canonical-validation` | fix | active | `dev` | `dev` | Repin beta.7 behavior to the corrective green canonical wrapper tag without moving published tags. |
+| `fix/beta7-canonical-validation` | fix | merged | `dev` | `dev` | Repin beta.7 behavior to the corrective green canonical wrapper tag without moving published tags. |
 
 ## Branch records
 
@@ -37,9 +37,9 @@ This ledger records why every current long-lived or work branch exists and prese
 - Purpose: integrate and validate the next plugin version before stable promotion to `main`.
 - Base: synchronized with `main` after the approved administrative promotion.
 - Intended target: `main` after future version work is reviewed and approved.
-- Current state: integrates beta.6 direct-launch mode repair, authoritative cache health, persistent native maintenance notifications, and pinned canonical `ffmpeg-asr v1.1.0-beta.4` on top of the scoped advanced-option controls.
-- Validation: 34 plugin unit tests, Python/JSON/shell checks, immutable wrapper source verification and idempotent synchronization, workspace reconciliation, exact tag/archive inspection, live Dispatcharr v0.29.0 notification-model and loader compatibility review, and whitespace validation pass. Installed beta.6 update validation remains pending.
-- Publication state: immutable `v0.2.0-beta.6` is tagged and advertised through `dispatcharr-plugins:dev`; the live instance still has beta.5 installed. No GitHub Release, stable-registry change, or distributable ZIP is authorized.
+- Current state: integrates beta.8 degraded stream-copy fallback, per-invocation persistent re-notification, launcher mode repair, authoritative cache health, scoped advanced options, and pinned canonical `ffmpeg-asr v1.1.0-beta.6`.
+- Validation: 37 plugin unit tests, Python/JSON/shell checks, exact offline and remote wrapper verification, idempotent synchronization, workspace validation, and `git diff --check` pass. Tag/archive, registry, and installed-update validation remain pending.
+- Publication state: immutable beta.8 tag and `dispatcharr-plugins:dev` publication are pending. No GitHub Release, stable-registry change, or distributable ZIP is authorized.
 - Last verified at: `2026-08-26`.
 
 ### `feature/additional-ffmpeg-options`
@@ -99,7 +99,7 @@ This ledger records why every current long-lived or work branch exists and prese
 - Exclusions: no CPU transcode fallback, automatic benchmark, Dispatcharr retry-routing or core change, stable registry, GitHub Release, or distributable ZIP.
 - Related work: canonical `ffmpeg-asr` branch `feature/degraded-proxy-fallback` and registry branch `feature/ffmpeg-smart-update-disclaimer`.
 - Canonical source: tagged beta.5 integration commit `4fafc8b5af300d6e47413cfb9cf8409fef7c2201`, recorded and verified at SHA-256 `c4030ee729caa002e0d6b4e68a5893bd73221be4eb72578a71a83cb3d10aa507`.
-- Result: finalized source commit `61a36f27b546f9f94fdf3b0a3283463ca5da3e42` merged into `dev` at `a982b08`; this reviewed integration is the candidate source for `v0.2.0-beta.7`.
+- Result: finalized source commit `61a36f27b546f9f94fdf3b0a3283463ca5da3e42` merged into `dev` at `a982b08`; immutable tag `v0.2.0-beta.7` resolves to `600ba14572ab48f4d920c2cfd7ad4ac9fffce787` and was advertised through `dispatcharr-plugins:dev` before the corrective beta.8 repin.
 - Validation: 37 plugin tests pass for beta.7, including launcher fallback, unique marker tokens, same-token deduplication, dismissal reset on later invocations, persistent-notification cleanup, and watcher lifecycle. Python/JSON/shell checks, offline and remote canonical-source verification, idempotent synchronization, workspace validation, and `git diff --check` pass. Live Dispatcharr fallback and notification reactivation remain pending.
 - Started: `2026-08-26`.
 
@@ -111,5 +111,6 @@ This ledger records why every current long-lived or work branch exists and prese
 - Scope: exact canonical wrapper commit/checksum synchronization, beta.8 version and release metadata, changelog, tests, and branch ledger.
 - Exclusions: no plugin fallback, notification, profile, scan, hardware, FFmpeg command, Dispatcharr compatibility, stable registry, GitHub Release, or distributable ZIP behavior change; do not move or replace published beta.7.
 - Related work: canonical `ffmpeg-asr v1.1.0-beta.6` at `aeff09204000f58aa6fdd3a14781935f77a0823a`, created after beta.5 workflows exposed a stale scoped-command test expectation.
-- Validation: all 37 plugin tests, Python compilation, JSON parsing, shell syntax, exact offline and remote canonical-source verification, idempotent synchronization, workspace validation, and `git diff --check` pass. GitHub and installed-update validation remain pending.
+- Result: source commit `e75d017` merged into `dev` at `5e5f5e6`; this reviewed integration is the candidate source for corrective `v0.2.0-beta.8`.
+- Validation: all 37 plugin tests, Python compilation, JSON parsing, shell syntax, exact offline and remote canonical-source verification, idempotent synchronization, workspace validation, feature-branch GitHub run `33015666374`, and `git diff --check` pass. Tag/archive, dev GitHub, registry, and installed-update validation remain pending.
 - Started: `2026-08-26`.
