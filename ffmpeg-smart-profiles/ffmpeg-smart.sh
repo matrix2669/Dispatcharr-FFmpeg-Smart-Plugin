@@ -4,7 +4,7 @@ set -euo pipefail
 
 LOG_PREFIX="[ffmpeg-smart]"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="1.1.0-beta.1"
+VERSION="1.1.0-beta.2"
 CAPACITY_BENCHMARK_VERSION="concurrency-1.2-v1"
 STATE_DIR="${FFMPEG_SMART_STATE_DIR:-$SCRIPT_DIR}"
 REQUIRE_CACHE_VALUE="${FFMPEG_SMART_REQUIRE_CACHE:-false}"
@@ -41,13 +41,19 @@ QSV_DEVICE_WAS_SET=false
 [[ -n "$QSV_DEVICE" ]] && QSV_DEVICE_WAS_SET=true
 
 # Device overrides must be known before hardware fingerprinting and cache load.
-CLI_ARGS=("$@")
-for ((CLI_INDEX = 0; CLI_INDEX < ${#CLI_ARGS[@]}; CLI_INDEX++)); do
-    case "${CLI_ARGS[$CLI_INDEX]}" in
+scan_device_overrides() {
+    local -a cli_args=("$@")
+    local cli_index
+    for ((cli_index = 0; cli_index < ${#cli_args[@]}; cli_index++)); do
+        case "${cli_args[$cli_index]}" in
+        -ffmpeg-option)
+            (( cli_index + 1 < ${#cli_args[@]} )) || { echo "$LOG_PREFIX ERROR: -ffmpeg-option requires one FFmpeg argument" >&2; exit 1; }
+            cli_index=$((cli_index + 1))
+            ;;
         -device|-dri-device)
-            (( CLI_INDEX + 1 < ${#CLI_ARGS[@]} )) || { echo "$LOG_PREFIX ERROR: ${CLI_ARGS[$CLI_INDEX]} requires a device path" >&2; exit 1; }
-            CLI_INDEX=$((CLI_INDEX + 1))
-            DRI_DEVICE="${CLI_ARGS[$CLI_INDEX]}"
+            (( cli_index + 1 < ${#cli_args[@]} )) || { echo "$LOG_PREFIX ERROR: ${cli_args[$cli_index]} requires a device path" >&2; exit 1; }
+            cli_index=$((cli_index + 1))
+            DRI_DEVICE="${cli_args[$cli_index]}"
             VAAPI_DEVICE="$DRI_DEVICE"
             QSV_DEVICE="$DRI_DEVICE"
             DRI_DEVICE_WAS_SET=true
@@ -55,19 +61,21 @@ for ((CLI_INDEX = 0; CLI_INDEX < ${#CLI_ARGS[@]}; CLI_INDEX++)); do
             QSV_DEVICE_WAS_SET=true
             ;;
         -vaapi-device)
-            (( CLI_INDEX + 1 < ${#CLI_ARGS[@]} )) || { echo "$LOG_PREFIX ERROR: -vaapi-device requires a device path" >&2; exit 1; }
-            CLI_INDEX=$((CLI_INDEX + 1))
-            VAAPI_DEVICE="${CLI_ARGS[$CLI_INDEX]}"
+            (( cli_index + 1 < ${#cli_args[@]} )) || { echo "$LOG_PREFIX ERROR: -vaapi-device requires a device path" >&2; exit 1; }
+            cli_index=$((cli_index + 1))
+            VAAPI_DEVICE="${cli_args[$cli_index]}"
             VAAPI_DEVICE_WAS_SET=true
             ;;
         -qsv-device)
-            (( CLI_INDEX + 1 < ${#CLI_ARGS[@]} )) || { echo "$LOG_PREFIX ERROR: -qsv-device requires a device path" >&2; exit 1; }
-            CLI_INDEX=$((CLI_INDEX + 1))
-            QSV_DEVICE="${CLI_ARGS[$CLI_INDEX]}"
+            (( cli_index + 1 < ${#cli_args[@]} )) || { echo "$LOG_PREFIX ERROR: -qsv-device requires a device path" >&2; exit 1; }
+            cli_index=$((cli_index + 1))
+            QSV_DEVICE="${cli_args[$cli_index]}"
             QSV_DEVICE_WAS_SET=true
             ;;
-    esac
-done
+        esac
+    done
+}
+scan_device_overrides "$@"
 
 get_dri_vendor() {
     local dev="$1"
@@ -863,6 +871,7 @@ FORCE_DEINT=false
 RECACHE=false
 RECACHE_ONLY=false
 ACCEL="__auto__"
+EXTRA_FFMPEG_ARGS=()
 
 detect_accel() {
     if [[ "$(uname -s)" == "Darwin" ]]; then
@@ -892,25 +901,33 @@ detect_accel() {
     fi
 }
 
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        -user_agent) AGENT="$2"; shift 2 ;;
-        -i) URL="$2"; shift 2 ;;
-        -accel) ACCEL="$2"; shift 2 ;;
-        -device|-dri-device|-qsv-device|-vaapi-device) shift 2 ;;
-        -vc) VCODEC_OUT="$2"; shift 2 ;;
-        -10bit) ALLOW_10BIT=true; shift ;;
-        -hdr) ALLOW_HDR=true; shift ;;
-        -maxres) MAX_RES="$2"; shift 2 ;;
-        -maxchan) MAX_CHANNELS="$2"; shift 2 ;;
-        -maxbr|-maxbitrate) MAX_BITRATE_INPUT="$2"; shift 2 ;;
-        -sdr) FORCE_SDR=true; shift ;;
-        -deint|-deinterlace) FORCE_DEINT=true; shift ;;
-        --recache) RECACHE=true; shift ;;
-        --recache-only) RECACHE=true; RECACHE_ONLY=true; shift ;;
-        *) shift ;;
-    esac
-done
+parse_cli_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -user_agent) AGENT="$2"; shift 2 ;;
+            -i) URL="$2"; shift 2 ;;
+            -accel) ACCEL="$2"; shift 2 ;;
+            -device|-dri-device|-qsv-device|-vaapi-device) shift 2 ;;
+            -vc) VCODEC_OUT="$2"; shift 2 ;;
+            -10bit) ALLOW_10BIT=true; shift ;;
+            -hdr) ALLOW_HDR=true; shift ;;
+            -maxres) MAX_RES="$2"; shift 2 ;;
+            -maxchan) MAX_CHANNELS="$2"; shift 2 ;;
+            -maxbr|-maxbitrate) MAX_BITRATE_INPUT="$2"; shift 2 ;;
+            -sdr) FORCE_SDR=true; shift ;;
+            -deint|-deinterlace) FORCE_DEINT=true; shift ;;
+            -ffmpeg-option)
+                (( $# >= 2 )) || { echo "$LOG_PREFIX ERROR: -ffmpeg-option requires one FFmpeg argument" >&2; exit 1; }
+                EXTRA_FFMPEG_ARGS+=("$2")
+                shift 2
+                ;;
+            --recache) RECACHE=true; shift ;;
+            --recache-only) RECACHE=true; RECACHE_ONLY=true; shift ;;
+            *) shift ;;
+        esac
+    done
+}
+parse_cli_args "$@"
 
 benchmark_lock_active() {
     local lock_pid=""
@@ -1331,6 +1348,7 @@ PROFILE_INFO=""
 [[ -n "$MAX_CHANNELS" ]] && PROFILE_INFO+=" maxchan=${MAX_CHANNELS}"
 [[ "$FORCE_SDR" == "true" ]] && PROFILE_INFO+=" sdr=true"
 [[ "$FORCE_DEINT" == "true" ]] && PROFILE_INFO+=" deint=true"
+(( ${#EXTRA_FFMPEG_ARGS[@]} > 0 )) && PROFILE_INFO+=" ffmpeg_options=${#EXTRA_FFMPEG_ARGS[@]}"
 
 echo "$LOG_PREFIX Detected ${WIDTH}x${HEIGHT} $VCODEC/$PIX_FMT field=${FIELD_ORDER} @ $FPS_FRAC -> $ENCODER ${TARGET_WIDTH}x${TARGET_HEIGHT} reason=${VIDEO_TRANSCODE_REASON} GOP=$GOP${GOP_WARN} audio=${AUDIO_INFO} accel=${ACCEL}${DEVICE_INFO} 10bit=${ALLOW_10BIT} hdr=${ALLOW_HDR}${PROFILE_INFO}" >&2
 
@@ -1374,6 +1392,7 @@ run_ffmpeg() {
         -mpegts_flags +pat_pmt_at_frames+resend_headers \
         -flush_packets 1 \
         -max_muxing_queue_size 4096 \
+        "${EXTRA_FFMPEG_ARGS[@]}" \
         -f mpegts \
         pipe:1
 }

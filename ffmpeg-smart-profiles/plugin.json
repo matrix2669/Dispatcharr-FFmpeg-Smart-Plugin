@@ -1,6 +1,6 @@
 {
   "name": "FFmpeg Smart Profiles",
-  "version": "0.2.0-beta.2",
+  "version": "0.2.0-beta.3",
   "description": "Installs FFmpeg Smart stream/output profiles and manages hardware capacity cache rebuilds.",
   "author": "matrix2669",
   "help_url": "https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin",
@@ -12,6 +12,7 @@
     {"id": "stream_1_sdr", "label": "Stream Profile 1: force SDR", "type": "boolean", "default": false, "help_text": "Takes precedence over Allow HDR."},
     {"id": "stream_1_deint", "label": "Stream Profile 1: force deinterlace", "type": "boolean", "default": false},
     {"id": "stream_1_options", "label": "Stream Profile 1 options", "type": "string", "default": "", "help_text": "Optional ffmpeg-smart flags, for example: -vc h264 -maxres 1080 -maxbr 8M -maxchan 2"},
+    {"id": "stream_1_ffmpeg_options", "label": "Stream Profile 1: additional FFmpeg options", "type": "string", "default": "", "help_text": "Advanced output options passed directly to FFmpeg, for example: -metadata 'service_name=Mobile feed' -muxdelay 0"},
     {"id": "stream_2_enabled", "label": "Enable Stream Profile 2", "type": "boolean", "default": false},
     {"id": "stream_2_name", "label": "Stream Profile 2 name", "type": "string", "default": ""},
     {"id": "stream_2_10bit", "label": "Stream Profile 2: allow 10-bit", "type": "boolean", "default": false, "help_text": "Unchecked leaves 10-bit on the wrapper's automatic hardware policy."},
@@ -19,6 +20,7 @@
     {"id": "stream_2_sdr", "label": "Stream Profile 2: force SDR", "type": "boolean", "default": false, "help_text": "Takes precedence over Allow HDR."},
     {"id": "stream_2_deint", "label": "Stream Profile 2: force deinterlace", "type": "boolean", "default": false},
     {"id": "stream_2_options", "label": "Stream Profile 2 options", "type": "string", "default": ""},
+    {"id": "stream_2_ffmpeg_options", "label": "Stream Profile 2: additional FFmpeg options", "type": "string", "default": ""},
     {"id": "output_1_enabled", "label": "Enable Output Profile 1", "type": "boolean", "default": true},
     {"id": "output_1_name", "label": "Output Profile 1 name", "type": "string", "default": "FFMpeg Smart - 720p Mobile"},
     {"id": "output_1_10bit", "label": "Output Profile 1: allow 10-bit", "type": "boolean", "default": false, "help_text": "Unchecked leaves 10-bit on the wrapper's automatic hardware policy."},
@@ -26,6 +28,7 @@
     {"id": "output_1_sdr", "label": "Output Profile 1: force SDR", "type": "boolean", "default": true, "help_text": "Takes precedence over Allow HDR."},
     {"id": "output_1_deint", "label": "Output Profile 1: force deinterlace", "type": "boolean", "default": true},
     {"id": "output_1_options", "label": "Output Profile 1 options", "type": "string", "default": "-maxres 720 -maxbr 2M -maxchan 2"},
+    {"id": "output_1_ffmpeg_options", "label": "Output Profile 1: additional FFmpeg options", "type": "string", "default": ""},
     {"id": "output_2_enabled", "label": "Enable Output Profile 2", "type": "boolean", "default": false},
     {"id": "output_2_name", "label": "Output Profile 2 name", "type": "string", "default": ""},
     {"id": "output_2_10bit", "label": "Output Profile 2: allow 10-bit", "type": "boolean", "default": false, "help_text": "Unchecked leaves 10-bit on the wrapper's automatic hardware policy."},
@@ -33,6 +36,7 @@
     {"id": "output_2_sdr", "label": "Output Profile 2: force SDR", "type": "boolean", "default": false, "help_text": "Takes precedence over Allow HDR."},
     {"id": "output_2_deint", "label": "Output Profile 2: force deinterlace", "type": "boolean", "default": false},
     {"id": "output_2_options", "label": "Output Profile 2 options", "type": "string", "default": ""},
+    {"id": "output_2_ffmpeg_options", "label": "Output Profile 2: additional FFmpeg options", "type": "string", "default": ""},
     {"id": "output_3_enabled", "label": "Enable Output Profile 3", "type": "boolean", "default": false},
     {"id": "output_3_name", "label": "Output Profile 3 name", "type": "string", "default": ""},
     {"id": "output_3_10bit", "label": "Output Profile 3: allow 10-bit", "type": "boolean", "default": false, "help_text": "Unchecked leaves 10-bit on the wrapper's automatic hardware policy."},
@@ -40,6 +44,7 @@
     {"id": "output_3_sdr", "label": "Output Profile 3: force SDR", "type": "boolean", "default": false, "help_text": "Takes precedence over Allow HDR."},
     {"id": "output_3_deint", "label": "Output Profile 3: force deinterlace", "type": "boolean", "default": false},
     {"id": "output_3_options", "label": "Output Profile 3 options", "type": "string", "default": ""},
+    {"id": "output_3_ffmpeg_options", "label": "Output Profile 3: additional FFmpeg options", "type": "string", "default": ""},
     {"id": "remove_missing_profiles", "label": "Remove disabled or renamed managed profiles", "type": "boolean", "default": true},
     {
       "id": "update_existing",
@@ -73,6 +78,12 @@
       "description": "-i and -user_agent are added by the plugin. Use Rebuild Hardware Cache instead of putting --recache or --recache-only in a profile."
     },
     {
+      "id": "flag_reference_ffmpeg",
+      "label": "Additional FFmpeg options",
+      "type": "info",
+      "description": "Advanced output options are passed after FFmpeg Smart's managed settings and may override them. The MPEG-TS pipe output remains fixed."
+    },
+    {
       "id": "profile_note",
       "label": "Profile behavior",
       "type": "info",
@@ -89,7 +100,7 @@
       "confirm": {
         "required": true,
         "title": "Install or update profiles?",
-        "message": "Installing or updating profiles requires a full Dispatcharr restart before the profiles can be used. Continue?"
+        "message": "Adding a new profile requires a full Dispatcharr restart before it can be used. Updates to existing profiles work without a restart. Continue?"
       }
     },
     {

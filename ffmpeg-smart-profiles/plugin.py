@@ -74,7 +74,7 @@ def policy_fields(
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.2.0-beta.2"
+    version = "0.2.0-beta.3"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
@@ -98,12 +98,25 @@ class Plugin:
             "default": "",
             "help_text": "Additional flags, for example: -vc h264 -maxres 1080 -maxbr 8M -maxchan 2",
         },
+        {
+            "id": "stream_1_ffmpeg_options",
+            "label": "Stream Profile 1: additional FFmpeg options",
+            "type": "string",
+            "default": "",
+            "help_text": "Advanced output options passed directly to FFmpeg, for example: -metadata 'service_name=Mobile feed' -muxdelay 0",
+        },
         {"id": "stream_2_enabled", "label": "Enable Stream Profile 2", "type": "boolean", "default": False},
         {"id": "stream_2_name", "label": "Stream Profile 2 name", "type": "string", "default": ""},
         *policy_fields("stream_2", "Stream Profile 2"),
         {
             "id": "stream_2_options",
             "label": "Stream Profile 2 options",
+            "type": "string",
+            "default": "",
+        },
+        {
+            "id": "stream_2_ffmpeg_options",
+            "label": "Stream Profile 2: additional FFmpeg options",
             "type": "string",
             "default": "",
         },
@@ -116,14 +129,17 @@ class Plugin:
             deint_default=True,
         ),
         {"id": "output_1_options", "label": "Output Profile 1 options", "type": "string", "default": "-maxres 720 -maxbr 2M -maxchan 2"},
+        {"id": "output_1_ffmpeg_options", "label": "Output Profile 1: additional FFmpeg options", "type": "string", "default": ""},
         {"id": "output_2_enabled", "label": "Enable Output Profile 2", "type": "boolean", "default": False},
         {"id": "output_2_name", "label": "Output Profile 2 name", "type": "string", "default": ""},
         *policy_fields("output_2", "Output Profile 2"),
         {"id": "output_2_options", "label": "Output Profile 2 options", "type": "string", "default": ""},
+        {"id": "output_2_ffmpeg_options", "label": "Output Profile 2: additional FFmpeg options", "type": "string", "default": ""},
         {"id": "output_3_enabled", "label": "Enable Output Profile 3", "type": "boolean", "default": False},
         {"id": "output_3_name", "label": "Output Profile 3 name", "type": "string", "default": ""},
         *policy_fields("output_3", "Output Profile 3"),
         {"id": "output_3_options", "label": "Output Profile 3 options", "type": "string", "default": ""},
+        {"id": "output_3_ffmpeg_options", "label": "Output Profile 3: additional FFmpeg options", "type": "string", "default": ""},
         {
             "id": "remove_missing_profiles",
             "label": "Remove disabled or renamed managed profiles",
@@ -156,6 +172,12 @@ class Plugin:
             "description": "-i and -user_agent are added by the plugin. Use Rebuild Hardware Cache instead of putting --recache or --recache-only in a profile.",
         },
         {
+            "id": "flag_reference_ffmpeg",
+            "label": "Additional FFmpeg options",
+            "type": "info",
+            "description": "Advanced output options are passed after FFmpeg Smart's managed settings and may override them. The MPEG-TS pipe output remains fixed.",
+        },
+        {
             "id": "profile_note",
             "label": "Profile behavior",
             "type": "info",
@@ -172,7 +194,7 @@ class Plugin:
             "confirm": {
                 "required": True,
                 "title": "Install or update profiles?",
-                "message": "Installing or updating profiles requires a full Dispatcharr restart before the profiles can be used. Continue?",
+                "message": "Adding a new profile requires a full Dispatcharr restart before it can be used. Updates to existing profiles work without a restart. Continue?",
             },
         },
         {
@@ -264,12 +286,18 @@ class Plugin:
                 str(settings.get(f"stream_{slot}_options", default_options) or ""),
                 f"Stream Profile {slot} options",
             )
+            ffmpeg_options = self._ffmpeg_options(
+                str(settings.get(f"stream_{slot}_ffmpeg_options", "") or ""),
+                f"Stream Profile {slot} additional FFmpeg options",
+            )
             definitions.append(
                 {
                     "name": name,
                     "command": str(LAUNCHER_PATH),
                     "parameters": self._join_parameters(
-                        '-i "{streamUrl}" -user_agent "{userAgent}"', options
+                        '-i "{streamUrl}" -user_agent "{userAgent}"',
+                        options,
+                        ffmpeg_options,
                     ),
                     "is_active": True,
                 }
@@ -296,11 +324,15 @@ class Plugin:
                 str(settings.get(f"output_{slot}_options", default_options) or ""),
                 f"Output Profile {slot} options",
             )
+            ffmpeg_options = self._ffmpeg_options(
+                str(settings.get(f"output_{slot}_ffmpeg_options", "") or ""),
+                f"Output Profile {slot} additional FFmpeg options",
+            )
             definitions.append(
                 {
                     "name": name,
                     "command": str(LAUNCHER_PATH),
-                    "parameters": self._join_parameters("-i pipe:0", options),
+                    "parameters": self._join_parameters("-i pipe:0", options, ffmpeg_options),
                 }
             )
         self._validate_unique_names(definitions, "Output Profile")
@@ -324,6 +356,16 @@ class Plugin:
         if invalid:
             raise ValueError(f"{label} cannot contain {invalid}")
         return options.strip()
+
+    @staticmethod
+    def _ffmpeg_options(options, label):
+        try:
+            tokens = shlex.split(options)
+        except ValueError as exc:
+            raise ValueError(f"{label} contains invalid quoting: {exc}") from exc
+        return " ".join(
+            f"-ffmpeg-option {shlex.quote(token)}" for token in tokens
+        )
 
     @staticmethod
     def _normalize_policy_settings(settings):
@@ -388,8 +430,8 @@ class Plugin:
         return " ".join(part for part in (options, *generated) if part)
 
     @staticmethod
-    def _join_parameters(base, options):
-        return f"{base} {options}".strip()
+    def _join_parameters(*parts):
+        return " ".join(part for part in parts if part).strip()
 
     @staticmethod
     def _is_managed_script(command):
@@ -448,10 +490,22 @@ class Plugin:
 
         if logger:
             logger.info("FFmpeg Smart profile install result: %s", result)
+        return self._install_result(result)
+
+    @classmethod
+    def _install_result(cls, result):
+        restart_required = bool(result["created"] or result["removed"])
+        message = cls._result_message(result)
+        if result["created"]:
+            message += " Restart Dispatcharr before using newly added profiles."
+        elif result["removed"]:
+            message += " Restart Dispatcharr for removed profiles to fully take effect."
+        elif result["updated"]:
+            message += " Updated profiles are available without restarting Dispatcharr."
         return {
             "status": "ok",
-            "message": self._result_message(result) + " Restart Dispatcharr before using these profiles.",
-            "restart_required": True,
+            "message": message,
+            "restart_required": restart_required,
             **result,
         }
 

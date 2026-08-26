@@ -4,6 +4,24 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ## [Unreleased]
 
+## [0.2.0-beta.3] - 2026-08-25
+
+### Added
+
+- Add a separate Additional FFmpeg options field to every managed profile and preserve each parsed argument through the canonical wrapper without shell evaluation.
+
+### Changed
+
+- Synchronize the bundled wrapper to `ffmpeg-asr@6659e1bd3d747fa81d2a79b4ed64ea75e58698ff` (`v1.1.0-beta.2`) with repeatable, output-scoped `-ffmpeg-option` support.
+
+### Fixed
+
+- Report a required Dispatcharr restart when profile application creates a profile, while allowing ordinary updates to apply without a restart; removal restart behavior is unchanged.
+
+### Validation
+
+- Passed 20 plugin unit tests, Python/JSON/shell checks, offline and remote immutable-source verification, exact local canonical-source comparison, repeat synchronization, and whitespace validation.
+
 ## [0.2.0-beta.2] - 2026-08-22
 
 ### Changed
@@ -75,7 +93,8 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 - Recorded final live capacity evidence at the canonical wrapper's 1.2x threshold: Arc A310 18 and UHD 770 15. These values are environment-specific and are not plugin defaults.
 - Verified the `v0.1.0` tagged tree installs from the stable plugin directory.
 
-[Unreleased]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.2...HEAD
+[Unreleased]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.3...HEAD
+[0.2.0-beta.3]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.2...v0.2.0-beta.3
 [0.2.0-beta.2]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.1...v0.2.0-beta.2
 [0.2.0-beta.1]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.1.0...v0.2.0-beta.1
 [0.1.0]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/releases/tag/v0.1.0

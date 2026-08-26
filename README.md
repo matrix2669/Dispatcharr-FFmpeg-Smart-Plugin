@@ -20,7 +20,9 @@ Install **FFmpeg Smart Profiles**, enable it, then run **Install or Update Profi
 
 Every managed profile points to the bundled `ffmpeg-smart-plugin.sh` launcher. The launcher keeps mutable state in `/data/ffmpeg_smart_profiles` and then executes the bundled `ffmpeg-smart.sh`. Output Profiles use its pipe-safe `-i pipe:0` mode, which samples the stream for probing and prepends the sampled packets when transcoding starts.
 
-Every slot has an enable checkbox, editable profile name, checkboxes for 10-bit, HDR, SDR, and deinterlacing, plus editable additional `ffmpeg-smart` options. If Allow HDR and Force SDR are both checked, Force SDR takes precedence and only `-sdr` is written to the profile. Running **Install or Update Profiles** reconciles renamed or disabled managed profiles when the corresponding cleanup setting is enabled. Existing development profiles that used the native `ffmpeg` command are migrated to the script when their names match the original bundled templates.
+Every slot has an enable checkbox, editable profile name, checkboxes for 10-bit, HDR, SDR, and deinterlacing, editable additional `ffmpeg-smart` options, and a separate Additional FFmpeg options field. If Allow HDR and Force SDR are both checked, Force SDR takes precedence and only `-sdr` is written to the profile. Running **Install or Update Profiles** reconciles renamed or disabled managed profiles when the corresponding cleanup setting is enabled. Existing development profiles that used the native `ffmpeg` command are migrated to the script when their names match the original bundled templates.
+
+The Additional FFmpeg options field accepts normal shell-style quoting, such as `-metadata 'service_name=Mobile feed' -muxdelay 0`. The plugin parses that text without evaluating it and passes each exact token through the wrapper's repeatable `-ffmpeg-option` boundary. These advanced options appear after FFmpeg Smart's managed output settings and can override an earlier managed value, but the final MPEG-TS `pipe:1` output remains fixed.
 
 Saved settings from development versions that placed policy flags in the additional-options field remain compatible. On **Install / Update**, the plugin removes those copies, enables their matching checkboxes in persisted settings, and generates each policy flag once. Refresh the settings page after normalization to see the checkbox changes; Dispatcharr does not invoke plugins directly from its settings Save button.
 
@@ -28,7 +30,7 @@ The initial defaults enable Stream Profile 1 (`FFmpeg Smart`) with 10-bit and HD
 
 The settings page includes a short flag reference for output codec, resolution, bitrate, audio-channel limits, acceleration, and explicit device selection.
 
-Profile installation is idempotent. Locked profiles, duplicate names, and same-name profiles pointing to unrelated commands are reported as conflicts rather than overwritten. Dispatcharr requires a full restart before directly created or updated profiles can be used, so both profile-changing actions show a confirmation warning and return a restart-required notification.
+Profile installation is idempotent. Locked profiles, duplicate names, and same-name profiles pointing to unrelated commands are reported as conflicts rather than overwritten. Adding a profile requires a full Dispatcharr restart before the new profile can be used; updating an existing managed profile applies without a restart. Removing profiles still requires a restart for the removal to fully take effect.
 
 The plugin cannot restart Dispatcharr by itself in a standard container deployment. It runs as the unprivileged Dispatcharr service user and is intentionally not given access to the Docker host control socket.
 

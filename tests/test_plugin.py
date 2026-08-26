@@ -1,5 +1,6 @@
 import json
 import os
+import shlex
 import subprocess
 import sys
 import unittest
@@ -59,13 +60,17 @@ class ActiveTranscodeSelectionTests(unittest.TestCase):
 
 
 class ProfileDefinitionTests(unittest.TestCase):
-    def test_profile_actions_warn_that_dispatcharr_restart_is_required(self):
+    def test_profile_actions_distinguish_creation_updates_and_removal_restarts(self):
         plugin = Plugin()
         actions = {action["id"]: action for action in plugin.actions}
 
         self.assertTrue(actions["install_profiles"]["confirm"]["required"])
         self.assertIn(
-            "full Dispatcharr restart",
+            "Adding a new profile requires a full Dispatcharr restart",
+            actions["install_profiles"]["confirm"]["message"],
+        )
+        self.assertIn(
+            "Updates to existing profiles work without a restart",
             actions["install_profiles"]["confirm"]["message"],
         )
         self.assertTrue(actions["remove_profiles"]["confirm"]["required"])
@@ -73,6 +78,20 @@ class ProfileDefinitionTests(unittest.TestCase):
             "full Dispatcharr restart",
             actions["remove_profiles"]["confirm"]["message"],
         )
+
+    def test_install_result_requires_restart_only_for_creation_or_removal(self):
+        base = {"created": [], "updated": [], "unchanged": [], "removed": [], "conflicts": []}
+
+        created = Plugin._install_result({**base, "created": ["New profile"]})
+        updated = Plugin._install_result({**base, "updated": ["Existing profile"]})
+        removed = Plugin._install_result({**base, "removed": ["Old profile"]})
+
+        self.assertTrue(created["restart_required"])
+        self.assertIn("newly added profiles", created["message"])
+        self.assertFalse(updated["restart_required"])
+        self.assertIn("without restarting Dispatcharr", updated["message"])
+        self.assertTrue(removed["restart_required"])
+        self.assertIn("removed profiles", removed["message"])
 
     def test_benchmark_confirmation_estimates_from_detected_gpu_count(self):
         with patch("plugin.glob.glob", return_value=["renderD128", "renderD129"]):
@@ -118,6 +137,41 @@ class ProfileDefinitionTests(unittest.TestCase):
         self.assertIn("-maxres 720", streams[0]["parameters"])
         self.assertEqual(outputs[0]["name"], "Mobile Output")
         self.assertIn("-maxbr 1M", outputs[0]["parameters"])
+
+    def test_additional_ffmpeg_options_preserve_argument_boundaries(self):
+        plugin = Plugin()
+        outputs = plugin._output_definitions(
+            {
+                "output_1_ffmpeg_options": (
+                    "-metadata 'service_name=Mobile feed' -muxdelay 0 "
+                    "'; touch /tmp/ffmpeg-smart-must-not-run'"
+                ),
+                "output_2_enabled": False,
+                "output_3_enabled": False,
+            }
+        )
+
+        tokens = shlex.split(outputs[0]["parameters"])
+        passthrough = [
+            tokens[index + 1]
+            for index, token in enumerate(tokens)
+            if token == "-ffmpeg-option"
+        ]
+        self.assertEqual(
+            passthrough,
+            [
+                "-metadata",
+                "service_name=Mobile feed",
+                "-muxdelay",
+                "0",
+                "; touch /tmp/ffmpeg-smart-must-not-run",
+            ],
+        )
+
+    def test_additional_ffmpeg_options_reject_invalid_quoting(self):
+        plugin = Plugin()
+        with self.assertRaisesRegex(ValueError, "additional FFmpeg options contains invalid quoting"):
+            plugin._stream_definitions({"stream_1_ffmpeg_options": "'unterminated"})
 
     def test_policy_checkboxes_generate_flags_and_sdr_overrides_hdr(self):
         plugin = Plugin()
@@ -289,6 +343,23 @@ class ReleaseMetadataTests(unittest.TestCase):
 
         self.assertEqual(version, Plugin.version)
         self.assertEqual(version, manifest["version"])
+        self.assertEqual(
+            [field["id"] for field in Plugin.fields],
+            [field["id"] for field in manifest["fields"]],
+        )
+        self.assertEqual(
+            [action["id"] for action in Plugin.actions],
+            [action["id"] for action in manifest["actions"]],
+        )
+        install_action = next(
+            action for action in manifest["actions"] if action["id"] == "install_profiles"
+        )
+        self.assertEqual(
+            next(action for action in Plugin.actions if action["id"] == "install_profiles")[
+                "confirm"
+            ]["message"],
+            install_action["confirm"]["message"],
+        )
 
     def test_runtime_files_use_stable_plugin_directory(self):
         runtime_dir = REPO_ROOT / "ffmpeg-smart-profiles"

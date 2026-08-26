@@ -419,7 +419,7 @@ Runtime PID, log, cache, and lock files are ignored state, not release content. 
 
 ## Status
 
-Accepted
+Superseded by ADR-016
 
 ## Date
 
@@ -448,6 +448,10 @@ Operators perform restart and browser refresh explicitly. Compatibility review m
 ## Provenance
 
 - Commits: `1974182`, `875ca20`
+
+## Supersession
+
+ADR-016 preserves restart requirements for profile creation and removal but supersedes the claim that an in-place update requires a restart.
 
 ---
 
@@ -670,3 +674,86 @@ Plugin removal does not automatically delete persistent FFmpeg Smart state. Oper
 
 - Canonical wrapper: `ffmpeg-asr@37bd0a9b16748a28f2144981fe1f315c1f01aa8f`
 - User-reported plugin update state loss on 2026-08-22
+
+---
+
+# ADR-016: Restart only for profile creation or removal
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-25
+
+## Decision
+
+**Install or Update Profiles** must distinguish the changes it actually applies:
+
+- creating any managed profile returns `restart_required: true` and tells the operator to restart before using the newly added profile;
+- updating existing managed profiles in place returns `restart_required: false` when no profile was created or removed and states that the update is available without a restart;
+- removing a disabled or renamed managed profile during reconciliation returns `restart_required: true`, consistent with the dedicated removal action;
+- an unchanged or conflict-only result does not request a restart.
+
+The action confirmation must no longer imply that updates require a restart. It states that adding a profile requires a full restart and that updates work without one. **Remove Managed Profiles** keeps its existing restart confirmation and result behavior.
+
+## Reason
+
+Installed behavior established that Dispatcharr applies changes saved to an existing profile without reloading the application. Only adding a profile requires discovery during startup. Keeping the blanket warning made routine option changes look more disruptive than they are.
+
+Removal remains restart-gated because deleting a profile can affect loaded profile state and channel assignments, and the 2026-08-25 operator correction addressed additions versus updates rather than removal semantics.
+
+## Alternatives considered
+
+- Keep requiring a restart after every update. Rejected because it contradicts observed update behavior and the operator requirement.
+- Never request a restart from Install or Update. Rejected because newly created profiles are not usable until Dispatcharr restarts, and optional cleanup may also remove profiles.
+- Restart Dispatcharr from the plugin. Rejected because the plugin remains intentionally unprivileged and has no host-control access.
+
+## Consequences
+
+The result payload is conditional on the created, updated, and removed lists. Tests must cover each state independently and mixed reconciliation results must remain restart-gated when they contain a creation or removal.
+
+## Provenance
+
+- Operator requirement review: 2026-08-25
+- Supersedes: ADR-010 only for in-place update behavior
+
+---
+
+# ADR-017: Expose advanced FFmpeg options separately from wrapper policy
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-25
+
+## Decision
+
+Give each of the two Stream Profile slots and three Output Profile slots a separate Additional FFmpeg options string field. Keep the existing Additional options field exclusively for `ffmpeg-smart` wrapper policy.
+
+Parse the FFmpeg field with Python `shlex.split` without shell evaluation. Generate one safely quoted `-ffmpeg-option <token>` pair for every parsed token, preserving order and values containing spaces or shell metacharacters. Invalid quoting blocks the enabled profile definition with an attributable validation error.
+
+The canonical wrapper owns placement: advanced arguments follow its managed output settings and precede the fixed `-f mpegts pipe:1`. The plugin documents that advanced settings can override managed FFmpeg values and does not promise compatibility with the selected encoder or filters.
+
+## Reason
+
+The existing Additional options field configures the wrapper's stable policy surface. Mixing raw FFmpeg switches into that field would make ownership ambiguous and the wrapper previously ignored unknown flags. A separate field gives advanced operators an explicit escape hatch while retaining deterministic, injection-resistant argument handling.
+
+## Alternatives considered
+
+- Put raw FFmpeg switches into the existing Additional options field. Rejected because wrapper flags and downstream FFmpeg arguments have different owners and validation rules.
+- Store one already-quoted shell fragment in the profile. Rejected because nested parsing would be ambiguous and could require unsafe evaluation.
+- Add a checkbox or plugin field for every FFmpeg feature. Rejected because the FFmpeg option surface is large, encoder-specific, and evolves independently.
+
+## Consequences
+
+The Python field list and `plugin.json` settings must remain identical. Wrapper synchronization is mandatory before the plugin change can be considered complete, and tests must confirm exact generated token boundaries across the plugin-to-wrapper handoff.
+
+## Provenance
+
+- Operator requirement review: 2026-08-25
+- Canonical decision: `ffmpeg-asr` ADR-017
