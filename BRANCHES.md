@@ -35,10 +35,10 @@ This ledger records why every current long-lived or work branch exists and prese
 - Purpose: integrate and validate the next plugin version before stable promotion to `main`.
 - Base: synchronized with `main` after the approved administrative promotion.
 - Intended target: `main` after future version work is reviewed and approved.
-- Current state: integrates the beta.5 in-UI inherited-default reference on top of the beta.4 scoped FFmpeg controls and the pinned `ffmpeg-asr v1.1.0-beta.3` wrapper.
-- Validation: 26 plugin unit tests, exact help/schema parity for all 25 advanced mode fields, Python/JSON/shell checks, immutable wrapper pin verification, profile-generation regressions, and whitespace validation pass. Earlier beta.2 live Dispatcharr and `pipe:0` validation remains applicable because beta.5 does not change wrapper or profile-generation behavior.
-- Publication state: immutable `v0.2.0-beta.5` is tagged and advertised through `dispatcharr-plugins:dev`; no GitHub Release, stable-registry change, or distributable ZIP is authorized.
-- Last verified at: `2026-08-25`.
+- Current state: integrates beta.6 direct-launch mode repair, authoritative cache health, persistent native maintenance notifications, and pinned canonical `ffmpeg-asr v1.1.0-beta.4` on top of the scoped advanced-option controls.
+- Validation: 34 plugin unit tests, Python/JSON/shell checks, immutable wrapper source verification and idempotent synchronization, workspace reconciliation, exact tag/archive inspection, live Dispatcharr v0.29.0 notification-model and loader compatibility review, and whitespace validation pass. Installed beta.6 update validation remains pending.
+- Publication state: immutable `v0.2.0-beta.6` is tagged and advertised through `dispatcharr-plugins:dev`; the live instance still has beta.5 installed. No GitHub Release, stable-registry change, or distributable ZIP is authorized.
+- Last verified at: `2026-08-26`.
 
 ### `feature/additional-ffmpeg-options`
 
@@ -80,10 +80,10 @@ This ledger records why every current long-lived or work branch exists and prese
 
 - Purpose: correct a registry reinstall that left bundled scripts non-executable and a Benchmark Status result that reported an existing but hardware-stale cache as healthy.
 - Base: `dev` at `01a6820` after refreshing GitHub and reconciling workspace standards revision `sha256:6456d4a722cfca0a03e6bce3d698208c844a114953c62d0fe757789d48f1c794`.
-- Intended target: `dev`, followed by approved immutable tag `v0.2.0-beta.6` and `dispatcharr-plugins:dev` publication after installed-plugin validation.
-- Result: source commit `a2af6ce` merged into `dev` at `45e6e5a`; this reviewed integration is the candidate source for `v0.2.0-beta.6`.
+- Intended target: `dev`, followed by approved immutable tag `v0.2.0-beta.6`, `dispatcharr-plugins:dev` publication, and installed-plugin validation.
+- Result: source commit `a2af6ce` merged into `dev` at `45e6e5a`; annotated tag `v0.2.0-beta.6` resolves to reviewed integration commit `e9e7554` and is advertised through `dispatcharr-plugins:dev`.
 - Scope: direct launcher mode repair, authoritative cache-validity status, persistent native cache-maintenance notifications, canonical wrapper beta.4 synchronization, regression tests, user/developer guidance, and beta.6 metadata.
 - Exclusions: no automatic disruptive benchmark, no Dispatcharr request-routing or failover core change, no stable registry, GitHub Release, or distributable ZIP.
 - Reported evidence: after a plugin reinstall the scripts lacked execute permission; a normal stream then emitted the wrapper's hardware-stale cache error, while Benchmark Status treated the cache as valid because the file still existed.
-- Validation: 34 plugin unit tests pass, including a simulated `0644` ZIP extraction, enabled-plugin load repair to `0755`, direct launcher execution, canonical cache-status handling, persistent-notification create/clear behavior, and profile restart semantics. Python/JSON/shell checks, immutable beta.4 wrapper verification, workspace reconciliation, and `git diff --check` pass. Tag-archive and installed Dispatcharr update checks remain required after publication.
+- Validation: 34 plugin unit tests pass, including a simulated `0644` ZIP extraction, enabled-plugin load repair to `0755`, direct launcher execution, canonical cache-status handling, persistent-notification create/clear behavior, and profile restart semantics. Python/JSON/shell checks, immutable beta.4 wrapper verification and idempotent synchronization, workspace reconciliation, exact tag/archive inspection, GitHub workflows, and `git diff --check` pass. The live beta.5 instance and cached pre-publication registry state were verified separately; beta.6 installation remains pending.
 - Started: `2026-08-26`.
