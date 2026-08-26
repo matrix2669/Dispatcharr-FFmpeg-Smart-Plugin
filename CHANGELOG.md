@@ -4,11 +4,18 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ## [Unreleased]
 
+## [0.2.0-beta.10] - 2026-08-26
+
+### Fixed
+
+- Make notification reactivation immediately visible without a browser refresh by clearing stored dismissals and broadcasting Dispatcharr's built-in authoritative notification-list refresh after plugin load, a manual status check, each new degraded fallback invocation, and notification removal.
+- Clarify that the green edge on Dispatcharr v0.29.0's Benchmark Status popup means the read-only plugin action completed; the popup message remains authoritative for whether a hardware recheck is required.
+
 ## [0.2.0-beta.9] - 2026-08-26
 
 ### Fixed
 
-- Restore a dismissed degraded-mode warning in Dispatcharr's notification center immediately after every new fallback invocation by sending `is_dismissed: false` in the websocket notification payload; the high-priority toast may still appear, but it no longer replaces the persistent entry.
+- Attempt to restore a dismissed degraded-mode warning in Dispatcharr's notification center immediately after every new fallback invocation by sending `is_dismissed: false` in the websocket notification payload. Live validation found that the durable database state changed, but the browser still required a refresh; beta.10 replaces this merge-only approach.
 
 ## [0.2.0-beta.8] - 2026-08-26
 

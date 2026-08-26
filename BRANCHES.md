@@ -138,5 +138,5 @@ This ledger records why every current long-lived or work branch exists and prese
 - Exclusions: no canonical wrapper, fallback routing, FFmpeg command, cache-validity policy, benchmark behavior, profile, hardware, Dispatcharr core, stable registry, GitHub Release, or distributable ZIP change.
 - Dispatcharr evidence: official `v0.29.0` commit `d9abece081c9edf637d4c3fdd41443eb993a3c08` handles `notifications_cleared` by fetching the authoritative notification API, while plugin action HTTP success is colored green without inspecting `result.status`.
 - Reported evidence: installed beta.9 restores the database-backed warning only after a browser refresh; a post-install Benchmark Status check reports the recheck requirement but Dispatcharr gives the successful action request a green toast edge.
-- Validation: pending.
+- Validation: all 37 plugin tests, Python compilation, JSON parsing, shell syntax, exact offline and remote canonical-source verification, workspace validation, official Dispatcharr v0.29.0 notification-refresh and plugin-action UI contract review, complete-diff review, and `git diff --check` pass. Feature workflow, immutable tag/archive, registry publication, and installed beta.10 validation remain pending.
 - Started: `2026-08-26`.
