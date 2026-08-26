@@ -4,7 +4,7 @@ set -euo pipefail
 
 LOG_PREFIX="[ffmpeg-smart]"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="1.1.0-beta.3"
+VERSION="1.1.0-beta.4"
 CAPACITY_BENCHMARK_VERSION="concurrency-1.2-v1"
 STATE_DIR="${FFMPEG_SMART_STATE_DIR:-$SCRIPT_DIR}"
 REQUIRE_CACHE_VALUE="${FFMPEG_SMART_REQUIRE_CACHE:-false}"
@@ -870,6 +870,7 @@ FORCE_SDR=false
 FORCE_DEINT=false
 RECACHE=false
 RECACHE_ONLY=false
+CACHE_STATUS_ONLY=false
 ACCEL="__auto__"
 FFMPEG_INPUT_MODE="inherit"
 FFMPEG_MAP_MODE="inherit"
@@ -963,11 +964,31 @@ parse_cli_args() {
                 ;;
             --recache) RECACHE=true; shift ;;
             --recache-only) RECACHE=true; RECACHE_ONLY=true; shift ;;
+            --cache-status) CACHE_STATUS_ONLY=true; shift ;;
             *) shift ;;
         esac
     done
 }
 parse_cli_args "$@"
+
+if [[ "$CACHE_STATUS_ONLY" == "true" ]]; then
+    if [[ "$RECACHE" == "true" ]]; then
+        echo "$LOG_PREFIX ERROR [configuration]: --cache-status cannot be combined with --recache or --recache-only" >&2
+        exit 64
+    fi
+    cache_status=0
+    load_cache 2>/dev/null || cache_status=$?
+    case "$cache_status" in
+        0) cache_status_name="valid" ;;
+        2) cache_status_name="missing" ;;
+        3) cache_status_name="invalid" ;;
+        4) cache_status_name="stale" ;;
+        *) cache_status_name="unavailable" ;;
+    esac
+    printf 'FFMPEG_SMART_CACHE_STATUS=%s\n' "$cache_status_name"
+    [[ "$cache_status" -eq 0 ]] && exit 0
+    exit 78
+fi
 
 configuration_error() {
     echo "$LOG_PREFIX ERROR [advanced-options]: $1" >&2

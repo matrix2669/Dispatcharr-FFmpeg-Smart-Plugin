@@ -18,6 +18,7 @@ This ledger records why every current long-lived or work branch exists and prese
 | `feature/additional-ffmpeg-options` | feature | merged | `dev` | `dev` | Add per-profile raw FFmpeg arguments and correct apply-profile restart feedback. |
 | `feature/scoped-ffmpeg-options` | feature | merged | `dev` | `dev` | Expose phase-scoped Smart FFmpeg defaults and expert overrides for every managed profile. |
 | `fix/show-advanced-defaults` | fix | merged | `dev` | `dev` | Show the exact static defaults and runtime-derived default formulas beside every advanced scope control. |
+| `fix/launcher-permissions-cache-status` | fix | active | `dev` | `dev` | Make registry installs launch reliably and report cache validity rather than file existence alone. |
 
 ## Branch records
 
@@ -74,3 +75,14 @@ This ledger records why every current long-lived or work branch exists and prese
 - Related work: canonical defaults remain owned by pinned `ffmpeg-asr v1.1.0-beta.3`.
 - Validation: 26 plugin unit tests, exact default text for all five profile slots, generated settings-schema parity, Python/JSON/shell checks, offline and remote source-pin verification, existing profile-generation regressions, tag archive/runtime layout inspection, and `git diff --check` pass. The published tag dereferences to `6fb786d`, the exact GitHub archive reports beta.5, and the `dev` verification workflow completed successfully.
 - Last verified at: `2026-08-25`.
+
+### `fix/launcher-permissions-cache-status`
+
+- Purpose: correct a registry reinstall that left bundled scripts non-executable and a Benchmark Status result that reported an existing but hardware-stale cache as healthy.
+- Base: `dev` at `01a6820` after refreshing GitHub and reconciling workspace standards revision `sha256:6456d4a722cfca0a03e6bce3d698208c844a114953c62d0fe757789d48f1c794`.
+- Intended target: `dev`, followed by approved immutable tag `v0.2.0-beta.6` and `dispatcharr-plugins:dev` publication after installed-plugin validation.
+- Scope: direct launcher mode repair, authoritative cache-validity status, persistent native cache-maintenance notifications, canonical wrapper beta.4 synchronization, regression tests, user/developer guidance, and beta.6 metadata.
+- Exclusions: no automatic disruptive benchmark, no Dispatcharr request-routing or failover core change, no stable registry, GitHub Release, or distributable ZIP.
+- Reported evidence: after a plugin reinstall the scripts lacked execute permission; a normal stream then emitted the wrapper's hardware-stale cache error, while Benchmark Status treated the cache as valid because the file still existed.
+- Validation: 34 plugin unit tests pass, including a simulated `0644` ZIP extraction, enabled-plugin load repair to `0755`, direct launcher execution, canonical cache-status handling, persistent-notification create/clear behavior, and profile restart semantics. Python/JSON/shell checks, immutable beta.4 wrapper verification, workspace reconciliation, and `git diff --check` pass. Tag-archive and installed Dispatcharr update checks remain required after publication.
+- Started: `2026-08-26`.

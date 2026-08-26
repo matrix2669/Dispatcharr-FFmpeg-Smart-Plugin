@@ -4,6 +4,26 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ## [Unreleased]
 
+## [0.2.0-beta.6] - 2026-08-26
+
+### Added
+
+- Add persistent Dispatcharr notification-center warnings when the hardware cache needs a scan and while a rebuild is active; clear the warning automatically after successful validation.
+
+### Fixed
+
+- Restore bundled script execute permissions immediately when an enabled plugin is loaded after Dispatcharr's ZIP installer strips archive mode bits.
+- Validate cache health through the canonical wrapper so a hardware-stale cache cannot be reported as healthy merely because its file exists.
+- Report missing, invalid, stale, inconsistent, and unavailable caches as actionable Benchmark Status errors while labeling any parsed stale capabilities as previous and unusable.
+
+### Changed
+
+- Synchronize the bundled wrapper to `ffmpeg-asr@fb990e9879eddf879fa6a57eaf76f0bc6040de50` (`v1.1.0-beta.4`) with the authoritative read-only cache-status contract.
+
+### Known limitations
+
+- Dispatcharr v0.29.0 treats benchmark-lock exit status 75 as a normal stream failure and can retry alternate streams; the persistent in-progress notification clarifies maintenance, but clean non-retryable handling requires Dispatcharr core support.
+
 ## [0.2.0-beta.5] - 2026-08-25
 
 ### Fixed
@@ -126,7 +146,8 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 - Recorded final live capacity evidence at the canonical wrapper's 1.2x threshold: Arc A310 18 and UHD 770 15. These values are environment-specific and are not plugin defaults.
 - Verified the `v0.1.0` tagged tree installs from the stable plugin directory.
 
-[Unreleased]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.5...HEAD
+[Unreleased]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.6...HEAD
+[0.2.0-beta.6]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.5...v0.2.0-beta.6
 [0.2.0-beta.5]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.4...v0.2.0-beta.5
 [0.2.0-beta.4]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.3...v0.2.0-beta.4
 [0.2.0-beta.3]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.2...v0.2.0-beta.3
