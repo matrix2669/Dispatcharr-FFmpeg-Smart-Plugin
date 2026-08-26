@@ -18,7 +18,7 @@ This ledger records why every current long-lived or work branch exists and prese
 | `feature/additional-ffmpeg-options` | feature | merged | `dev` | `dev` | Add per-profile raw FFmpeg arguments and correct apply-profile restart feedback. |
 | `feature/scoped-ffmpeg-options` | feature | merged | `dev` | `dev` | Expose phase-scoped Smart FFmpeg defaults and expert overrides for every managed profile. |
 | `fix/show-advanced-defaults` | fix | merged | `dev` | `dev` | Show the exact static defaults and runtime-derived default formulas beside every advanced scope control. |
-| `fix/launcher-permissions-cache-status` | fix | active | `dev` | `dev` | Make registry installs launch reliably and report cache validity rather than file existence alone. |
+| `fix/launcher-permissions-cache-status` | fix | merged | `dev` | `dev` | Make registry installs launch reliably and report cache validity rather than file existence alone. |
 
 ## Branch records
 
@@ -81,6 +81,7 @@ This ledger records why every current long-lived or work branch exists and prese
 - Purpose: correct a registry reinstall that left bundled scripts non-executable and a Benchmark Status result that reported an existing but hardware-stale cache as healthy.
 - Base: `dev` at `01a6820` after refreshing GitHub and reconciling workspace standards revision `sha256:6456d4a722cfca0a03e6bce3d698208c844a114953c62d0fe757789d48f1c794`.
 - Intended target: `dev`, followed by approved immutable tag `v0.2.0-beta.6` and `dispatcharr-plugins:dev` publication after installed-plugin validation.
+- Result: source commit `a2af6ce` merged into `dev` at `45e6e5a`; this reviewed integration is the candidate source for `v0.2.0-beta.6`.
 - Scope: direct launcher mode repair, authoritative cache-validity status, persistent native cache-maintenance notifications, canonical wrapper beta.4 synchronization, regression tests, user/developer guidance, and beta.6 metadata.
 - Exclusions: no automatic disruptive benchmark, no Dispatcharr request-routing or failover core change, no stable registry, GitHub Release, or distributable ZIP.
 - Reported evidence: after a plugin reinstall the scripts lacked execute permission; a normal stream then emitted the wrapper's hardware-stale cache error, while Benchmark Status treated the cache as valid because the file still existed.
