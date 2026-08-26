@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ffmpeg-smart-profiles"))
 
-from plugin import Plugin
+from plugin import ADVANCED_DEFAULT_HELP, Plugin
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -60,6 +60,23 @@ class ActiveTranscodeSelectionTests(unittest.TestCase):
 
 
 class ProfileDefinitionTests(unittest.TestCase):
+    def test_advanced_mode_fields_show_the_inherited_defaults(self):
+        suffixes = {
+            "ffmpeg_input_mode": "input",
+            "ffmpeg_mapping_mode": "mapping",
+            "ffmpeg_video_mode": "video",
+            "ffmpeg_audio_mode": "audio",
+            "ffmpeg_options_mode": "mux",
+        }
+        fields = {field["id"]: field for field in Plugin.fields}
+        for prefix in ("stream_1", "stream_2", "output_1", "output_2", "output_3"):
+            for suffix, scope in suffixes.items():
+                with self.subTest(prefix=prefix, scope=scope):
+                    self.assertEqual(
+                        fields[f"{prefix}_{suffix}"]["help_text"],
+                        ADVANCED_DEFAULT_HELP[scope],
+                    )
+
     def test_profile_actions_distinguish_creation_updates_and_removal_restarts(self):
         plugin = Plugin()
         actions = {action["id"]: action for action in plugin.actions}

@@ -4,6 +4,18 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ## [Unreleased]
 
+## [0.2.0-beta.5] - 2026-08-25
+
+### Fixed
+
+- Show the exact inherited input, mapping, and MPEG-TS defaults directly below every matching mode dropdown.
+- Show the complete runtime-derived video and audio default formulas, including bitrate, GOP, accelerator-tuning, AAC, channel-layout, and profile-ceiling behavior.
+- Keep editable option fields reserved for user-owned Add/Replace text because Dispatcharr cannot populate a sibling field when a dropdown changes.
+
+### Validation
+
+- Passed 26 plugin unit tests, settings-schema parity, Python/JSON/shell checks, immutable wrapper source verification, and whitespace validation.
+
 ## [0.2.0-beta.4] - 2026-08-25
 
 ### Added
@@ -114,7 +126,8 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 - Recorded final live capacity evidence at the canonical wrapper's 1.2x threshold: Arc A310 18 and UHD 770 15. These values are environment-specific and are not plugin defaults.
 - Verified the `v0.1.0` tagged tree installs from the stable plugin directory.
 
-[Unreleased]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.4...HEAD
+[Unreleased]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.5...HEAD
+[0.2.0-beta.5]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.4...v0.2.0-beta.5
 [0.2.0-beta.4]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.3...v0.2.0-beta.4
 [0.2.0-beta.3]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.2...v0.2.0-beta.3
 [0.2.0-beta.2]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.1...v0.2.0-beta.2

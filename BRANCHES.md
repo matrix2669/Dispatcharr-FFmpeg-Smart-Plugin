@@ -17,6 +17,7 @@ This ledger records why every current long-lived or work branch exists and prese
 | `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version and canonical wrapper updates. |
 | `feature/additional-ffmpeg-options` | feature | merged | `dev` | `dev` | Add per-profile raw FFmpeg arguments and correct apply-profile restart feedback. |
 | `feature/scoped-ffmpeg-options` | feature | merged | `dev` | `dev` | Expose phase-scoped Smart FFmpeg defaults and expert overrides for every managed profile. |
+| `fix/show-advanced-defaults` | fix | active | `dev` | `dev` | Show the exact static defaults and runtime-derived default formulas beside every advanced scope control. |
 
 ## Branch records
 
@@ -60,4 +61,15 @@ This ledger records why every current long-lived or work branch exists and prese
 - Exclusions: no native/custom FFmpeg profile mode, no bypass of hardware or encoder selection, no change to restart semantics, cache policy, Dispatcharr compatibility floor, stable registry, GitHub Releases, or distributable ZIPs.
 - Related work: canonical `ffmpeg-asr` branch `feature/scoped-ffmpeg-options`.
 - Validation: 25 plugin unit tests, generated-profile/settings-schema parity, scoped mode and mapping constraints, structural-option rejection, update-without-restart regression checks, canonical wrapper validation, Python/JSON/shell checks, exact offline and remote source-pin verification, repeat synchronization, tag-archive layout, and `git diff --check` pass for `v0.2.0-beta.4`; the published tag resolves correctly and the `dev` workflow completed successfully.
+- Last verified at: `2026-08-25`.
+
+### `fix/show-advanced-defaults`
+
+- Purpose: make each Inherit choice understandable without requiring users to inspect the wrapper source or infer what Replace removes.
+- Base: `dev` at `1de8e3c`.
+- Intended target: `dev` as a new immutable beta after plugin-only UI/documentation validation.
+- Scope: advanced-field help text, managed-default reference documentation, schema parity tests, version/release metadata, and the durable UI decision.
+- Exclusions: no dropdown-driven sibling-field mutation because Dispatcharr exposes no dependent-field hook; no wrapper behavior, saved-option migration, profile-generation, hardware policy, stable registry, GitHub Release, or Dispatcharr core change.
+- Related work: canonical defaults remain owned by pinned `ffmpeg-asr v1.1.0-beta.3`.
+- Validation: 26 plugin unit tests, exact default text for all five profile slots, generated settings-schema parity, Python/JSON/shell checks, offline and remote source-pin verification, existing profile-generation regressions, and `git diff --check` pass on the feature branch. Tag-archive validation remains required after `dev` integration.
 - Last verified at: `2026-08-25`.
