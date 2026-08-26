@@ -1,10 +1,12 @@
 import copy
 import glob
+import logging
 import os
 import re
 import shlex
 import signal
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -18,6 +20,22 @@ PID_FILE = RUNTIME_DIR / "recache.pid"
 LOG_FILE = RUNTIME_DIR / "recache.log"
 BENCHMARK_LOCK_FILE = STATE_DIR / ".benchmark.lock"
 CACHE_FILE = STATE_DIR / ".capabilities.cache"
+CACHE_NOTIFICATION_KEY = "ffmpeg-smart-hardware-cache"
+logger = logging.getLogger(__name__)
+
+
+def _repair_script_permissions():
+    for script in (SCRIPT_PATH, LAUNCHER_PATH):
+        if not script.is_file():
+            raise RuntimeError(f"Bundled script is missing: {script}")
+        mode = script.stat().st_mode
+        if mode & 0o111 != 0o111:
+            script.chmod(mode | 0o111)
+
+
+_repair_script_permissions()
+
+
 LEGACY_OUTPUT_NAMES = {
     "FFmpeg Smart - Passthrough",
     "FFmpeg Smart - 720p 2M Stereo",
@@ -172,7 +190,7 @@ def advanced_ffmpeg_fields(prefix, label):
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.2.0-beta.5"
+    version = "0.2.0-beta.6"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
@@ -330,6 +348,8 @@ class Plugin:
         for action in self.actions:
             if action.get("id") == "rebuild_cache":
                 action["confirm"]["message"] += f" Estimated runtime: {estimate}."
+        if os.environ.get("DJANGO_SETTINGS_MODULE"):
+            self._sync_cache_notification()
 
     def run(self, action: str, params: dict, context: dict):
         settings = context.get("settings") or {}
@@ -446,7 +466,7 @@ class Plugin:
             tokens = shlex.split(options)
         except ValueError as exc:
             raise ValueError(f"{label} contains invalid quoting: {exc}") from exc
-        forbidden = {"-i", "--recache", "--recache-only"}
+        forbidden = {"-i", "--cache-status", "--recache", "--recache-only"}
         invalid = next((token for token in tokens if token in forbidden), None)
         if invalid:
             raise ValueError(f"{label} cannot contain {invalid}")
@@ -888,6 +908,13 @@ class Plugin:
             BENCHMARK_LOCK_FILE.unlink(missing_ok=True)
             raise
         PID_FILE.write_text(str(process.pid), encoding="utf-8")
+        self._sync_cache_notification()
+        threading.Thread(
+            target=self._monitor_recache_completion,
+            args=(process,),
+            name="ffmpeg-smart-cache-notification",
+            daemon=True,
+        ).start()
         if logger:
             logger.info("Started FFmpeg Smart cache rebuild PID %s", process.pid)
         return {
@@ -898,6 +925,23 @@ class Plugin:
             ),
             "stopped_streams": stopped,
         }
+
+    @classmethod
+    def _monitor_recache_completion(cls, process):
+        try:
+            process.wait()
+        finally:
+            try:
+                from django.db import close_old_connections
+
+                close_old_connections()
+                cls._sync_cache_notification()
+                close_old_connections()
+            except Exception:
+                logger.debug(
+                    "Could not synchronize FFmpeg Smart cache notification after rebuild",
+                    exc_info=True,
+                )
 
     @staticmethod
     def _stop_active_streams(logger):
@@ -963,33 +1007,156 @@ class Plugin:
         lines = []
         if LOG_FILE.exists():
             lines = LOG_FILE.read_text(encoding="utf-8", errors="replace").splitlines()[-30:]
+        cache_status, cache_detail = self._cache_status()
+        capabilities = self._capability_summary()
         if running:
             status = "running"
             message = f"Hardware benchmark is running (PID {pid})."
             if lines:
                 message += f" Latest progress: {lines[-1]}"
-        elif lines and any("Cache rebuild complete" in line for line in lines):
+            if cache_status == "valid" and capabilities:
+                message += " Current capabilities while rebuild is active: " + capabilities["summary"]
+            elif capabilities:
+                message += (
+                    f" Previous cached capabilities are not currently usable ({cache_status}): "
+                    + capabilities["summary"]
+                )
+            else:
+                message += f" Current cache status: {cache_status}."
+        elif cache_status == "valid":
             status = "complete"
-            message = "Hardware cache rebuild completed successfully."
-        elif lines:
-            status = "error"
-            message = "Hardware benchmark is not running and did not report successful completion."
+            message = "Hardware capability cache is valid for the current FFmpeg Smart version and hardware."
+            if capabilities:
+                message += " " + capabilities["summary"]
         else:
-            status = "idle"
-            message = "No hardware benchmark has been started by this plugin."
-        capabilities = self._capability_summary()
-        if capabilities:
-            label = "Cached capabilities while rebuild is active: " if running else ""
-            message += " " + label + capabilities["summary"]
-        elif not running:
-            message += " No valid hardware capability cache is available."
+            status = "error"
+            message = cache_detail + " Run Rebuild Hardware Cache before using FFmpeg Smart profiles."
+            if capabilities:
+                message += " Previous cached capabilities (not usable): " + capabilities["summary"]
+        self._sync_cache_notification()
         return {
             "status": status,
             "message": message,
             "pid": pid,
+            "cache_status": cache_status,
             "capabilities": capabilities,
             "recent_log": lines,
         }
+
+    @classmethod
+    def _cache_notification_state(cls):
+        pid = cls._read_pid()
+        if pid and cls._pid_is_running(pid):
+            return {
+                "state": "running",
+                "notification_type": "info",
+                "priority": "high",
+                "title": "FFmpeg Smart hardware scan in progress",
+                "message": (
+                    "FFmpeg Smart managed streams are temporarily unavailable while "
+                    "the hardware cache is rebuilt. New starts may be rejected until "
+                    "the scan completes."
+                ),
+            }
+
+        cache_status, cache_detail = cls._cache_status()
+        if cache_status == "valid":
+            return None
+        return {
+            "state": cache_status,
+            "notification_type": "warning",
+            "priority": "high",
+            "title": "FFmpeg Smart hardware scan required",
+            "message": (
+                f"{cache_detail} Open FFmpeg Smart Profiles in Plugins and run "
+                "Rebuild Hardware Cache before using managed profiles."
+            ),
+        }
+
+    @classmethod
+    def _sync_cache_notification(cls):
+        try:
+            from core.models import SystemNotification
+            from core.utils import send_notification_dismissed, send_websocket_notification
+
+            state = cls._cache_notification_state()
+            existing = SystemNotification.objects.filter(
+                notification_key=CACHE_NOTIFICATION_KEY
+            ).first()
+            if state is None:
+                if existing:
+                    existing.delete()
+                    send_notification_dismissed(CACHE_NOTIFICATION_KEY)
+                return
+
+            previous_state = (existing.action_data or {}).get("cache_status") if existing else None
+            notification, created = SystemNotification.objects.update_or_create(
+                notification_key=CACHE_NOTIFICATION_KEY,
+                defaults={
+                    "notification_type": state["notification_type"],
+                    "priority": state["priority"],
+                    "source": SystemNotification.Source.SYSTEM,
+                    "title": state["title"],
+                    "message": state["message"],
+                    "action_data": {
+                        "plugin_key": "ffmpeg_smart_profiles",
+                        "plugin_action": "rebuild_cache",
+                        "cache_status": state["state"],
+                    },
+                    "is_active": True,
+                    "admin_only": True,
+                    "expires_at": None,
+                },
+            )
+            if created or previous_state != state["state"]:
+                if not created:
+                    notification.dismissals.all().delete()
+                send_websocket_notification(notification)
+        except Exception:
+            logger.debug(
+                "Could not synchronize FFmpeg Smart cache notification",
+                exc_info=True,
+            )
+
+    @staticmethod
+    def _cache_status():
+        details = {
+            "missing": "Hardware capability cache is missing.",
+            "invalid": "Hardware capability cache is invalid or unreadable.",
+            "stale": "Hardware capability cache does not match the current FFmpeg Smart version or hardware.",
+            "unavailable": "Hardware capability cache could not be validated.",
+        }
+        try:
+            result = subprocess.run(
+                [str(LAUNCHER_PATH), "--cache-status"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+                timeout=15,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            return "unavailable", f"Hardware capability cache could not be validated: {exc}."
+
+        match = re.search(
+            r"^FFMPEG_SMART_CACHE_STATUS=(valid|missing|invalid|stale|unavailable)$",
+            result.stdout,
+            re.MULTILINE,
+        )
+        if not match:
+            detail = (result.stderr or result.stdout).strip().splitlines()
+            suffix = f" Wrapper response: {detail[-1]}" if detail else ""
+            return "unavailable", details["unavailable"] + suffix
+        status = match.group(1)
+        if status == "valid" and result.returncode == 0:
+            return status, "Hardware capability cache is valid."
+        if (status == "valid") != (result.returncode == 0):
+            return (
+                "unavailable",
+                "Hardware capability cache returned an inconsistent validation result.",
+            )
+        return status, details.get(status, details["unavailable"])
 
     @staticmethod
     def _capability_summary():
@@ -1068,10 +1235,7 @@ class Plugin:
 
     @staticmethod
     def _ensure_script():
-        for script in (SCRIPT_PATH, LAUNCHER_PATH):
-            if not script.is_file():
-                raise RuntimeError(f"Bundled script is missing: {script}")
-            script.chmod(script.stat().st_mode | 0o111)
+        _repair_script_permissions()
         try:
             RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
             probe = RUNTIME_DIR / f".write-test-{os.getpid()}-{time.monotonic_ns()}"

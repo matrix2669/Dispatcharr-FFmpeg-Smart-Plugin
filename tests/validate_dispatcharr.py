@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import os
 import shlex
 from pathlib import Path
 
@@ -18,10 +19,12 @@ spec.loader.exec_module(module)
 manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 plugin = module.Plugin()
 
-assert plugin.version == "0.2.0-beta.5"
+assert plugin.version == "0.2.0-beta.6"
 assert manifest["version"] == plugin.version
 assert (PLUGIN_DIR / "ffmpeg-smart.sh").is_file()
 assert (PLUGIN_DIR / "ffmpeg-smart-plugin.sh").is_file()
+assert os.access(PLUGIN_DIR / "ffmpeg-smart.sh", os.X_OK)
+assert os.access(PLUGIN_DIR / "ffmpeg-smart-plugin.sh", os.X_OK)
 assert module.STATE_DIR == Path("/data/ffmpeg_smart_profiles")
 assert module.CACHE_FILE == module.STATE_DIR / ".capabilities.cache"
 
@@ -30,11 +33,12 @@ outputs = plugin._output_definitions({})
 
 assert len(streams) == 1
 assert streams[0]["name"] == "FFmpeg Smart"
+assert streams[0]["command"] == str(PLUGIN_DIR / "ffmpeg-smart-plugin.sh")
 assert streams[0]["parameters"].endswith("-10bit -hdr")
 
 assert len(outputs) == 1
 assert outputs[0]["name"] == "FFMpeg Smart - 720p Mobile"
-assert outputs[0]["command"].endswith("ffmpeg-smart-plugin.sh")
+assert outputs[0]["command"] == str(PLUGIN_DIR / "ffmpeg-smart-plugin.sh")
 assert outputs[0]["parameters"] == (
     "-i pipe:0 -maxres 720 -maxbr 2M -maxchan 2 -sdr -deint"
 )

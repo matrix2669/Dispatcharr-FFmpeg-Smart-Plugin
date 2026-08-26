@@ -1,8 +1,11 @@
+import importlib.util
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
+import types
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -10,6 +13,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ffmpeg-smart-profiles"))
 
+import plugin
 from plugin import ADVANCED_DEFAULT_HELP, Plugin
 
 
@@ -127,8 +131,11 @@ class ProfileDefinitionTests(unittest.TestCase):
         self.assertIn("-10bit", streams[0]["parameters"])
         self.assertIn("-hdr", streams[0]["parameters"])
         self.assertEqual([profile["name"] for profile in outputs], ["FFMpeg Smart - 720p Mobile"])
-        self.assertTrue(all(profile["command"].endswith("ffmpeg-smart-plugin.sh") for profile in outputs))
-        self.assertTrue(all(profile["parameters"].startswith("-i pipe:0") for profile in outputs))
+        self.assertTrue(
+            all(profile["command"].endswith("ffmpeg-smart-plugin.sh") for profile in streams + outputs)
+        )
+        self.assertTrue(all(profile["parameters"].startswith("-i") for profile in streams + outputs))
+        self.assertEqual(shlex.split(outputs[0]["parameters"])[:2], ["-i", "pipe:0"])
         self.assertIn("-maxres 720 -maxbr 2M -maxchan 2", outputs[0]["parameters"])
         self.assertIn("-sdr", outputs[0]["parameters"])
         self.assertIn("-deint", outputs[0]["parameters"])
@@ -191,6 +198,13 @@ class ProfileDefinitionTests(unittest.TestCase):
         plugin = Plugin()
         with self.assertRaisesRegex(ValueError, "mux options contains invalid quoting"):
             plugin._stream_definitions({"stream_1_ffmpeg_options": "'unterminated"})
+
+    def test_profile_options_cannot_invoke_cache_maintenance_modes(self):
+        plugin = Plugin()
+        for option in ("--cache-status", "--recache", "--recache-only"):
+            with self.subTest(option=option):
+                with self.assertRaisesRegex(ValueError, f"cannot contain {option}"):
+                    plugin._stream_definitions({"stream_1_options": option})
 
     def test_scoped_ffmpeg_options_route_the_advanced_example(self):
         plugin = Plugin()
@@ -420,12 +434,216 @@ class CapabilityStatusTests(unittest.TestCase):
                 patch("plugin.LOG_FILE", log_file),
                 patch("plugin.CACHE_FILE", cache_file),
                 patch.object(Plugin, "_pid_is_running", return_value=True),
+                patch.object(
+                    Plugin,
+                    "_cache_status",
+                    return_value=(
+                        "stale",
+                        "Hardware capability cache does not match current hardware.",
+                    ),
+                ),
             ):
                 result = Plugin()._benchmark_status()
 
         self.assertEqual(result["status"], "running")
         self.assertIn("Latest progress: Testing 18 concurrent streams", result["message"])
-        self.assertIn("Cached capabilities while rebuild is active", result["message"])
+        self.assertIn("Previous cached capabilities are not currently usable (stale)", result["message"])
+
+    def test_stale_cache_is_error_even_when_previous_log_completed(self):
+        capabilities = {"summary": "Capabilities: VAAPI/HEVC."}
+        with TemporaryDirectory() as temp_dir:
+            log_file = Path(temp_dir) / "recache.log"
+            log_file.write_text("[ffmpeg-smart] Cache rebuild complete\n", encoding="utf-8")
+            with (
+                patch.object(Plugin, "_read_pid", return_value=None),
+                patch.object(
+                    Plugin,
+                    "_cache_status",
+                    return_value=(
+                        "stale",
+                        "Hardware capability cache does not match the current FFmpeg Smart version or hardware.",
+                    ),
+                ),
+                patch.object(Plugin, "_capability_summary", return_value=capabilities),
+                patch("plugin.LOG_FILE", log_file),
+            ):
+                result = Plugin()._benchmark_status()
+
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["cache_status"], "stale")
+        self.assertIn("does not match", result["message"])
+        self.assertIn("Run Rebuild Hardware Cache", result["message"])
+        self.assertIn("Previous cached capabilities (not usable)", result["message"])
+
+    def test_valid_cache_is_complete_without_a_plugin_rebuild_log(self):
+        with TemporaryDirectory() as temp_dir:
+            log_file = Path(temp_dir) / "missing-recache.log"
+            with (
+                patch.object(Plugin, "_read_pid", return_value=None),
+                patch.object(
+                    Plugin,
+                    "_cache_status",
+                    return_value=("valid", "Hardware capability cache is valid."),
+                ),
+                patch.object(Plugin, "_capability_summary", return_value=None),
+                patch("plugin.LOG_FILE", log_file),
+            ):
+                result = Plugin()._benchmark_status()
+
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["cache_status"], "valid")
+        self.assertIn("valid for the current", result["message"])
+
+    def test_cache_status_uses_wrapper_machine_status(self):
+        cases = (
+            (0, "valid", "valid"),
+            (78, "missing", "missing"),
+            (78, "invalid", "invalid"),
+            (78, "stale", "stale"),
+        )
+        for returncode, marker, expected in cases:
+            with self.subTest(marker=marker):
+                completed = subprocess.CompletedProcess(
+                    args=[],
+                    returncode=returncode,
+                    stdout=f"FFMPEG_SMART_CACHE_STATUS={marker}\n",
+                    stderr="",
+                )
+                with patch("plugin.subprocess.run", return_value=completed) as run:
+                    status, _ = Plugin._cache_status()
+
+                self.assertEqual(status, expected)
+                self.assertEqual(
+                    run.call_args.args[0],
+                    [str(plugin.LAUNCHER_PATH), "--cache-status"],
+                )
+
+    def test_cache_status_rejects_inconsistent_wrapper_result(self):
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=78,
+            stdout="FFMPEG_SMART_CACHE_STATUS=valid\n",
+            stderr="",
+        )
+        with patch("plugin.subprocess.run", return_value=completed):
+            status, detail = Plugin._cache_status()
+
+        self.assertEqual(status, "unavailable")
+        self.assertIn("inconsistent", detail)
+
+
+class CacheNotificationTests(unittest.TestCase):
+    def test_notification_state_distinguishes_required_running_and_valid(self):
+        with (
+            patch.object(Plugin, "_read_pid", return_value=1234),
+            patch.object(Plugin, "_pid_is_running", return_value=True),
+        ):
+            running = Plugin._cache_notification_state()
+        self.assertEqual(running["state"], "running")
+        self.assertIn("in progress", running["title"])
+
+        with (
+            patch.object(Plugin, "_read_pid", return_value=None),
+            patch.object(
+                Plugin,
+                "_cache_status",
+                return_value=("stale", "Hardware capability cache is stale."),
+            ),
+        ):
+            stale = Plugin._cache_notification_state()
+        self.assertEqual(stale["state"], "stale")
+        self.assertIn("scan required", stale["title"])
+
+        with (
+            patch.object(Plugin, "_read_pid", return_value=None),
+            patch.object(
+                Plugin,
+                "_cache_status",
+                return_value=("valid", "Hardware capability cache is valid."),
+            ),
+        ):
+            self.assertIsNone(Plugin._cache_notification_state())
+
+    def test_persistent_notification_is_created_and_cleared(self):
+        class FakeDismissals:
+            def __init__(self):
+                self.deleted = False
+
+            def all(self):
+                return self
+
+            def delete(self):
+                self.deleted = True
+
+        class FakeNotification:
+            def __init__(self, manager, action_data):
+                self.manager = manager
+                self.action_data = action_data
+                self.dismissals = FakeDismissals()
+
+            def delete(self):
+                self.manager.current = None
+
+        class FakeManager:
+            def __init__(self):
+                self.current = None
+
+            def filter(self, **kwargs):
+                self.key = kwargs["notification_key"]
+                return self
+
+            def first(self):
+                return self.current
+
+            def update_or_create(self, notification_key, defaults):
+                created = self.current is None
+                self.current = FakeNotification(self, defaults["action_data"])
+                self.defaults = defaults
+                self.key = notification_key
+                return self.current, created
+
+        manager = FakeManager()
+        models_module = types.ModuleType("core.models")
+        notification_class = type(
+            "SystemNotification",
+            (),
+            {"objects": manager, "Source": type("Source", (), {"SYSTEM": "system"})},
+        )
+        models_module.SystemNotification = notification_class
+        sent = []
+        cleared = []
+        utils_module = types.ModuleType("core.utils")
+        utils_module.send_websocket_notification = sent.append
+        utils_module.send_notification_dismissed = cleared.append
+        core_module = types.ModuleType("core")
+
+        with patch.dict(
+            sys.modules,
+            {"core": core_module, "core.models": models_module, "core.utils": utils_module},
+        ):
+            with patch.object(
+                Plugin,
+                "_cache_notification_state",
+                return_value={
+                    "state": "stale",
+                    "notification_type": "warning",
+                    "priority": "high",
+                    "title": "FFmpeg Smart hardware scan required",
+                    "message": "Run the hardware scan.",
+                },
+            ):
+                Plugin._sync_cache_notification()
+
+            self.assertEqual(manager.key, plugin.CACHE_NOTIFICATION_KEY)
+            self.assertEqual(manager.defaults["action_data"]["cache_status"], "stale")
+            self.assertTrue(manager.defaults["admin_only"])
+            self.assertEqual(len(sent), 1)
+
+            with patch.object(Plugin, "_cache_notification_state", return_value=None):
+                Plugin._sync_cache_notification()
+
+        self.assertIsNone(manager.current)
+        self.assertEqual(cleared, [plugin.CACHE_NOTIFICATION_KEY])
 
 
 class PersistentStateTests(unittest.TestCase):
@@ -440,13 +658,32 @@ class PersistentStateTests(unittest.TestCase):
     def test_legacy_and_launcher_commands_are_managed(self):
         self.assertTrue(Plugin._is_managed_script("/old/plugin/ffmpeg-smart.sh"))
         self.assertTrue(Plugin._is_managed_script("/new/plugin/ffmpeg-smart-plugin.sh"))
+        self.assertFalse(Plugin._is_managed_script("/bin/bash"))
         self.assertFalse(Plugin._is_managed_script("ffmpeg"))
 
-    def test_launcher_reports_missing_cache_as_ffmpeg_smart_error(self):
-        launcher = REPO_ROOT / "ffmpeg-smart-profiles" / "ffmpeg-smart-plugin.sh"
+    def test_plugin_load_repairs_install_modes_before_direct_launcher_use(self):
+        source_dir = REPO_ROOT / "ffmpeg-smart-profiles"
         with TemporaryDirectory() as temp_dir:
+            plugin_dir = Path(temp_dir) / "plugin"
+            state_dir = Path(temp_dir) / "state"
+            plugin_dir.mkdir()
+            plugin_path = plugin_dir / "plugin.py"
+            launcher = plugin_dir / "ffmpeg-smart-plugin.sh"
+            wrapper = plugin_dir / "ffmpeg-smart.sh"
+            shutil.copyfile(source_dir / plugin_path.name, plugin_path)
+            shutil.copyfile(source_dir / launcher.name, launcher)
+            shutil.copyfile(source_dir / wrapper.name, wrapper)
+            launcher.chmod(0o644)
+            wrapper.chmod(0o644)
+
+            spec = importlib.util.spec_from_file_location("installed_mode_repair_test", plugin_path)
+            installed_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(installed_module)
+
+            self.assertEqual(wrapper.stat().st_mode & 0o777, 0o755)
+            self.assertEqual(launcher.stat().st_mode & 0o777, 0o755)
             environment = os.environ.copy()
-            environment["FFMPEG_SMART_STATE_DIR"] = temp_dir
+            environment["FFMPEG_SMART_STATE_DIR"] = str(state_dir)
             result = subprocess.run(
                 [str(launcher), "-i", "/unavailable/input.ts"],
                 env=environment,
@@ -460,6 +697,27 @@ class PersistentStateTests(unittest.TestCase):
         self.assertEqual(result.returncode, 78)
         self.assertIn("[ffmpeg-smart] ERROR [capability-cache-missing]", result.stderr)
         self.assertIn("Rebuild Hardware Cache", result.stderr)
+
+    def test_script_check_repairs_execute_bits(self):
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            wrapper = temp_path / "ffmpeg-smart.sh"
+            launcher = temp_path / "ffmpeg-smart-plugin.sh"
+            runtime = temp_path / "state" / "runtime"
+            wrapper.write_text("#!/bin/bash\n", encoding="utf-8")
+            launcher.write_text("#!/bin/bash\n", encoding="utf-8")
+            wrapper.chmod(0o644)
+            launcher.chmod(0o644)
+            with (
+                patch("plugin.SCRIPT_PATH", wrapper),
+                patch("plugin.LAUNCHER_PATH", launcher),
+                patch("plugin.STATE_DIR", runtime.parent),
+                patch("plugin.RUNTIME_DIR", runtime),
+            ):
+                Plugin._ensure_script()
+
+            self.assertEqual(wrapper.stat().st_mode & 0o777, 0o755)
+            self.assertEqual(launcher.stat().st_mode & 0o777, 0o755)
 
 
 class ReleaseMetadataTests(unittest.TestCase):

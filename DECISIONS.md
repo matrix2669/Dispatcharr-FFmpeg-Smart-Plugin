@@ -856,3 +856,58 @@ The Python and JSON field schemas must contain identical default help text. Test
 - Operator defaults-visibility correction: 2026-08-25
 - Dispatcharr `frontend/src/components/Field.jsx` and plugin settings schema reviewed 2026-08-25
 - Canonical wrapper defaults: pinned `ffmpeg-asr v1.1.0-beta.3`
+
+---
+
+# ADR-020: Repair installed script modes and surface authoritative cache maintenance
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-26
+
+## Decision
+
+Keep managed Stream and Output Profiles executing `ffmpeg-smart-plugin.sh` directly. On every enabled plugin load, idempotently restore the execute bits on both bundled shell scripts before Dispatcharr can use managed profiles. Repeat the repair before plugin-owned profile reconciliation and cache rebuild actions. Do not change generated profile commands to `/bin/bash` as a permanent workaround.
+
+Use canonical `ffmpeg-asr --cache-status` as the sole cache-validity authority. **Benchmark Status** reports `complete` only when that command returns `valid`; missing, invalid, stale, inconsistent, or unavailable validation reports `error` and instructs the operator to run **Rebuild Hardware Cache**. A running rebuild remains `running`. Parsed capabilities from a non-valid cache may be shown only as previous, unusable details.
+
+Create one persistent, admin-only Dispatcharr `SystemNotification` with notification key `ffmpeg-smart-hardware-cache`:
+
+- a missing, invalid, stale, or unverifiable cache creates or updates a high-priority **FFmpeg Smart hardware scan required** warning;
+- an active plugin-started rebuild changes it to **FFmpeg Smart hardware scan in progress**;
+- successful post-rebuild validation deletes the notification and sends Dispatcharr's dismissal update so it leaves the notification center;
+- the fixed unresolved-condition key prevents duplicates, while deletion after recovery also deletes old dismissals so a future hardware change can create a visible warning again.
+
+The WebSocket update is only an immediate UI refresh. The database-backed `SystemNotification` is the durable notice, matching Dispatcharr's account-expiration notification mechanism.
+
+Keep the wrapper's benchmark lock refusal and exit status `75`. The live Dispatcharr `v0.29.0` request path has no veto-capable pre-stream plugin hook and treats this intentional maintenance exit as an ordinary source failure, including retries, alternate-stream cycling, and `channel_error` events. The persistent in-progress notification makes the maintenance cause visible but does not claim to change that routing behavior. Clean non-retryable maintenance handling with HTTP 503/Retry-After semantics requires a separately reviewed Dispatcharr core contract; do not emulate it by disabling profiles, emitting placeholder media, or holding arbitrary viewer processes open.
+
+## Reason
+
+Dispatcharr's ZIP installer writes every member to a newly opened file and does not restore archive mode bits. A reinstall therefore changed the bundled scripts from executable to data files even though the Git tree and ZIP recorded `0755`. Registry installation immediately force-reloads enabled plugins, giving the plugin a reliable point to repair its own files before direct profile execution.
+
+The same incident exposed a second ownership error: file existence was presented as a healthy cache although the wrapper rejected its hardware fingerprint. A persistent native warning is required because an operator should not need to discover the rebuild requirement from an invisible stream-process error.
+
+## Alternatives considered
+
+- Run every managed profile through `/bin/bash`. Rejected as a long-term workaround because it hides incorrect installation state and changes the generated command contract.
+- Depend only on ZIP executable metadata. Rejected because Dispatcharr `v0.29.0` discards it during extraction.
+- Infer validity by parsing the cache in Python. Rejected because hardware fingerprinting belongs to canonical `ffmpeg-asr` ADR-019.
+- Use a one-time toast. Rejected because the warning must persist and be dismissible in Dispatcharr's normal notification center.
+- Wait behind the benchmark lock or synthesize a maintenance MPEG-TS stream. Rejected because Dispatcharr timeouts, client lifecycle, and benchmark isolation make those behaviors misleading and fragile.
+
+## Consequences
+
+The plugin must be enabled for its load-time repair and notifications to run; managed profiles are supported only while their owning plugin is enabled. Packaging validation must simulate a `0644` extraction, import the installed plugin, verify both scripts become `0755`, and execute the launcher directly. Cache-status tests must cover valid and every non-valid state. Notification tests must cover required, running, deduplication, dismissal reset, and automatic removal after successful validation.
+
+Until Dispatcharr adds non-retryable maintenance handling, benchmark-time viewer requests can still produce retry/failover and reliability events. Publication notes must not describe the plugin notification as a request-routing block.
+
+## Provenance
+
+- Operator reports: stripped executable bits, stale-cache false health, and a viewer start during a hardware scan, 2026-08-26
+- Live Dispatcharr `v0.29.0` evidence: scan PID `10972` began at `19:12:05Z`; a new viewer requested a managed channel at `19:12:29Z`; the benchmark lock caused rapid retries and alternate-stream cycling until the scan completed
+- Canonical decision: `ffmpeg-asr` ADR-019
