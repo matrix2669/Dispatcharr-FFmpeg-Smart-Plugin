@@ -30,6 +30,16 @@ The advanced controls retain FFmpeg Smart's hardware benefits while exposing opt
 - **Audio defaults** apply on both video-copy and video-transcode paths and can replace Smart's AAC/copy decision with a deliberate codec choice.
 - **MPEG-TS/output defaults** apply on both paths before the fixed `-f mpegts pipe:1` contract. The existing beta.3 Additional FFmpeg options field is retained here, and a saved value with Inherit selected behaves as Add.
 
+The current inherited value or formula is shown directly below every mode dropdown. Dispatcharr's plugin form cannot change one field when a different dropdown changes, so the adjacent options field intentionally stays blank and contains only user-owned Add/Replace text. This also prevents selecting Inherit from overwriting a saved custom value.
+
+| Scope | Inherited default |
+|---|---|
+| Input | `-fflags +genpts+igndts+discardcorrupt -err_detect ignore_err` |
+| Mapping | `-map 0:v:0 -map 0:a:0?` |
+| Video transcode tuning | `-b:v <target> -maxrate <rate> -bufsize <buffer> -g <rounded source fps> -bf <0 or 2> <accelerator tuning> -fps_mode cfr -r <source fps> [-tag:v hvc1]`. The target is 8 Mbps at 1080p scaled by output pixels with a 2 Mbps floor. Without `-maxbr`, maxrate is 125% and buffer is 200% of target. With `-maxbr`, target is capped at 85%, maxrate equals the limit, and buffer is twice the limit. |
+| Audio | No options without audio; compatible AAC uses `-c:a copy`; other audio uses `-c:a aac -b:a <rate> -ac <channels> [-ch_layout ...] -af aresample=async=1`. Rates are 96k mono, 192k stereo, 384k 5.1, 512k 7.1, or 64k per channel otherwise. |
+| MPEG-TS/output | `-avoid_negative_ts make_zero -start_at_zero -mpegts_copyts 0 -mpegts_flags +pat_pmt_at_frames+resend_headers -flush_packets 1 -max_muxing_queue_size 4096`, followed by Smart-owned `-f mpegts pipe:1`. |
+
 Each non-mapping group offers **Use FFmpeg Smart default**, **Add to default**, and **Replace default**. Replace may be intentionally blank. Fields accept normal shell-style quoting; the plugin parses with `shlex` without evaluating the text and quotes every wrapper argument independently.
 
 For the Discord-style example, choose Replace for Input and enter `-fflags +discardcorrupt+genpts+nobuffer`; choose Map all input streams; choose Add for Video and enter `-g 60 -keyint_min 60 -sc_threshold 0 -force_key_frames 'expr:gte(t,n_forced*2)'`; choose Replace for Audio and enter `-c:a ac3`; then choose Replace for MPEG-TS/output and enter `-mpegts_flags +pat_pmt_at_frames+resend_headers+initial_discontinuity`.

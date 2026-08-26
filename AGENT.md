@@ -54,6 +54,7 @@ Data flow:
 - Profile installation must remain idempotent and transactional. Do not overwrite locked profiles, duplicate names, or same-name profiles owned by another command.
 - Keep policy normalization plugin-only. Do not require a Dispatcharr core change to migrate `-10bit`, `-hdr`, `-sdr`, `-deint`, or `-deinterlace` from Additional options into checkboxes.
 - Keep advanced FFmpeg settings aligned with the canonical wrapper's input, mapping, transcode-video, audio, and MPEG-TS/mux scopes. Parse fields with `shlex.split`, quote each wrapper argument independently, retain the beta.3 `*_ffmpeg_options` IDs as mux fields, and never expose a full custom command or wrapper-owned input, hardware, encoder, filter, format, or output controls.
+- Show each advanced scope's complete inherited default or runtime-derived formula in the mode field's help text. Keep the adjacent options field blank for user-owned Add/Replace text; Dispatcharr does not provide a dependent-field hook that can safely populate it when the mode changes.
 - Force SDR takes precedence over Allow HDR. Generate each managed policy flag at most once.
 - All managed Output Profiles must use the pipe-safe wrapper path. Do not replace them with bare `ffmpeg` templates.
 - Hardware benchmarking may stop input- or output-transcoded streams, but proxy-only streams must continue. New FFmpeg Smart transcodes remain blocked until the benchmark lock clears.

@@ -810,3 +810,49 @@ The existing restart decision remains unchanged: creating or removing profiles r
 - Operator advanced-options review: 2026-08-25
 - Canonical wrapper: `ffmpeg-asr` ADR-018 and `v1.1.0-beta.3`
 - Supersedes: plugin ADR-017
+
+---
+
+# ADR-019: Display inherited defaults without mutating expert option fields
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-25
+
+## Decision
+
+Show the inherited value or exact runtime-derived formula in the help text beneath every advanced mode dropdown for all five managed profile slots. The displayed contracts are:
+
+1. Input: `-fflags +genpts+igndts+discardcorrupt -err_detect ignore_err`.
+2. Mapping: `-map 0:v:0 -map 0:a:0?`.
+3. Video transcode tuning: `-b:v <target> -maxrate <rate> -bufsize <buffer> -g <rounded source fps> -bf <0 or 2> <accelerator tuning> -fps_mode cfr -r <source fps> [-tag:v hvc1]`. The target starts at 8 Mbps for 1920x1080, scales by output pixel count, and has a 2 Mbps floor. Without `-maxbr`, maxrate is 125 percent and buffer is 200 percent of target. With `-maxbr`, target is capped at 85 percent of the limit, maxrate equals the limit, and buffer is twice the limit. B-frame and accelerator arguments remain hardware-derived.
+4. Audio: no arguments when audio is absent; compatible AAC uses `-c:a copy`; other audio uses AAC with asynchronous resampling and 96 kbps mono, 192 kbps stereo, 384 kbps 5.1, 512 kbps 7.1, or 64 kbps per channel for other layouts. An explicit `-maxchan` ceiling remains authoritative.
+5. MPEG-TS/output: `-avoid_negative_ts make_zero -start_at_zero -mpegts_copyts 0 -mpegts_flags +pat_pmt_at_frames+resend_headers -flush_packets 1 -max_muxing_queue_size 4096`, followed by Smart-owned `-f mpegts pipe:1`.
+
+Keep adjacent options fields blank by default and use them only for user-owned Add/Replace text. Do not prefill them with managed values. As of the reviewed Dispatcharr plugin form, each field receives only its own `onChange` callback and the manifest schema has no dependency or computed-value hook, so a mode selection cannot safely repopulate a sibling input. Prefilling would also turn managed defaults into saved user data, duplicate additive flags, risk stale video/audio values, and overwrite custom text when toggling modes.
+
+Revisit this presentation if Dispatcharr adds an official dependent-field or computed-placeholder contract that can preserve saved custom values. Until then, mode help text is the authoritative in-UI default reference and the README mirrors it.
+
+## Reason
+
+Inherit, Add, and Replace are not understandable unless the user can see what Inherit supplies and what Replace removes. Static input, mapping, and mux values can be shown exactly. Video and audio must be described as formulas because their concrete arguments depend on the source stream, profile limits, and selected accelerator at runtime.
+
+## Alternatives considered
+
+- Populate the options field when the mode dropdown changes. Rejected because the current Dispatcharr plugin field API has no cross-field change hook.
+- Set the options field's manifest default to the managed arguments. Rejected because backend default merging would make managed values indistinguishable from user input and could duplicate them in Add mode.
+- Show only examples. Rejected because an example does not identify the actual inherited contract.
+
+## Consequences
+
+The Python and JSON field schemas must contain identical default help text. Tests must cover all five scopes across all five profile slots. Wrapper-default changes require synchronized UI help, README documentation, decision text, and regression expectations in a new plugin version.
+
+## Provenance
+
+- Operator defaults-visibility correction: 2026-08-25
+- Dispatcharr `frontend/src/components/Field.jsx` and plugin settings schema reviewed 2026-08-25
+- Canonical wrapper defaults: pinned `ffmpeg-asr v1.1.0-beta.3`
