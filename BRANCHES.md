@@ -17,7 +17,7 @@ This ledger records why every current long-lived or work branch exists and prese
 | `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version and canonical wrapper updates. |
 | `feature/additional-ffmpeg-options` | feature | merged | `dev` | `dev` | Add per-profile raw FFmpeg arguments and correct apply-profile restart feedback. |
 | `feature/scoped-ffmpeg-options` | feature | merged | `dev` | `dev` | Expose phase-scoped Smart FFmpeg defaults and expert overrides for every managed profile. |
-| `feature/degraded-proxy-fallback` | feature | active | `dev` | `dev` | Preserve basic stream-copy service and re-notify after every degraded invocation while Smart capabilities are unavailable. |
+| `feature/degraded-proxy-fallback` | feature | merged | `dev` | `dev` | Preserve basic stream-copy service and re-notify after every degraded invocation while Smart capabilities are unavailable. |
 | `fix/show-advanced-defaults` | fix | merged | `dev` | `dev` | Show the exact static defaults and runtime-derived default formulas beside every advanced scope control. |
 | `fix/launcher-permissions-cache-status` | fix | merged | `dev` | `dev` | Make registry installs launch reliably and report cache validity rather than file existence alone. |
 
@@ -93,10 +93,11 @@ This ledger records why every current long-lived or work branch exists and prese
 
 - Purpose: use the canonical wrapper's opt-in degraded stream-copy proxy whenever the required cache is unusable or a hardware benchmark is active, while keeping the cause visible in Dispatcharr's persistent notification center.
 - Base: `dev` at `1b902d8be3def5c28e45aa6a2df5a5161ce810db` after refreshing project governance and remote state.
-- Intended target: `dev` after the canonical wrapper change is committed, pinned, synchronized, and the complete plugin gate passes.
+- Intended target: `dev`, followed by approved immutable tag `v0.2.0-beta.7` and `dispatcharr-plugins:dev` publication.
 - Scope: launcher opt-in, canonical wrapper synchronization, per-invocation fallback marker monitoring, dismissal reset, notification wording, tests, documentation, and update-description coordination.
 - Exclusions: no CPU transcode fallback, automatic benchmark, Dispatcharr retry-routing or core change, stable registry, GitHub Release, or distributable ZIP.
 - Related work: canonical `ffmpeg-asr` branch `feature/degraded-proxy-fallback` and registry branch `feature/ffmpeg-smart-update-disclaimer`.
 - Canonical source: tagged beta.5 integration commit `4fafc8b5af300d6e47413cfb9cf8409fef7c2201`, recorded and verified at SHA-256 `c4030ee729caa002e0d6b4e68a5893bd73221be4eb72578a71a83cb3d10aa507`.
-- Validation: 37 plugin tests pass, including launcher fallback, unique marker tokens, same-token deduplication, dismissal reset on later invocations, persistent-notification cleanup, and watcher lifecycle. Python/JSON/shell checks, offline and remote canonical-source verification, idempotent synchronization, workspace validation, and `git diff --check` pass. Live Dispatcharr fallback and notification reactivation remain pending.
+- Result: finalized source commit `61a36f27b546f9f94fdf3b0a3283463ca5da3e42` merged into `dev` at `a982b08`; this reviewed integration is the candidate source for `v0.2.0-beta.7`.
+- Validation: 37 plugin tests pass for beta.7, including launcher fallback, unique marker tokens, same-token deduplication, dismissal reset on later invocations, persistent-notification cleanup, and watcher lifecycle. Python/JSON/shell checks, offline and remote canonical-source verification, idempotent synchronization, workspace validation, and `git diff --check` pass. Live Dispatcharr fallback and notification reactivation remain pending.
 - Started: `2026-08-26`.
