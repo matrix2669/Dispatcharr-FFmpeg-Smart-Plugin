@@ -22,6 +22,7 @@ This ledger records why every current long-lived or work branch exists and prese
 | `fix/launcher-permissions-cache-status` | fix | merged | `dev` | `dev` | Make registry installs launch reliably and report cache validity rather than file existence alone. |
 | `fix/beta7-canonical-validation` | fix | merged | `dev` | `dev` | Repin beta.7 behavior to the corrective green canonical wrapper tag without moving published tags. |
 | `fix/persistent-fallback-reactivation` | fix | merged | `dev` | `dev` | Restore dismissed degraded warnings in the notification center instead of showing only a toast. |
+| `fix/authoritative-notification-refresh` | fix | active | `dev` | `dev` | Refresh the browser from Dispatcharr's authoritative notification API after persistent-warning reactivation. |
 
 ## Branch records
 
@@ -126,4 +127,16 @@ This ledger records why every current long-lived or work branch exists and prese
 - Dispatcharr evidence: official `v0.29.0` commit `d9abece081c9edf637d4c3fdd41443eb993a3c08` stores notifications durably but its model-to-WebSocket payload omits `is_dismissed`; the frontend merges by notification key and therefore preserves an old `true` value while independently showing a high-priority toast.
 - Result: source commit `1cbd609` merged into `dev` at `8aab22b`; immutable tag `v0.2.0-beta.9` resolves to reviewed integration commit `d25b44b8999dba3aaeb82e264fb75335bbcacc88` and is advertised through `dispatcharr-plugins:dev`.
 - Validation: official Dispatcharr v0.29.0 model/WebSocket/store review, all 37 plugin tests including explicit `is_dismissed: false` reactivation, Python compilation, JSON parsing, shell syntax, exact offline and remote canonical-source verification, idempotent synchronization, workspace validation, feature run `33017167703`, dev run `33017278257`, tag run `33017320109`, immutable archive inspection, registry run `33017533957`, public raw-manifest agreement, complete-diff review, and `git diff --check` pass. Installed beta.9 reactivation remains pending; live beta.8 already confirms degraded stream-copy service itself works.
+- Started: `2026-08-26`.
+
+### `fix/authoritative-notification-refresh`
+
+- Purpose: correct live beta.9 behavior where dismissal rows are removed successfully but the persistent warning does not reappear in the browser until a manual refresh, and clarify the green action-completion toast shown for an unhealthy cache result.
+- Base: `dev` at `7a6c9c87463db72be200bd14e6c9e75a9453beed` after refreshing the published beta.9 plugin and development registry heads.
+- Intended target: `dev`, followed by corrective immutable tag `v0.2.0-beta.10` and `dispatcharr-plugins:dev` publication.
+- Scope: Dispatcharr's built-in notification-refresh event, load/status/fallback dismissal reactivation, regression coverage, status-result wording, beta.10 metadata, changelog, ADR-021 correction, and this branch ledger.
+- Exclusions: no canonical wrapper, fallback routing, FFmpeg command, cache-validity policy, benchmark behavior, profile, hardware, Dispatcharr core, stable registry, GitHub Release, or distributable ZIP change.
+- Dispatcharr evidence: official `v0.29.0` commit `d9abece081c9edf637d4c3fdd41443eb993a3c08` handles `notifications_cleared` by fetching the authoritative notification API, while plugin action HTTP success is colored green without inspecting `result.status`.
+- Reported evidence: installed beta.9 restores the database-backed warning only after a browser refresh; a post-install Benchmark Status check reports the recheck requirement but Dispatcharr gives the successful action request a green toast edge.
+- Validation: pending.
 - Started: `2026-08-26`.
