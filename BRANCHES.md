@@ -15,7 +15,7 @@ This ledger records why every current long-lived or work branch exists and prese
 |---|---|---|---|---|---|
 | `main` | long-lived | active | initial project history | stable releases | Production-ready plugin source and GitHub Releases. |
 | `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version and canonical wrapper updates. |
-| `feature/additional-ffmpeg-options` | feature | active | `dev` | `dev` | Add per-profile raw FFmpeg arguments and correct apply-profile restart feedback. |
+| `feature/additional-ffmpeg-options` | feature | merged | `dev` | `dev` | Add per-profile raw FFmpeg arguments and correct apply-profile restart feedback. |
 
 ## Branch records
 
@@ -42,6 +42,7 @@ This ledger records why every current long-lived or work branch exists and prese
 - Purpose: add a separate Additional FFmpeg options field to every managed profile and make Install or Update report a restart only when it creates a profile.
 - Base: current `dev` at `ef35687`.
 - Intended target: `dev` after the canonical wrapper change is committed, synchronized, and validated.
+- Result: plugin source commit `ca1e3b2` merged into `dev` at `1a9f201`; `dev` is the tagged source for `v0.2.0-beta.3`.
 - Scope: plugin settings/schema mirrors, profile parameter generation, conditional restart results, tests, user/developer documentation, decision history, and the immutable wrapper source pin.
 - Exclusions: removal restart behavior, hardware-cache policy, registry publication, version/tag changes, and GitHub Release creation.
 - Related work: canonical `ffmpeg-asr` branch `feature/additional-ffmpeg-options`.
