@@ -16,6 +16,7 @@ This ledger records why every current long-lived or work branch exists and prese
 | `main` | long-lived | active | initial project history | stable releases | Production-ready plugin source and GitHub Releases. |
 | `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version and canonical wrapper updates. |
 | `feature/additional-ffmpeg-options` | feature | merged | `dev` | `dev` | Add per-profile raw FFmpeg arguments and correct apply-profile restart feedback. |
+| `feature/scoped-ffmpeg-options` | feature | active | `dev` | `dev` | Expose phase-scoped Smart FFmpeg defaults and expert overrides for every managed profile. |
 
 ## Branch records
 
@@ -47,4 +48,15 @@ This ledger records why every current long-lived or work branch exists and prese
 - Exclusions: removal restart behavior, hardware-cache policy, registry publication, version/tag changes, and GitHub Release creation.
 - Related work: canonical `ffmpeg-asr` branch `feature/additional-ffmpeg-options`.
 - Validation: 20 plugin unit tests, generated-profile and settings-schema parity checks, Python/JSON/shell validation, exact comparison with canonical `ffmpeg-asr v1.1.0-beta.2`, offline and remote source-pin verification, repeat synchronization, tag-archive layout, and `git diff --check` pass for `v0.2.0-beta.3`; the published `dev` workflow completed successfully.
+- Last verified at: `2026-08-25`.
+
+### `feature/scoped-ffmpeg-options`
+
+- Purpose: replace the single Additional FFmpeg options field with Smart-only input, mapping, video-tuning, audio, and MPEG-TS/mux controls that inherit, add to, or replace the applicable managed defaults.
+- Base: `dev` at `3966268`.
+- Intended target: `dev` after the canonical wrapper contract is implemented, committed, synchronized, and validated.
+- Scope: settings/schema mirrors, per-profile mode and option generation, legacy-field migration, structural-option validation, effective-command guidance, tests, user/developer documentation, decision history, and the immutable wrapper source pin.
+- Exclusions: no native/custom FFmpeg profile mode, no bypass of hardware or encoder selection, no change to restart semantics, cache policy, Dispatcharr compatibility floor, stable registry, GitHub Releases, or distributable ZIPs.
+- Related work: canonical `ffmpeg-asr` branch `feature/scoped-ffmpeg-options`.
+- Validation plan: generated-profile/schema parity, exact phase-token boundaries, inherited/add/replace modes, reserved-option rejection, copy/transcode placement through canonical wrapper tests, update-without-restart regression checks, complete plugin validation, tag-archive layout, and `git diff --check`.
 - Last verified at: `2026-08-25`.

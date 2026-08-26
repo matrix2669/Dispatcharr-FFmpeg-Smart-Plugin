@@ -757,3 +757,56 @@ The Python field list and `plugin.json` settings must remain identical. Wrapper 
 
 - Operator requirement review: 2026-08-25
 - Canonical decision: `ffmpeg-asr` ADR-017
+
+---
+
+# ADR-018: Expose phase-scoped advanced options without a custom FFmpeg mode
+
+## Status
+
+Accepted; supersedes ADR-017's single Additional FFmpeg output field
+
+## Date
+
+2026-08-25
+
+## Decision
+
+Keep every managed profile on the bundled FFmpeg Smart launcher. Do not expose a full custom/native FFmpeg command because it would bypass Smart's hardware discovery, device scheduling, adaptive video copy/transcode decision, selected encoder, and hardware filter construction.
+
+Give each of the two Stream Profile slots and three Output Profile slots five scoped advanced groups that match canonical `ffmpeg-asr` ADR-018:
+
+1. Input defaults: `inherit`, `add`, or `replace`, placed before `-i` but after Smart-owned user-agent, reconnect, and hardware input setup.
+2. Stream mapping: `inherit`, `add`, `replace`, or `all`. Custom values use `-map <typed specifier>` pairs or bare typed specifiers. Add may add only non-video mappings because the inherited group already selects one video; Replace must contain exactly one positive video selector; runtime validation rejects selectors that resolve to multiple videos.
+3. Video tuning defaults: `inherit`, `add`, or `replace`, used only on the video-transcode path and unable to replace the Smart-owned video encoder or filter graph.
+4. Audio defaults: `inherit`, `add`, or `replace`, used on both video-copy and video-transcode paths. Replace is an explicit expert choice to bypass normal AAC/copy selection.
+5. MPEG-TS/output defaults: `inherit`, `add`, or `replace`, used on both paths before Smart's fixed `-f mpegts pipe:1` output.
+
+Parse every options field with `shlex.split` and emit one independently quoted repeatable wrapper argument per token. Reject invalid quoting and wrapper-owned structural tokens before profile reconciliation. An options value with the default `inherit` mode behaves as `add` so saved settings remain useful.
+
+Retain the existing beta.3 `*_ffmpeg_options` field IDs as the MPEG-TS/output text fields and add `*_ffmpeg_options_mode`. This carries saved beta.3 values forward as additive mux options. New scopes use distinct IDs.
+
+Explicit wrapper policy remains authoritative after expert settings: `-maxbr` stays a hard bitrate ceiling and `-maxchan` stays a hard channel ceiling. The plugin does not promise that other advanced options are supported by every FFmpeg build or selected encoder.
+
+## Reason
+
+FFmpeg option placement is phase-sensitive. A single final-output field cannot safely express pre-input flags, mapping replacement, transcode-only encoder tuning, or audio behavior on both copy and transcode paths. Matching the canonical wrapper's scoped model makes the effective ownership predictable without discarding its hardware-aware purpose.
+
+## Alternatives considered
+
+- Expose the complete Discord command as a custom profile. Rejected because its `-c:v copy` and native command structure bypass Smart's hardware-aware path.
+- Make the entire generated FFmpeg command editable as one default. Rejected because the encoder, devices, filters, and copy/transcode choice are resolved dynamically per stream and deployment.
+- Keep only the beta.3 final-output field. Superseded because it cannot place several common advanced switches correctly and did not apply on the video-copy path.
+- Add a dedicated field for every FFmpeg switch. Rejected because the option surface is build- and encoder-specific and changes independently.
+
+## Consequences
+
+`Plugin.fields` and `plugin.json` must remain exact mirrors. Tests must cover the complete five-slot schema, mode migration, quoting and metacharacter boundaries, generated order, empty replacement groups, mapping constraints, structural rejection, copy/transcode placement in the pinned canonical wrapper, and update-without-restart behavior.
+
+The existing restart decision remains unchanged: creating or removing profiles requires restart feedback, while updating existing profiles does not.
+
+## Provenance
+
+- Operator advanced-options review: 2026-08-25
+- Canonical wrapper: `ffmpeg-asr` ADR-018 and `v1.1.0-beta.3`
+- Supersedes: plugin ADR-017
