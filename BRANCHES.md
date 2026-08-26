@@ -22,7 +22,7 @@ This ledger records why every current long-lived or work branch exists and prese
 | `fix/launcher-permissions-cache-status` | fix | merged | `dev` | `dev` | Make registry installs launch reliably and report cache validity rather than file existence alone. |
 | `fix/beta7-canonical-validation` | fix | merged | `dev` | `dev` | Repin beta.7 behavior to the corrective green canonical wrapper tag without moving published tags. |
 | `fix/persistent-fallback-reactivation` | fix | merged | `dev` | `dev` | Restore dismissed degraded warnings in the notification center instead of showing only a toast. |
-| `fix/authoritative-notification-refresh` | fix | active | `dev` | `dev` | Refresh the browser from Dispatcharr's authoritative notification API after persistent-warning reactivation. |
+| `fix/authoritative-notification-refresh` | fix | merged | `dev` | `dev` | Refresh the browser from Dispatcharr's authoritative notification API after persistent-warning reactivation. |
 
 ## Branch records
 
@@ -39,9 +39,9 @@ This ledger records why every current long-lived or work branch exists and prese
 - Purpose: integrate and validate the next plugin version before stable promotion to `main`.
 - Base: synchronized with `main` after the approved administrative promotion.
 - Intended target: `main` after future version work is reviewed and approved.
-- Current state: integrates beta.9 degraded stream-copy fallback with immediate persistent notification-center reactivation, launcher mode repair, authoritative cache health, scoped advanced options, and pinned canonical `ffmpeg-asr v1.1.0-beta.6`.
-- Validation: 37 plugin unit tests, Python/JSON/shell checks, exact offline and remote wrapper verification, idempotent synchronization, official Dispatcharr v0.29.0 notification-contract review, workspace validation, feature/dev/tag GitHub workflows, immutable beta.9 archive inspection, development-registry validation/publication, public raw-manifest agreement, and `git diff --check` pass. Installed beta.9 reactivation validation remains pending.
-- Publication state: immutable `v0.2.0-beta.9` is tagged and advertised through `dispatcharr-plugins:dev`; beta.8 remains immutable in registry history. No GitHub Release, stable-registry change, or distributable ZIP is authorized.
+- Current state: integrates the beta.10 authoritative persistent-notification refresh correction with degraded stream-copy fallback, launcher mode repair, authoritative cache health, scoped advanced options, and pinned canonical `ffmpeg-asr v1.1.0-beta.6`.
+- Validation: 37 plugin unit tests, Python/JSON/shell checks, exact offline and remote wrapper verification, official Dispatcharr v0.29.0 notification-refresh and plugin-action UI contract review, workspace validation, feature workflow run `33018546999`, and `git diff --check` pass. Dev/tag workflows, immutable beta.10 archive inspection, development-registry validation/publication, and installed beta.10 validation remain pending.
+- Publication state: corrective immutable `v0.2.0-beta.10` and `dispatcharr-plugins:dev` publication are pending; beta.9 remains immutable and advertised until replacement. No GitHub Release, stable-registry change, or distributable ZIP is authorized.
 - Last verified at: `2026-08-26`.
 
 ### `feature/additional-ffmpeg-options`
@@ -138,5 +138,6 @@ This ledger records why every current long-lived or work branch exists and prese
 - Exclusions: no canonical wrapper, fallback routing, FFmpeg command, cache-validity policy, benchmark behavior, profile, hardware, Dispatcharr core, stable registry, GitHub Release, or distributable ZIP change.
 - Dispatcharr evidence: official `v0.29.0` commit `d9abece081c9edf637d4c3fdd41443eb993a3c08` handles `notifications_cleared` by fetching the authoritative notification API, while plugin action HTTP success is colored green without inspecting `result.status`.
 - Reported evidence: installed beta.9 restores the database-backed warning only after a browser refresh; a post-install Benchmark Status check reports the recheck requirement but Dispatcharr gives the successful action request a green toast edge.
-- Validation: all 37 plugin tests, Python compilation, JSON parsing, shell syntax, exact offline and remote canonical-source verification, workspace validation, official Dispatcharr v0.29.0 notification-refresh and plugin-action UI contract review, complete-diff review, and `git diff --check` pass. Feature workflow, immutable tag/archive, registry publication, and installed beta.10 validation remain pending.
+- Result: source commit `2aa812a30bb949e877bbbae64cfd9b51d7ed69a2` merged into `dev` at `15caf3a1df554544a47bf67643eabd5f0dbe6eee`; this reviewed integration is the candidate source for corrective `v0.2.0-beta.10`.
+- Validation: all 37 plugin tests, Python compilation, JSON parsing, shell syntax, exact offline and remote canonical-source verification, workspace validation, official Dispatcharr v0.29.0 notification-refresh and plugin-action UI contract review, feature workflow run `33018546999`, complete-diff review, and `git diff --check` pass. Dev/tag workflows, immutable tag/archive, registry publication, and installed beta.10 validation remain pending.
 - Started: `2026-08-26`.
