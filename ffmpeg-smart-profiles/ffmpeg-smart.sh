@@ -4,7 +4,7 @@ set -euo pipefail
 
 LOG_PREFIX="[ffmpeg-smart]"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="1.1.0-beta.6"
+VERSION="1.1.0-beta.7"
 CAPACITY_BENCHMARK_VERSION="concurrency-1.2-v1"
 STATE_DIR="${FFMPEG_SMART_STATE_DIR:-$SCRIPT_DIR}"
 REQUIRE_CACHE_VALUE="${FFMPEG_SMART_REQUIRE_CACHE:-false}"
@@ -1199,6 +1199,17 @@ run_degraded_proxy() {
         pipe:1
 }
 
+BENCHMARK_LOCK_OWNER_PID=""
+
+cleanup_benchmark_lock() {
+    local recorded_pid=""
+    [[ -n "$BENCHMARK_LOCK_OWNER_PID" ]] || return 0
+    [[ "${BASH_SUBSHELL:-0}" -eq 0 ]] || return 0
+    recorded_pid="$(head -n 1 "$BENCHMARK_LOCK_FILE" 2>/dev/null || true)"
+    [[ "$recorded_pid" == "$BENCHMARK_LOCK_OWNER_PID" ]] || return 0
+    rm -f -- "$BENCHMARK_LOCK_FILE"
+}
+
 benchmark_lock_active() {
     local lock_pid=""
     [[ -e "$BENCHMARK_LOCK_FILE" ]] || return 1
@@ -1215,8 +1226,9 @@ benchmark_lock_active() {
 }
 
 if [[ "$RECACHE_ONLY" == "true" ]]; then
-    echo "$$" > "$BENCHMARK_LOCK_FILE"
-    trap 'rm -f -- "$BENCHMARK_LOCK_FILE"' EXIT
+    BENCHMARK_LOCK_OWNER_PID="$$"
+    echo "$BENCHMARK_LOCK_OWNER_PID" > "$BENCHMARK_LOCK_FILE"
+    trap cleanup_benchmark_lock EXIT
 elif benchmark_lock_active; then
     if [[ "$RECACHE" != "true" && "$CACHE_FALLBACK" == "proxy" ]]; then
         run_degraded_proxy "Hardware benchmark is in progress"
@@ -1436,6 +1448,7 @@ if [[ "$HAS_AUDIO" == "true" ]]; then
     fi
 fi
 resolve_audio_ffmpeg_args
+MAPPED_AUXILIARY_CODEC_ARGS=(-c:s copy -c:d copy -c:t copy)
 AUDIO_POLICY_ARGS=()
 if [[ -n "$MAX_CHANNELS" && "$HAS_AUDIO" == "true" && ( "$AUDIO_SOURCE_CHANNELS" -eq 0 || "$AUDIO_SOURCE_CHANNELS" -gt "$MAX_CHANNELS" ) ]]; then
     AUDIO_POLICY_ARGS=(-ac "$AUDIO_TARGET_CHANNELS")
@@ -1452,6 +1465,7 @@ if [[ -n "$VIDEO_COPY_REASON" ]]; then
         -c:v copy \
         ${FFMPEG_AUDIO_ARGS[@]+"${FFMPEG_AUDIO_ARGS[@]}"} \
         ${AUDIO_POLICY_ARGS[@]+"${AUDIO_POLICY_ARGS[@]}"} \
+        "${MAPPED_AUXILIARY_CODEC_ARGS[@]}" \
         ${FFMPEG_MUX_ARGS[@]+"${FFMPEG_MUX_ARGS[@]}"} \
         -f mpegts \
         pipe:1
@@ -1665,6 +1679,7 @@ run_ffmpeg() {
         ${VIDEO_POLICY_ARGS[@]+"${VIDEO_POLICY_ARGS[@]}"} \
         ${FFMPEG_AUDIO_ARGS[@]+"${FFMPEG_AUDIO_ARGS[@]}"} \
         ${AUDIO_POLICY_ARGS[@]+"${AUDIO_POLICY_ARGS[@]}"} \
+        "${MAPPED_AUXILIARY_CODEC_ARGS[@]}" \
         ${FFMPEG_MUX_ARGS[@]+"${FFMPEG_MUX_ARGS[@]}"} \
         -f mpegts \
         pipe:1

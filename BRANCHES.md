@@ -22,6 +22,7 @@ This ledger records why every current long-lived or work branch exists and prese
 | `fix/launcher-permissions-cache-status` | fix | merged | `dev` | `dev` | Make registry installs launch reliably and report cache validity rather than file existence alone. |
 | `fix/beta7-canonical-validation` | fix | merged | `dev` | `dev` | Repin beta.7 behavior to the corrective green canonical wrapper tag without moving published tags. |
 | `fix/persistent-fallback-reactivation` | fix | merged | `dev` | `dev` | Restore dismissed degraded warnings in the notification center instead of showing only a toast. |
+| `fix/map-all-benchmark-lock` | fix | active | `dev` | `dev` | Repin the canonical wrapper so Map All preserves compatible auxiliary streams and benchmark fallback remains authoritative. |
 | `fix/authoritative-notification-refresh` | fix | merged | `dev` | `dev` | Refresh the browser from Dispatcharr's authoritative notification API after persistent-warning reactivation. |
 
 ## Branch records
@@ -140,4 +141,16 @@ This ledger records why every current long-lived or work branch exists and prese
 - Reported evidence: installed beta.9 restores the database-backed warning only after a browser refresh; a post-install Benchmark Status check reports the recheck requirement but Dispatcharr gives the successful action request a green toast edge.
 - Result: source commit `2aa812a30bb949e877bbbae64cfd9b51d7ed69a2` merged into `dev` at `15caf3a1df554544a47bf67643eabd5f0dbe6eee`; immutable tag `v0.2.0-beta.10` resolves to reviewed integration commit `2ceb64a178ee626c833c5d5b786f35e8ed86c99f` and is advertised through `dispatcharr-plugins:dev`.
 - Validation: all 37 plugin tests, Python compilation, JSON parsing, shell syntax, exact offline and remote canonical-source verification, workspace validation, official Dispatcharr v0.29.0 notification-refresh and plugin-action UI contract review, feature run `33018546999`, dev run `33018659558`, tag run `33018651305`, immutable archive inspection, registry run `33018930141`, public raw-manifest agreement, complete-diff review, and `git diff --check` pass. Installed beta.10 validation remains pending.
+- Started: `2026-08-26`.
+
+### `fix/map-all-benchmark-lock`
+
+- Purpose: ship the canonical corrections found during installed beta.10 custom-string validation: Map All must preserve MPEG-TS-compatible auxiliary streams without automatic encoder selection, and an active hardware recheck must retain its lock until the top-level recache exits.
+- Base: `dev` at `6b1d3470c17fbdeccc6751e33c9e9c184d61b1db` after refreshing `origin` and reconciling workspace standards revision `sha256:6456d4a722cfca0a03e6bce3d698208c844a114953c62d0fe757789d48f1c794`.
+- Intended target: `dev`, followed by immutable plugin `v0.2.0-beta.11`, `dispatcharr-plugins:dev` publication, and focused installed validation.
+- Scope: exact canonical `ffmpeg-asr v1.1.0-beta.7` synchronization, mapping help clarification, plugin beta.11 metadata, tests, user guidance, decision history, and development-registry publication.
+- Exclusions: no plugin-side FFmpeg implementation, profile schema or saved-setting migration, notification semantics, benchmark orchestration, Dispatcharr compatibility floor, stable registry, GitHub Release, or distributable ZIP.
+- Live evidence: beta.10 advanced strings passed input/map/video/audio/mux placement, quoting, copy, transcode, and `pipe:0` checks; Map All failed on a DVB-subtitle source, and normal Smart/audio policy ran during an active benchmark after the canonical lock disappeared.
+- Related canonical source: `ffmpeg-asr v1.1.0-beta.7` at `6a735d61113646153aef5bf1a1c0a5667b1331e9`; dev workflow `33024572011` and tag workflow `33024640090` passed.
+- Validation: 39 plugin tests, Python compilation, JSON parsing, shell syntax, exact offline and remote canonical-source verification, idempotent synchronization, workspace reconciliation, version/schema parity, and `git diff --check` pass locally; plugin GitHub, archive, registry, and installed beta.11 checks remain pending.
 - Started: `2026-08-26`.

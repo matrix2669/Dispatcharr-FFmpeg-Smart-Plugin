@@ -965,3 +965,47 @@ The notification watcher must stop cleanly on plugin unload and tolerate multipl
 - Operator live validation: fallback streamed successfully, but a dismissed warning returned only as a toast because the browser retained its dismissed state, 2026-08-26
 - Operator live validation: beta.9 persisted reactivation in the database but the notification appeared only after a browser refresh; post-install Benchmark Status also exposed Dispatcharr's green action-completion color for an unhealthy result, 2026-08-26
 - Canonical decision: `ffmpeg-asr` ADR-020
+
+---
+
+# ADR-022: Pin canonical auxiliary-mapping and benchmark-lock corrections
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-26
+
+## Decision
+
+Synchronize the bundled wrapper to canonical `ffmpeg-asr v1.1.0-beta.7` at exact commit `6a735d61113646153aef5bf1a1c0a5667b1331e9`. Keep the plugin's mapping modes and saved-setting schema unchanged. Update mapping guidance to state that mapped subtitle, data, and attachment streams are copied when compatible with the fixed MPEG-TS output.
+
+Rely on the canonical wrapper's top-level benchmark-lock ownership. The plugin continues to create its orchestration lock before stopping active transcodes and to launch the canonical `--recache-only` process, while every managed profile launcher continues to enable degraded proxy fallback. Do not duplicate lock cleanup or auxiliary codec policy in `plugin.py` or the launcher.
+
+## Reason
+
+Installed beta.10 testing proved the scoped custom strings and degraded fallback design but exposed two canonical defects. Map All selected a DVB subtitle alongside one video and two audio streams, then FFmpeg exited because no subtitle codec policy was stated. During a real recheck, the top-level benchmark PID remained active after a subshell removed `.benchmark.lock`, allowing a later managed request to run normal Smart/audio policy instead of degraded `-c copy`.
+
+Both corrections belong to the canonical wrapper: Dispatcharr invokes the launcher and wrapper directly for profiles, and the plugin action is not in the media execution path. Pinning one reviewed canonical commit preserves the self-contained package and immutable-source contract.
+
+## Alternatives considered
+
+- Add plugin-side FFmpeg flags without changing the canonical wrapper. Rejected because it would fork wrapper behavior and violate the source-pin boundary.
+- Remove Map All from the UI. Rejected because compatible auxiliary streams are useful and canonical explicit copy corrects the observed failure.
+- Treat the missing lock as negligible because the observed video happened to copy. Rejected because custom audio transcoding still ran and other sources can invoke GPU video processing during the benchmark.
+- Change notification behavior again. Rejected because the persistent notification worked as designed; the fault was routing caused by premature canonical lock removal.
+
+## Consequences
+
+Plugin beta.11 must pin and byte-verify the corrected wrapper, keep `Plugin.fields` and `plugin.json` aligned, and pass all existing schema, profile, notification, fallback, and packaging tests. Installed validation must repeat the DVB-subtitle Map All case and verify that the lock persists and a managed start uses `-c copy` throughout an active benchmark before any stable promotion.
+
+The Output Profile child-process cleanup issue reproduced with original beta.10 profile values as well as custom strings. It remains a separate Dispatcharr/process-lifecycle concern and is not attributed to this advanced-options correction.
+
+## Provenance
+
+- Operator authorization to proceed after installed beta.10 custom-string testing, 2026-08-26
+- Canonical decision: `ffmpeg-asr` ADR-021
+- Canonical dev workflow: `33024572011`
+- Canonical tag workflow: `33024640090`
