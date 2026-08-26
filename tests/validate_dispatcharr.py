@@ -17,7 +17,7 @@ spec.loader.exec_module(module)
 manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 plugin = module.Plugin()
 
-assert plugin.version == "0.2.0-beta.2"
+assert plugin.version == "0.2.0-beta.3"
 assert manifest["version"] == plugin.version
 assert (PLUGIN_DIR / "ffmpeg-smart.sh").is_file()
 assert (PLUGIN_DIR / "ffmpeg-smart-plugin.sh").is_file()
@@ -37,6 +37,17 @@ assert outputs[0]["command"].endswith("ffmpeg-smart-plugin.sh")
 assert outputs[0]["parameters"] == (
     "-i pipe:0 -maxres 720 -maxbr 2M -maxchan 2 -sdr -deint"
 )
+
+with_ffmpeg_options = plugin._output_definitions(
+    {
+        "output_1_ffmpeg_options": "-metadata 'service_name=Mobile feed' -muxdelay 0",
+        "output_2_enabled": False,
+        "output_3_enabled": False,
+    }
+)[0]["parameters"]
+assert "-ffmpeg-option -metadata" in with_ffmpeg_options
+assert "-ffmpeg-option 'service_name=Mobile feed'" in with_ffmpeg_options
+assert "-ffmpeg-option -muxdelay -ffmpeg-option 0" in with_ffmpeg_options
 
 # Force SDR must win without raising an error when both controls are enabled.
 override = plugin._stream_definitions(
