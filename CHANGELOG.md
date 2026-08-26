@@ -4,6 +4,8 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ## [Unreleased]
 
+## [0.2.0-beta.7] - 2026-08-26
+
 ### Added
 
 - Keep managed streams available through a basic FFmpeg `-c copy` proxy while the hardware cache is missing, invalid, stale, unavailable, or being rebuilt.
@@ -11,7 +13,7 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ### Changed
 
-- Synchronize the bundled wrapper to canonical `ffmpeg-asr@4ff4a386f8d0511ec1228708c74eeacda745da04` with opt-in degraded proxy and invocation-marker support.
+- Synchronize the bundled wrapper to canonical `ffmpeg-asr@4fafc8b5af300d6e47413cfb9cf8409fef7c2201` (`v1.1.0-beta.5`) with opt-in degraded proxy and invocation-marker support.
 - Explain that FFmpeg Smart policy and hardware acceleration are bypassed until a required capability scan succeeds.
 
 ### Safety

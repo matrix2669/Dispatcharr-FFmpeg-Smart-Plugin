@@ -97,6 +97,6 @@ This ledger records why every current long-lived or work branch exists and prese
 - Scope: launcher opt-in, canonical wrapper synchronization, per-invocation fallback marker monitoring, dismissal reset, notification wording, tests, documentation, and update-description coordination.
 - Exclusions: no CPU transcode fallback, automatic benchmark, Dispatcharr retry-routing or core change, stable registry, GitHub Release, or distributable ZIP.
 - Related work: canonical `ffmpeg-asr` branch `feature/degraded-proxy-fallback` and registry branch `feature/ffmpeg-smart-update-disclaimer`.
-- Canonical source: commit `4ff4a386f8d0511ec1228708c74eeacda745da04`, recorded and verified at SHA-256 `6319094e9495f60050f523f11c2d01caea8634fa026d75e92f85f42e9719dcd5`.
+- Canonical source: tagged beta.5 integration commit `4fafc8b5af300d6e47413cfb9cf8409fef7c2201`, recorded and verified at SHA-256 `c4030ee729caa002e0d6b4e68a5893bd73221be4eb72578a71a83cb3d10aa507`.
 - Validation: 37 plugin tests pass, including launcher fallback, unique marker tokens, same-token deduplication, dismissal reset on later invocations, persistent-notification cleanup, and watcher lifecycle. Python/JSON/shell checks, offline and remote canonical-source verification, idempotent synchronization, workspace validation, and `git diff --check` pass. Live Dispatcharr fallback and notification reactivation remain pending.
 - Started: `2026-08-26`.
