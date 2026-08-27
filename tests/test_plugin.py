@@ -95,6 +95,10 @@ class ProfileDefinitionTests(unittest.TestCase):
             "Updates to existing profiles work without a restart",
             actions["install_profiles"]["confirm"]["message"],
         )
+        self.assertIn(
+            "browser refresh may be needed",
+            actions["install_profiles"]["confirm"]["message"],
+        )
         self.assertTrue(actions["remove_profiles"]["confirm"]["required"])
         self.assertIn(
             "full Dispatcharr restart",
@@ -270,6 +274,8 @@ class ProfileDefinitionTests(unittest.TestCase):
         plugin = Plugin()
         cases = (
             {"stream_1_ffmpeg_input_options": "-i other.ts"},
+            {"stream_1_ffmpeg_input_options": "-analyzeduration 1000000"},
+            {"stream_1_ffmpeg_input_options": "-probesize 1000000"},
             {"stream_1_ffmpeg_video_options": "-c:v copy"},
             {"stream_1_ffmpeg_video_options": "-vf scale=1280:720"},
             {"stream_1_ffmpeg_options": "-f matroska"},
@@ -358,6 +364,35 @@ class ProfileDefinitionTests(unittest.TestCase):
         self.assertTrue(normalized["stream_1_hdr"])
         self.assertEqual(moved, ["stream_1:-10bit", "stream_1:-hdr"])
 
+    def test_manual_probe_limits_are_removed_from_saved_input_options(self):
+        plugin = Plugin()
+        normalized, removed = plugin._normalize_adaptive_probe_settings(
+            {
+                "stream_1_ffmpeg_input_mode": "add",
+                "stream_1_ffmpeg_input_options": (
+                    "-fflags +discardcorrupt -analyzeduration 1000000 "
+                    "-probesize=1000000"
+                ),
+            }
+        )
+
+        self.assertEqual(
+            normalized["stream_1_ffmpeg_input_options"],
+            "-fflags +discardcorrupt",
+        )
+        self.assertEqual(
+            removed,
+            ["stream_1:-analyzeduration", "stream_1:-probesize"],
+        )
+
+        malformed, _ = plugin._normalize_adaptive_probe_settings(
+            {"stream_1_ffmpeg_input_options": "-analyzeduration -fflags +genpts"}
+        )
+        self.assertEqual(
+            malformed["stream_1_ffmpeg_input_options"],
+            "-fflags +genpts",
+        )
+
     def test_install_persists_normalized_policy_controls(self):
         plugin = Plugin()
         install_result = {
@@ -373,7 +408,10 @@ class ProfileDefinitionTests(unittest.TestCase):
                 {},
                 {
                     "settings": {
-                        "output_2_options": "-maxres 1080 -10bit -hdr -sdr -deinterlace"
+                        "output_2_options": "-maxres 1080 -10bit -hdr -sdr -deinterlace",
+                        "output_2_ffmpeg_input_options": (
+                            "-analyzeduration 1000000 -probesize 1000000"
+                        ),
                     }
                 },
             )
@@ -384,6 +422,11 @@ class ProfileDefinitionTests(unittest.TestCase):
         self.assertTrue(saved["output_2_hdr"])
         self.assertTrue(saved["output_2_sdr"])
         self.assertTrue(saved["output_2_deint"])
+        self.assertEqual(saved["output_2_ffmpeg_input_options"], "")
+        self.assertEqual(
+            result["normalized_probe_options"],
+            ["output_2:-analyzeduration", "output_2:-probesize"],
+        )
         self.assertIn("refresh the settings page", result["message"])
 
 

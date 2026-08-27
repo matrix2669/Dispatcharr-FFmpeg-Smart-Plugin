@@ -24,7 +24,7 @@ Every slot has an enable checkbox, editable profile name, checkboxes for 10-bit,
 
 The advanced controls retain FFmpeg Smart's hardware benefits while exposing options at the phase where FFmpeg expects them:
 
-- **Input defaults** are placed before `-i` and normally inherit Smart's corruption/timestamp handling.
+- **Input defaults** are placed before `-i` and normally inherit Smart's corruption/timestamp handling. Adaptive `-analyzeduration` and `-probesize` values are Smart-owned rather than profile overrides.
 - **Stream mapping** normally selects the first video and optional first audio. Map all input streams is available when the input has one video; custom Replace mappings must explicitly select exactly one video and may add audio, subtitle, data, or attachment streams. Mapped subtitle, data, and attachment streams are copied rather than automatically encoded, but their source codec must still be compatible with MPEG-TS.
 - **Video tuning defaults** apply only when Smart chooses to transcode video and can tune GOP, key frames, rate control, or encoder-specific behavior without replacing Smart's selected encoder or hardware filters.
 - **Audio defaults** apply on both video-copy and video-transcode paths and can replace Smart's AAC/copy decision with a deliberate codec choice.
@@ -44,7 +44,9 @@ Each non-mapping group offers **Use FFmpeg Smart default**, **Add to default**, 
 
 For the Discord-style example, choose Replace for Input and enter `-fflags +discardcorrupt+genpts+nobuffer`; choose Map all input streams; choose Add for Video and enter `-g 60 -keyint_min 60 -sc_threshold 0 -force_key_frames 'expr:gte(t,n_forced*2)'`; choose Replace for Audio and enter `-c:a ac3`; then choose Replace for MPEG-TS/output and enter `-mpegts_flags +pat_pmt_at_frames+resend_headers+initial_discontinuity`.
 
-Do not enter `-user_agent`, `-i`, `-c:v`, hardware/device flags, filter graphs, `-f mpegts`, or `pipe:1`: Smart owns those structural parts. Explicit profile limits still win—`-maxbr` remains the maximum bitrate and `-maxchan` remains the maximum channel count. Other expert combinations are accepted only as far as the installed FFmpeg build and selected encoder support them.
+Do not enter `-user_agent`, `-i`, `-analyzeduration`, `-probesize`, `-c:v`, hardware/device flags, filter graphs, `-f mpegts`, or `pipe:1`: Smart owns those structural parts. Explicit profile limits still win—`-maxbr` remains the maximum bitrate and `-maxchan` remains the maximum channel count. Other expert combinations are accepted only as far as the installed FFmpeg build and selected encoder support them.
+
+The generated wrapper command intentionally repeats `-ffmpeg-input-option` once for every safely parsed FFmpeg argument. For example, `-analyzeduration 1000000` becomes `-ffmpeg-input-option -analyzeduration -ffmpeg-input-option 1000000`; this preserves two exact argv tokens without evaluating shell text. Beginning with `0.2.1-beta.1`, Install / Update removes saved manual probe-window pairs and persists the cleaned settings because adaptive probing selects and applies the safe tier automatically.
 
 Saved settings from development versions that placed policy flags in the additional-options field remain compatible. On **Install / Update**, the plugin removes those copies, enables their matching checkboxes in persisted settings, and generates each policy flag once. Refresh the settings page after normalization to see the checkbox changes; Dispatcharr does not invoke plugins directly from its settings Save button.
 

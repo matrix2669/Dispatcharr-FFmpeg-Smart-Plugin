@@ -125,7 +125,7 @@ def advanced_ffmpeg_fields(prefix, label):
             "label": f"{label}: input options",
             "type": "string",
             "default": "",
-            "help_text": "For example: -fflags +discardcorrupt+genpts+nobuffer. Text with Inherit selected is treated as Add.",
+            "help_text": "For example: -fflags +discardcorrupt+genpts+nobuffer. Text with Inherit selected is treated as Add. Adaptive -analyzeduration and -probesize values are FFmpeg Smart-owned.",
         },
         {
             "id": f"{prefix}_ffmpeg_mapping_mode",
@@ -192,7 +192,7 @@ def advanced_ffmpeg_fields(prefix, label):
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.2.0"
+    version = "0.2.1-beta.1"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
@@ -310,7 +310,7 @@ class Plugin:
             "confirm": {
                 "required": True,
                 "title": "Install or update profiles?",
-                "message": "Adding a new profile requires a full Dispatcharr restart before it can be used. Updates to existing profiles work without a restart. Continue?",
+                "message": "Adding a new profile requires a full Dispatcharr restart before it can be used. Updates to existing profiles work without a restart. A browser refresh may be needed to see settings changes. Continue?",
             },
         },
         {
@@ -370,13 +370,24 @@ class Plugin:
         logger = context.get("logger")
         if action == "install_profiles":
             normalized_settings, normalized_flags = self._normalize_policy_settings(settings)
+            normalized_settings, normalized_probe_options = (
+                self._normalize_adaptive_probe_settings(normalized_settings)
+            )
             result = self._install_profiles(normalized_settings, logger)
-            if normalized_flags:
+            if normalized_flags or normalized_probe_options:
                 self._save_normalized_settings(normalized_settings)
+            if normalized_flags:
                 result["normalized_policy_flags"] = normalized_flags
                 result["message"] += (
                     " Policy flags were moved from Additional options to their "
                     "checkboxes; refresh the settings page to see the changes."
+                )
+            if normalized_probe_options:
+                result["normalized_probe_options"] = normalized_probe_options
+                result["message"] += (
+                    " Manual analyzeduration/probesize input options were removed "
+                    "because adaptive probing now manages them; refresh the settings "
+                    "page to see the changes."
                 )
             return result
         if action == "remove_profiles":
@@ -527,6 +538,8 @@ class Plugin:
                     "-f",
                     "-map",
                     "-user_agent",
+                    "-analyzeduration",
+                    "-probesize",
                     "-c",
                     "-codec",
                     "-vcodec",
@@ -710,6 +723,45 @@ class Plugin:
             if len(remaining) != len(tokens):
                 normalized[options_key] = " ".join(shlex.quote(token) for token in remaining)
         return normalized, moved
+
+    @staticmethod
+    def _normalize_adaptive_probe_settings(settings):
+        normalized = dict(settings or {})
+        managed_options = {"-analyzeduration", "-probesize"}
+        removed = []
+        for prefix in POLICY_DEFAULTS:
+            options_key = f"{prefix}_ffmpeg_input_options"
+            options = str(normalized.get(options_key, "") or "")
+            try:
+                tokens = shlex.split(options)
+            except ValueError:
+                continue
+
+            remaining = []
+            index = 0
+            while index < len(tokens):
+                token = tokens[index]
+                option = token.split("=", 1)[0]
+                if option not in managed_options:
+                    remaining.append(token)
+                    index += 1
+                    continue
+
+                removed.append(f"{prefix}:{option}")
+                if "=" not in token and index + 1 < len(tokens):
+                    next_option = tokens[index + 1].split("=", 1)[0]
+                    if (
+                        next_option not in managed_options
+                        and not tokens[index + 1].startswith("-")
+                    ):
+                        index += 1
+                index += 1
+
+            if len(remaining) != len(tokens):
+                normalized[options_key] = " ".join(
+                    shlex.quote(token) for token in remaining
+                )
+        return normalized, removed
 
     @staticmethod
     def _save_normalized_settings(settings):
