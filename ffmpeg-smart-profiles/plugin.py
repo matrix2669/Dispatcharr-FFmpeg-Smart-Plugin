@@ -1,21 +1,43 @@
 import copy
 import glob
+import logging
 import os
 import re
 import shlex
 import signal
 import subprocess
+import threading
 import time
 from pathlib import Path
 
 
 PLUGIN_DIR = Path(__file__).resolve().parent
 SCRIPT_PATH = PLUGIN_DIR / "ffmpeg-smart.sh"
-RUNTIME_DIR = PLUGIN_DIR / "runtime"
+LAUNCHER_PATH = PLUGIN_DIR / "ffmpeg-smart-plugin.sh"
+STATE_DIR = Path(os.environ.get("FFMPEG_SMART_STATE_DIR", "/data/ffmpeg_smart_profiles"))
+RUNTIME_DIR = STATE_DIR / "runtime"
 PID_FILE = RUNTIME_DIR / "recache.pid"
 LOG_FILE = RUNTIME_DIR / "recache.log"
-BENCHMARK_LOCK_FILE = PLUGIN_DIR / ".benchmark.lock"
-CACHE_FILE = PLUGIN_DIR / ".capabilities.cache"
+BENCHMARK_LOCK_FILE = STATE_DIR / ".benchmark.lock"
+CACHE_FILE = STATE_DIR / ".capabilities.cache"
+FALLBACK_MARKER_FILE = RUNTIME_DIR / "fallback-invocation"
+CACHE_NOTIFICATION_KEY = "ffmpeg-smart-hardware-cache"
+NOTIFICATION_WATCH_INTERVAL = 1.0
+logger = logging.getLogger(__name__)
+
+
+def _repair_script_permissions():
+    for script in (SCRIPT_PATH, LAUNCHER_PATH):
+        if not script.is_file():
+            raise RuntimeError(f"Bundled script is missing: {script}")
+        mode = script.stat().st_mode
+        if mode & 0o111 != 0o111:
+            script.chmod(mode | 0o111)
+
+
+_repair_script_permissions()
+
+
 LEGACY_OUTPUT_NAMES = {
     "FFmpeg Smart - Passthrough",
     "FFmpeg Smart - 720p 2M Stereo",
@@ -27,6 +49,24 @@ POLICY_DEFAULTS = {
     "output_1": {"10bit": False, "hdr": False, "sdr": True, "deint": True},
     "output_2": {"10bit": False, "hdr": False, "sdr": False, "deint": False},
     "output_3": {"10bit": False, "hdr": False, "sdr": False, "deint": False},
+}
+ADVANCED_MODE_OPTIONS = [
+    {"value": "inherit", "label": "Use FFmpeg Smart default"},
+    {"value": "add", "label": "Add to default"},
+    {"value": "replace", "label": "Replace default"},
+]
+MAPPING_MODE_OPTIONS = [
+    {"value": "inherit", "label": "First video and optional first audio"},
+    {"value": "all", "label": "Map all input streams"},
+    {"value": "add", "label": "Add custom mappings to default"},
+    {"value": "replace", "label": "Replace default mappings"},
+]
+ADVANCED_DEFAULT_HELP = {
+    "input": "Inherit currently uses: -fflags +genpts+igndts+discardcorrupt -err_detect ignore_err. These run before -i. Replace removes only this managed group; URL, user-agent, reconnect, and hardware setup remain Smart-owned.",
+    "mapping": "Inherit currently uses: -map 0:v:0 -map 0:a:0? (first video and optional first audio). Smart requires exactly one mapped video per job; Map all is valid only when the input contains one video. Mapped subtitle, data, and attachment streams are copied when compatible with MPEG-TS.",
+    "video": "Inherit is calculated only when video transcodes: -b:v <target> -maxrate <rate> -bufsize <buffer> -g <rounded source fps> -bf <0 or 2> <accelerator tuning> -fps_mode cfr -r <source fps> [-tag:v hvc1]. Target is 8 Mbps at 1080p scaled by output pixels with a 2 Mbps floor; without -maxbr, maxrate is 125% and buffer 200% of target. With -maxbr, target is capped at 85%, maxrate equals the limit, and buffer is 2x the limit. Replace keeps Smart's encoder, filters, color policy, and explicit -maxbr ceiling.",
+    "audio": "Inherit is calculated per stream: no audio adds no options; compatible AAC uses -c:a copy; otherwise Smart uses -c:a aac -b:a <rate> -ac <channels> [-ch_layout ...] -af aresample=async=1. Rates are 96k mono, 192k stereo, 384k 5.1, 512k 7.1, or 64k/channel otherwise. An explicit -maxchan ceiling still follows Add or Replace.",
+    "mux": "Inherit currently uses: -avoid_negative_ts make_zero -start_at_zero -mpegts_copyts 0 -mpegts_flags +pat_pmt_at_frames+resend_headers -flush_packets 1 -max_muxing_queue_size 4096. Smart always appends -f mpegts pipe:1 after this group.",
 }
 
 
@@ -70,15 +110,98 @@ def policy_fields(
     ]
 
 
+def advanced_ffmpeg_fields(prefix, label):
+    return [
+        {
+            "id": f"{prefix}_ffmpeg_input_mode",
+            "label": f"{label}: input defaults",
+            "type": "select",
+            "default": "inherit",
+            "options": copy.deepcopy(ADVANCED_MODE_OPTIONS),
+            "help_text": ADVANCED_DEFAULT_HELP["input"],
+        },
+        {
+            "id": f"{prefix}_ffmpeg_input_options",
+            "label": f"{label}: input options",
+            "type": "string",
+            "default": "",
+            "help_text": "For example: -fflags +discardcorrupt+genpts+nobuffer. Text with Inherit selected is treated as Add.",
+        },
+        {
+            "id": f"{prefix}_ffmpeg_mapping_mode",
+            "label": f"{label}: stream mapping",
+            "type": "select",
+            "default": "inherit",
+            "options": copy.deepcopy(MAPPING_MODE_OPTIONS),
+            "help_text": ADVANCED_DEFAULT_HELP["mapping"],
+        },
+        {
+            "id": f"{prefix}_ffmpeg_mapping",
+            "label": f"{label}: custom stream mappings",
+            "type": "string",
+            "default": "",
+            "help_text": "Use typed mappings such as -map 0:v:0 -map 0:a:0?. Replace must select exactly one video; Add already inherits its one video. Use Map all input streams instead of entering -map 0 here.",
+        },
+        {
+            "id": f"{prefix}_ffmpeg_video_mode",
+            "label": f"{label}: video tuning defaults",
+            "type": "select",
+            "default": "inherit",
+            "options": copy.deepcopy(ADVANCED_MODE_OPTIONS),
+            "help_text": ADVANCED_DEFAULT_HELP["video"],
+        },
+        {
+            "id": f"{prefix}_ffmpeg_video_options",
+            "label": f"{label}: video tuning options",
+            "type": "string",
+            "default": "",
+            "help_text": "For example: -g 60 -keyint_min 60 -sc_threshold 0 -force_key_frames 'expr:gte(t,n_forced*2)'.",
+        },
+        {
+            "id": f"{prefix}_ffmpeg_audio_mode",
+            "label": f"{label}: audio defaults",
+            "type": "select",
+            "default": "inherit",
+            "options": copy.deepcopy(ADVANCED_MODE_OPTIONS),
+            "help_text": ADVANCED_DEFAULT_HELP["audio"],
+        },
+        {
+            "id": f"{prefix}_ffmpeg_audio_options",
+            "label": f"{label}: audio options",
+            "type": "string",
+            "default": "",
+            "help_text": "For example: -c:a ac3 or -c:a aac -b:a 256k.",
+        },
+        {
+            "id": f"{prefix}_ffmpeg_options_mode",
+            "label": f"{label}: MPEG-TS/output defaults",
+            "type": "select",
+            "default": "inherit",
+            "options": copy.deepcopy(ADVANCED_MODE_OPTIONS),
+            "help_text": ADVANCED_DEFAULT_HELP["mux"],
+        },
+        {
+            "id": f"{prefix}_ffmpeg_options",
+            "label": f"{label}: MPEG-TS/output options",
+            "type": "string",
+            "default": "",
+            "help_text": "For example: -mpegts_flags +pat_pmt_at_frames+resend_headers+initial_discontinuity -muxdelay 0. Existing beta.3 values continue here.",
+        },
+    ]
+
+
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.1.0"
+    version = "0.2.0-beta.11"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
     )
     author = "matrix2669"
     help_url = "https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin"
+    _notification_watcher_lock = threading.Lock()
+    _notification_watcher_thread = None
+    _notification_watcher_stop_event = None
 
     fields = [
         {"id": "stream_1_enabled", "label": "Enable Stream Profile 1", "type": "boolean", "default": True},
@@ -94,8 +217,9 @@ class Plugin:
             "label": "Stream Profile 1 options",
             "type": "string",
             "default": "",
-            "help_text": "Additional flags, for example: -vc h264 -maxres 1080 -maxbr 8M -maxchan 2",
+            "help_text": "Optional ffmpeg-smart flags, for example: -vc h264 -maxres 1080 -maxbr 8M -maxchan 2",
         },
+        *advanced_ffmpeg_fields("stream_1", "Stream Profile 1"),
         {"id": "stream_2_enabled", "label": "Enable Stream Profile 2", "type": "boolean", "default": False},
         {"id": "stream_2_name", "label": "Stream Profile 2 name", "type": "string", "default": ""},
         *policy_fields("stream_2", "Stream Profile 2"),
@@ -105,6 +229,7 @@ class Plugin:
             "type": "string",
             "default": "",
         },
+        *advanced_ffmpeg_fields("stream_2", "Stream Profile 2"),
         {"id": "output_1_enabled", "label": "Enable Output Profile 1", "type": "boolean", "default": True},
         {"id": "output_1_name", "label": "Output Profile 1 name", "type": "string", "default": "FFMpeg Smart - 720p Mobile"},
         *policy_fields(
@@ -114,21 +239,30 @@ class Plugin:
             deint_default=True,
         ),
         {"id": "output_1_options", "label": "Output Profile 1 options", "type": "string", "default": "-maxres 720 -maxbr 2M -maxchan 2"},
+        *advanced_ffmpeg_fields("output_1", "Output Profile 1"),
         {"id": "output_2_enabled", "label": "Enable Output Profile 2", "type": "boolean", "default": False},
         {"id": "output_2_name", "label": "Output Profile 2 name", "type": "string", "default": ""},
         *policy_fields("output_2", "Output Profile 2"),
         {"id": "output_2_options", "label": "Output Profile 2 options", "type": "string", "default": ""},
+        *advanced_ffmpeg_fields("output_2", "Output Profile 2"),
         {"id": "output_3_enabled", "label": "Enable Output Profile 3", "type": "boolean", "default": False},
         {"id": "output_3_name", "label": "Output Profile 3 name", "type": "string", "default": ""},
         *policy_fields("output_3", "Output Profile 3"),
         {"id": "output_3_options", "label": "Output Profile 3 options", "type": "string", "default": ""},
+        *advanced_ffmpeg_fields("output_3", "Output Profile 3"),
         {
             "id": "remove_missing_profiles",
             "label": "Remove disabled or renamed managed profiles",
             "type": "boolean",
             "default": True,
         },
-        {"id": "update_existing", "label": "Update existing managed profiles", "type": "boolean", "default": True},
+        {
+            "id": "update_existing",
+            "label": "Update existing managed profiles",
+            "type": "boolean",
+            "default": True,
+            "help_text": "Only profiles already pointing to an FFmpeg Smart managed script or matching this plugin's native FFmpeg templates are updated.",
+        },
         {
             "id": "flag_reference_video",
             "label": "Other flags: video and limits",
@@ -154,10 +288,16 @@ class Plugin:
             "description": "-i and -user_agent are added by the plugin. Use Rebuild Hardware Cache instead of putting --recache or --recache-only in a profile.",
         },
         {
+            "id": "flag_reference_ffmpeg",
+            "label": "Advanced FFmpeg Smart options",
+            "type": "info",
+            "description": "Each profile can inherit, add to, or replace scoped input, video-tuning, audio, and MPEG-TS defaults, plus select default, all-stream, or custom mapping. FFmpeg Smart keeps ownership of the hardware encoder, hardware filters, input, and final MPEG-TS pipe.",
+        },
+        {
             "id": "profile_note",
             "label": "Profile behavior",
             "type": "info",
-            "description": "All managed Stream and Output Profiles use the bundled ffmpeg-smart.sh. Output Profiles use its pipe-safe input mode.",
+            "description": "All managed profiles use the bundled FFmpeg Smart launcher and persistent state in /data/ffmpeg_smart_profiles. When a required hardware scan is pending or active, profiles use basic FFmpeg stream copy and bypass Smart policy and hardware acceleration until Rebuild Hardware Cache succeeds.",
         },
     ]
 
@@ -170,7 +310,7 @@ class Plugin:
             "confirm": {
                 "required": True,
                 "title": "Install or update profiles?",
-                "message": "Installing or updating profiles requires a full Dispatcharr restart before the profiles can be used. Continue?",
+                "message": "Adding a new profile requires a full Dispatcharr restart before it can be used. Updates to existing profiles work without a restart. Continue?",
             },
         },
         {
@@ -181,10 +321,18 @@ class Plugin:
             "confirm": {
                 "required": True,
                 "title": "Rebuild hardware cache?",
-                "message": "This stops active FFmpeg Smart transcodes, blocks new ones until the benchmark finishes, and places a heavy concurrent load on every visible GPU. Proxy-only streams continue running.",
+                "message": "This stops active FFmpeg Smart transcodes, routes new managed starts through basic FFmpeg stream copy until the benchmark finishes, and places a heavy concurrent load on every visible GPU. Proxy-only streams continue running.",
             },
         },
-        {"id": "benchmark_status", "label": "Benchmark Status", "button_label": "Check Status"},
+        {
+            "id": "benchmark_status",
+            "label": "Benchmark Status",
+            "description": (
+                "Run a read-only check. Dispatcharr's popup color confirms the "
+                "check completed; the message reports cache health."
+            ),
+            "button_label": "Check Status",
+        },
         {
             "id": "remove_profiles",
             "label": "Remove Managed Profiles",
@@ -213,6 +361,9 @@ class Plugin:
         for action in self.actions:
             if action.get("id") == "rebuild_cache":
                 action["confirm"]["message"] += f" Estimated runtime: {estimate}."
+        if os.environ.get("DJANGO_SETTINGS_MODULE"):
+            self._sync_cache_notification()
+            self._start_notification_watcher()
 
     def run(self, action: str, params: dict, context: dict):
         settings = context.get("settings") or {}
@@ -237,6 +388,7 @@ class Plugin:
         return {"status": "error", "message": f"Unknown action: {action}"}
 
     def stop(self, context: dict):
+        type(self)._stop_notification_watcher()
         pid = self._read_pid()
         if pid and self._pid_is_running(pid):
             try:
@@ -262,12 +414,19 @@ class Plugin:
                 str(settings.get(f"stream_{slot}_options", default_options) or ""),
                 f"Stream Profile {slot} options",
             )
+            ffmpeg_options = self._advanced_ffmpeg_parameters(
+                settings,
+                f"stream_{slot}",
+                f"Stream Profile {slot}",
+            )
             definitions.append(
                 {
                     "name": name,
-                    "command": str(SCRIPT_PATH),
+                    "command": str(LAUNCHER_PATH),
                     "parameters": self._join_parameters(
-                        '-i "{streamUrl}" -user_agent "{userAgent}"', options
+                        '-i "{streamUrl}" -user_agent "{userAgent}"',
+                        options,
+                        ffmpeg_options,
                     ),
                     "is_active": True,
                 }
@@ -294,11 +453,16 @@ class Plugin:
                 str(settings.get(f"output_{slot}_options", default_options) or ""),
                 f"Output Profile {slot} options",
             )
+            ffmpeg_options = self._advanced_ffmpeg_parameters(
+                settings,
+                f"output_{slot}",
+                f"Output Profile {slot}",
+            )
             definitions.append(
                 {
                     "name": name,
-                    "command": str(SCRIPT_PATH),
-                    "parameters": self._join_parameters("-i pipe:0", options),
+                    "command": str(LAUNCHER_PATH),
+                    "parameters": self._join_parameters("-i pipe:0", options, ffmpeg_options),
                 }
             )
         self._validate_unique_names(definitions, "Output Profile")
@@ -317,11 +481,203 @@ class Plugin:
             tokens = shlex.split(options)
         except ValueError as exc:
             raise ValueError(f"{label} contains invalid quoting: {exc}") from exc
-        forbidden = {"-i", "--recache", "--recache-only"}
+        forbidden = {"-i", "--cache-status", "--recache", "--recache-only"}
         invalid = next((token for token in tokens if token in forbidden), None)
         if invalid:
             raise ValueError(f"{label} cannot contain {invalid}")
         return options.strip()
+
+    @staticmethod
+    def _advanced_tokens(options, label):
+        try:
+            return shlex.split(options)
+        except ValueError as exc:
+            raise ValueError(f"{label} contains invalid quoting: {exc}") from exc
+
+    @staticmethod
+    def _advanced_mode(settings, key, label, *, mapping=False):
+        mode = str(settings.get(key, "inherit") or "inherit")
+        allowed = {"inherit", "add", "replace"}
+        if mapping:
+            allowed.add("all")
+        if mode not in allowed:
+            raise ValueError(
+                f"{label} mode must be one of: {', '.join(sorted(allowed))}"
+            )
+        return mode
+
+    @staticmethod
+    def _validate_advanced_tokens(scope, tokens, label):
+        for token in tokens:
+            option = token.split("=", 1)[0]
+            audio_codec = (
+                option in {"-acodec", "-c:a", "-codec:a"}
+                or option.startswith("-c:a:")
+                or option.startswith("-codec:a:")
+            )
+            if audio_codec:
+                if scope == "audio":
+                    continue
+                raise ValueError(f"{label} cannot contain audio option {option}")
+
+            wrapper_owned = (
+                option
+                in {
+                    "-i",
+                    "-f",
+                    "-map",
+                    "-user_agent",
+                    "-c",
+                    "-codec",
+                    "-vcodec",
+                    "-device",
+                    "-dri-device",
+                    "-dri_device",
+                    "-qsv-device",
+                    "-qsv_device",
+                    "-vaapi-device",
+                    "-vaapi_device",
+                    "-init_hw_device",
+                    "-filter_hw_device",
+                    "-vf",
+                    "-filter",
+                    "-filter_complex",
+                }
+                or option.startswith("-hwaccel")
+                or option.startswith("-c:")
+                or option.startswith("-codec:")
+                or option.startswith("-filter:")
+                or option.startswith("-filter_complex")
+            )
+            if wrapper_owned or token == "pipe:1":
+                raise ValueError(
+                    f"{label} cannot contain FFmpeg Smart-owned option {option}"
+                )
+
+    @classmethod
+    def _mapping_specs(cls, options, label):
+        tokens = cls._advanced_tokens(options, label)
+        if not tokens:
+            return []
+        if "-map" not in tokens:
+            if any(token.startswith("-map") for token in tokens):
+                raise ValueError(f"{label} supports only -map <specifier> pairs")
+            return tokens
+
+        specs = []
+        index = 0
+        while index < len(tokens):
+            if tokens[index] != "-map" or index + 1 >= len(tokens):
+                raise ValueError(f"{label} must contain complete -map <specifier> pairs")
+            specs.append(tokens[index + 1])
+            index += 2
+        return specs
+
+    @staticmethod
+    def _validate_mapping_specs(mode, specs, label):
+        video_selectors = 0
+        for specifier in specs:
+            if not specifier:
+                raise ValueError(f"{label} cannot contain an empty stream specifier")
+            negative = specifier.startswith("-")
+            base = specifier[1:] if negative else specifier
+            video_selector = (
+                base in {"0", "0:v", "0:V", "0:v?", "0:V?"}
+                or base.startswith(("0:v:", "0:V:"))
+            )
+            non_video_selector = bool(
+                re.fullmatch(r"0:[asdt](?::.*|\?)?", base)
+            )
+            if negative and video_selector:
+                raise ValueError(
+                    f"{label} cannot remove video; FFmpeg Smart requires exactly one mapped video"
+                )
+            if negative:
+                if not non_video_selector:
+                    raise ValueError(
+                        f"{label} negative mappings must name an audio, subtitle, data, or attachment stream"
+                    )
+                continue
+            if video_selector:
+                video_selectors += 1
+            elif not non_video_selector:
+                raise ValueError(
+                    f"{label} positive mappings must use input 0 and an explicit stream type"
+                )
+
+        if mode == "add" and video_selectors:
+            raise ValueError(
+                f"{label} Add already inherits one video and cannot add another video mapping"
+            )
+        if mode == "replace" and video_selectors != 1:
+            raise ValueError(
+                f"{label} Replace must contain exactly one positive video mapping"
+            )
+
+    @classmethod
+    def _advanced_ffmpeg_parameters(cls, settings, prefix, label):
+        parameters = []
+        groups = (
+            ("input", "ffmpeg_input_mode", "ffmpeg_input_options", "-ffmpeg-input"),
+            ("video", "ffmpeg_video_mode", "ffmpeg_video_options", "-ffmpeg-video"),
+            ("audio", "ffmpeg_audio_mode", "ffmpeg_audio_options", "-ffmpeg-audio"),
+            ("mux", "ffmpeg_options_mode", "ffmpeg_options", "-ffmpeg-mux"),
+        )
+
+        group_parts = {}
+        for scope, mode_suffix, options_suffix, wrapper_prefix in groups:
+            scoped_parts = []
+            mode = cls._advanced_mode(
+                settings,
+                f"{prefix}_{mode_suffix}",
+                f"{label} {scope}",
+            )
+            tokens = cls._advanced_tokens(
+                str(settings.get(f"{prefix}_{options_suffix}", "") or ""),
+                f"{label} {scope} options",
+            )
+            cls._validate_advanced_tokens(scope, tokens, f"{label} {scope} options")
+            if tokens and mode == "inherit":
+                mode = "add"
+            if mode != "inherit":
+                scoped_parts.append(f"{wrapper_prefix}-mode {mode}")
+            scoped_parts.extend(
+                f"{wrapper_prefix}-option {shlex.quote(token)}" for token in tokens
+            )
+            group_parts[scope] = scoped_parts
+
+        mapping_mode = cls._advanced_mode(
+            settings,
+            f"{prefix}_ffmpeg_mapping_mode",
+            f"{label} mapping",
+            mapping=True,
+        )
+        mapping_specs = cls._mapping_specs(
+            str(settings.get(f"{prefix}_ffmpeg_mapping", "") or ""),
+            f"{label} custom mapping",
+        )
+        if mapping_specs and mapping_mode == "inherit":
+            mapping_mode = "add"
+        if mapping_mode == "all" and mapping_specs:
+            raise ValueError(f"{label} all-stream mapping cannot include custom mappings")
+        if mapping_mode == "replace" and not mapping_specs:
+            raise ValueError(f"{label} replacement mapping requires at least one -map value")
+        cls._validate_mapping_specs(mapping_mode, mapping_specs, f"{label} custom mapping")
+        if mapping_mode != "inherit":
+            parameters.append(f"-ffmpeg-map-mode {mapping_mode}")
+        parameters.extend(
+            f"-ffmpeg-map {shlex.quote(specifier)}" for specifier in mapping_specs
+        )
+
+        return " ".join(
+            (
+                *group_parts["input"],
+                *parameters,
+                *group_parts["video"],
+                *group_parts["audio"],
+                *group_parts["mux"],
+            )
+        )
 
     @staticmethod
     def _normalize_policy_settings(settings):
@@ -386,12 +742,12 @@ class Plugin:
         return " ".join(part for part in (options, *generated) if part)
 
     @staticmethod
-    def _join_parameters(base, options):
-        return f"{base} {options}".strip()
+    def _join_parameters(*parts):
+        return " ".join(part for part in parts if part).strip()
 
     @staticmethod
     def _is_managed_script(command):
-        return Path(command).name == SCRIPT_PATH.name
+        return Path(command).name in {SCRIPT_PATH.name, LAUNCHER_PATH.name}
 
     def _install_profiles(self, settings, logger):
         from django.db import transaction
@@ -446,10 +802,22 @@ class Plugin:
 
         if logger:
             logger.info("FFmpeg Smart profile install result: %s", result)
+        return self._install_result(result)
+
+    @classmethod
+    def _install_result(cls, result):
+        restart_required = bool(result["created"] or result["removed"])
+        message = cls._result_message(result)
+        if result["created"]:
+            message += " Restart Dispatcharr before using newly added profiles."
+        elif result["removed"]:
+            message += " Restart Dispatcharr for removed profiles to fully take effect."
+        elif result["updated"]:
+            message += " Updated profiles are available without restarting Dispatcharr."
         return {
             "status": "ok",
-            "message": self._result_message(result) + " Restart Dispatcharr before using these profiles.",
-            "restart_required": True,
+            "message": message,
+            "restart_required": restart_required,
             **result,
         }
 
@@ -532,7 +900,6 @@ class Plugin:
 
     def _start_recache(self, logger):
         self._ensure_script()
-        RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
         pid = self._read_pid()
         if pid and self._pid_is_running(pid):
             return {"status": "running", "message": f"Benchmark is already running (PID {pid})."}
@@ -543,7 +910,7 @@ class Plugin:
             log_handle = LOG_FILE.open("w", encoding="utf-8")
             try:
                 process = subprocess.Popen(
-                    [str(SCRIPT_PATH), "--recache-only"],
+                    [str(LAUNCHER_PATH), "--recache-only"],
                     stdin=subprocess.DEVNULL,
                     stdout=log_handle,
                     stderr=subprocess.STDOUT,
@@ -556,16 +923,41 @@ class Plugin:
             BENCHMARK_LOCK_FILE.unlink(missing_ok=True)
             raise
         PID_FILE.write_text(str(process.pid), encoding="utf-8")
+        self._sync_cache_notification()
+        threading.Thread(
+            target=self._monitor_recache_completion,
+            args=(process,),
+            name="ffmpeg-smart-cache-notification",
+            daemon=True,
+        ).start()
         if logger:
             logger.info("Started FFmpeg Smart cache rebuild PID %s", process.pid)
         return {
             "status": "queued",
             "message": (
-                f"Stopped {stopped} active transcode stream(s), blocked new FFmpeg "
-                f"Smart transcodes, and started the hardware benchmark (PID {process.pid})."
+                f"Stopped {stopped} active transcode stream(s), routed new managed "
+                f"starts through basic FFmpeg stream copy, and started the hardware "
+                f"benchmark (PID {process.pid})."
             ),
             "stopped_streams": stopped,
         }
+
+    @classmethod
+    def _monitor_recache_completion(cls, process):
+        try:
+            process.wait()
+        finally:
+            try:
+                from django.db import close_old_connections
+
+                close_old_connections()
+                cls._sync_cache_notification()
+                close_old_connections()
+            except Exception:
+                logger.debug(
+                    "Could not synchronize FFmpeg Smart cache notification after rebuild",
+                    exc_info=True,
+                )
 
     @staticmethod
     def _stop_active_streams(logger):
@@ -631,33 +1023,245 @@ class Plugin:
         lines = []
         if LOG_FILE.exists():
             lines = LOG_FILE.read_text(encoding="utf-8", errors="replace").splitlines()[-30:]
+        cache_status, cache_detail = self._cache_status()
+        capabilities = self._capability_summary()
         if running:
             status = "running"
             message = f"Hardware benchmark is running (PID {pid})."
             if lines:
                 message += f" Latest progress: {lines[-1]}"
-        elif lines and any("Cache rebuild complete" in line for line in lines):
+            if cache_status == "valid" and capabilities:
+                message += " Current capabilities while rebuild is active: " + capabilities["summary"]
+            elif capabilities:
+                message += (
+                    f" Previous cached capabilities are not currently usable ({cache_status}): "
+                    + capabilities["summary"]
+                )
+            else:
+                message += f" Current cache status: {cache_status}."
+        elif cache_status == "valid":
             status = "complete"
-            message = "Hardware cache rebuild completed successfully."
-        elif lines:
-            status = "error"
-            message = "Hardware benchmark is not running and did not report successful completion."
+            message = "Hardware capability cache is valid for the current FFmpeg Smart version and hardware."
+            if capabilities:
+                message += " " + capabilities["summary"]
         else:
-            status = "idle"
-            message = "No hardware benchmark has been started by this plugin."
-        capabilities = self._capability_summary()
-        if capabilities:
-            label = "Cached capabilities while rebuild is active: " if running else ""
-            message += " " + label + capabilities["summary"]
-        elif not running:
-            message += " No valid hardware capability cache is available."
+            status = "error"
+            message = (
+                "Status check completed. Hardware recheck required: "
+                + cache_detail
+                + " Managed profiles use basic stream copy. Run Rebuild Hardware Cache to restore FFmpeg Smart and hardware acceleration."
+            )
+            if capabilities:
+                message += " Previous cached capabilities (not usable): " + capabilities["summary"]
+        self._sync_cache_notification()
         return {
             "status": status,
             "message": message,
             "pid": pid,
+            "cache_status": cache_status,
             "capabilities": capabilities,
             "recent_log": lines,
         }
+
+    @classmethod
+    def _cache_notification_state(cls):
+        pid = cls._read_pid()
+        if pid and cls._pid_is_running(pid):
+            return {
+                "state": "running",
+                "notification_type": "info",
+                "priority": "high",
+                "title": "FFmpeg Smart hardware acceleration bypassed",
+                "message": (
+                    "A hardware capability scan is in progress. Managed profiles are "
+                    "using basic FFmpeg stream copy and bypassing FFmpeg Smart policy "
+                    "and hardware acceleration until the scan completes successfully."
+                ),
+            }
+
+        cache_status, cache_detail = cls._cache_status()
+        if cache_status == "valid":
+            return None
+        return {
+            "state": cache_status,
+            "notification_type": "warning",
+            "priority": "high",
+            "title": "FFmpeg Smart hardware acceleration bypassed",
+            "message": (
+                f"{cache_detail} Managed profiles are using basic FFmpeg stream copy "
+                "and bypassing FFmpeg Smart policy and hardware acceleration. Open "
+                "FFmpeg Smart Profiles in Plugins and run Rebuild Hardware Cache."
+            ),
+        }
+
+    @classmethod
+    def _sync_cache_notification(cls, fallback_token=None):
+        try:
+            from core.models import SystemNotification
+            from core.utils import send_notification_dismissed, send_websocket_update
+
+            state = cls._cache_notification_state()
+            existing = SystemNotification.objects.filter(
+                notification_key=CACHE_NOTIFICATION_KEY
+            ).first()
+            if state is None:
+                if existing:
+                    existing.delete()
+                    send_notification_dismissed(CACHE_NOTIFICATION_KEY)
+                    send_websocket_update(
+                        "updates",
+                        "update",
+                        {"type": "notifications_cleared"},
+                    )
+                return
+
+            previous_action_data = (existing.action_data or {}) if existing else {}
+            previous_state = previous_action_data.get("cache_status")
+            previous_fallback_token = previous_action_data.get("fallback_token")
+            effective_fallback_token = fallback_token or previous_fallback_token
+            action_data = {
+                "plugin_key": "ffmpeg_smart_profiles",
+                "plugin_action": "rebuild_cache",
+                "cache_status": state["state"],
+            }
+            if effective_fallback_token:
+                action_data["fallback_token"] = effective_fallback_token
+            notification, created = SystemNotification.objects.update_or_create(
+                notification_key=CACHE_NOTIFICATION_KEY,
+                defaults={
+                    "notification_type": state["notification_type"],
+                    "priority": state["priority"],
+                    "source": SystemNotification.Source.SYSTEM,
+                    "title": state["title"],
+                    "message": state["message"],
+                    "action_data": action_data,
+                    "is_active": True,
+                    "admin_only": True,
+                    "expires_at": None,
+                },
+            )
+            fallback_advanced = bool(
+                fallback_token and fallback_token != previous_fallback_token
+            )
+            should_reactivate = bool(
+                created
+                or previous_state != state["state"]
+                or fallback_advanced
+                or fallback_token is None
+            )
+            if should_reactivate:
+                notification.dismissals.all().delete()
+                send_websocket_update(
+                    "updates",
+                    "update",
+                    {"type": "notifications_cleared"},
+                )
+        except Exception:
+            logger.debug(
+                "Could not synchronize FFmpeg Smart cache notification",
+                exc_info=True,
+            )
+
+    @staticmethod
+    def _read_fallback_marker():
+        try:
+            return FALLBACK_MARKER_FILE.read_text(encoding="utf-8").strip() or None
+        except OSError:
+            return None
+
+    @classmethod
+    def _sync_fallback_marker(cls, previous_token):
+        token = cls._read_fallback_marker()
+        if token and token != previous_token:
+            cls._sync_cache_notification(fallback_token=token)
+            return token
+        return previous_token
+
+    @classmethod
+    def _watch_fallback_invocations(cls, stop_event):
+        last_token = None
+        while not stop_event.is_set():
+            try:
+                from django.db import close_old_connections
+
+                close_old_connections()
+                last_token = cls._sync_fallback_marker(last_token)
+                close_old_connections()
+            except Exception:
+                logger.debug(
+                    "Could not monitor FFmpeg Smart degraded proxy invocations",
+                    exc_info=True,
+                )
+            stop_event.wait(NOTIFICATION_WATCH_INTERVAL)
+
+    @classmethod
+    def _start_notification_watcher(cls):
+        with cls._notification_watcher_lock:
+            thread = cls._notification_watcher_thread
+            if thread and thread.is_alive():
+                return
+            stop_event = threading.Event()
+            thread = threading.Thread(
+                target=cls._watch_fallback_invocations,
+                args=(stop_event,),
+                name="ffmpeg-smart-fallback-notification",
+                daemon=True,
+            )
+            cls._notification_watcher_stop_event = stop_event
+            cls._notification_watcher_thread = thread
+            thread.start()
+
+    @classmethod
+    def _stop_notification_watcher(cls):
+        with cls._notification_watcher_lock:
+            stop_event = cls._notification_watcher_stop_event
+            thread = cls._notification_watcher_thread
+            cls._notification_watcher_stop_event = None
+            cls._notification_watcher_thread = None
+        if stop_event:
+            stop_event.set()
+        if thread and thread is not threading.current_thread():
+            thread.join(timeout=NOTIFICATION_WATCH_INTERVAL + 1.0)
+
+    @staticmethod
+    def _cache_status():
+        details = {
+            "missing": "Hardware capability cache is missing.",
+            "invalid": "Hardware capability cache is invalid or unreadable.",
+            "stale": "Hardware capability cache does not match the current FFmpeg Smart version or hardware.",
+            "unavailable": "Hardware capability cache could not be validated.",
+        }
+        try:
+            result = subprocess.run(
+                [str(LAUNCHER_PATH), "--cache-status"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+                timeout=15,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            return "unavailable", f"Hardware capability cache could not be validated: {exc}."
+
+        match = re.search(
+            r"^FFMPEG_SMART_CACHE_STATUS=(valid|missing|invalid|stale|unavailable)$",
+            result.stdout,
+            re.MULTILINE,
+        )
+        if not match:
+            detail = (result.stderr or result.stdout).strip().splitlines()
+            suffix = f" Wrapper response: {detail[-1]}" if detail else ""
+            return "unavailable", details["unavailable"] + suffix
+        status = match.group(1)
+        if status == "valid" and result.returncode == 0:
+            return status, "Hardware capability cache is valid."
+        if (status == "valid") != (result.returncode == 0):
+            return (
+                "unavailable",
+                "Hardware capability cache returned an inconsistent validation result.",
+            )
+        return status, details.get(status, details["unavailable"])
 
     @staticmethod
     def _capability_summary():
@@ -726,7 +1330,8 @@ class Plugin:
             if len(stat_fields) > 2 and stat_fields[2] == "Z":
                 return False
             cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ")
-            if str(SCRIPT_PATH).encode() not in cmdline or b"--recache-only" not in cmdline:
+            commands = (str(SCRIPT_PATH).encode(), str(LAUNCHER_PATH).encode())
+            if not any(command in cmdline for command in commands) or b"--recache-only" not in cmdline:
                 return False
             os.kill(pid, 0)
             return True
@@ -735,9 +1340,16 @@ class Plugin:
 
     @staticmethod
     def _ensure_script():
-        if not SCRIPT_PATH.is_file():
-            raise RuntimeError(f"Bundled script is missing: {SCRIPT_PATH}")
-        SCRIPT_PATH.chmod(SCRIPT_PATH.stat().st_mode | 0o111)
+        _repair_script_permissions()
+        try:
+            RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+            probe = RUNTIME_DIR / f".write-test-{os.getpid()}-{time.monotonic_ns()}"
+            probe.write_text("ok\n", encoding="utf-8")
+            probe.unlink()
+        except OSError as exc:
+            raise RuntimeError(
+                f"FFmpeg Smart state directory is not writable: {STATE_DIR}: {exc}"
+            ) from exc
 
     @staticmethod
     def _result_message(result):

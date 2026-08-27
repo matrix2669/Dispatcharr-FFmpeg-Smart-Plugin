@@ -419,7 +419,7 @@ Runtime PID, log, cache, and lock files are ignored state, not release content. 
 
 ## Status
 
-Accepted
+Superseded by ADR-016
 
 ## Date
 
@@ -449,6 +449,10 @@ Operators perform restart and browser refresh explicitly. Compatibility review m
 
 - Commits: `1974182`, `875ca20`
 
+## Supersession
+
+ADR-016 preserves restart requirements for profile creation and removal but supersedes the claim that an in-place update requires a restart.
+
 ---
 
 # ADR-011: Package the plugin under a stable install directory
@@ -468,6 +472,7 @@ The tagged tree and installable archive contain runtime files beneath the stable
 ```text
 ffmpeg-smart-profiles/
 ├── FFMPEG_SMART_SOURCE.json
+├── ffmpeg-smart-plugin.sh
 ├── ffmpeg-smart.sh
 ├── plugin.json
 └── plugin.py
@@ -630,3 +635,377 @@ Release preparation includes a licensing gate before packaging. Registry and doc
 - Related `ffmpeg-asr` ADR-015
 - `ffmpeg-asr` licensing review and upstream MIT-license contribution attempt
 - Existing plugin tag: `v0.1.0` at `1581f3f`
+
+---
+
+# ADR-015: Keep mutable runtime state outside the plugin install directory
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-22
+
+## Decision
+
+Store the capability cache, probe sample, benchmark lock, background PID, and benchmark log beneath `/data/ffmpeg_smart_profiles`, not beneath `/data/plugins/ffmpeg_smart_profiles`.
+
+Managed profiles execute `ffmpeg-smart-plugin.sh`. This small plugin-owned launcher sets the persistent state directory, requires a valid prebuilt cache for normal stream requests, and then executes the vendored canonical wrapper. The plugin continues recognizing legacy profiles that point directly at `ffmpeg-smart.sh`, so **Install or Update Profiles** can migrate them.
+
+When the cache is missing, unreadable, or stale for the current hardware or benchmark policy, the canonical wrapper exits before probing media with exit code 78 and one `[ffmpeg-smart] ERROR [capability-cache-...]` message that directs the operator to **Rebuild Hardware Cache**. Explicit recache commands remain allowed. Do not manufacture a malformed FFmpeg command merely to obtain an FFmpeg-branded error.
+
+## Reason
+
+Dispatcharr replaces the complete plugin install directory during an update. Cache and benchmark files stored there were therefore deleted even though they represented installation state rather than plugin code. An explicit wrapper error is more attributable and actionable than allowing the stream to fail later during probing or hardware initialization.
+
+## Alternatives considered
+
+- Keep state in the plugin directory and restore it after updates. Rejected because the old directory may already be gone before new plugin code runs.
+- Automatically benchmark when a viewer starts a stream. Rejected because benchmarking is disruptive, stops active transcodes, and must remain an explicit confirmed action.
+- Emit an intentionally invalid FFmpeg invocation. Rejected because it hides the real owner and can produce misleading diagnostics.
+
+## Consequences
+
+Plugin removal does not automatically delete persistent FFmpeg Smart state. Operators may remove `/data/ffmpeg_smart_profiles` manually after uninstalling when they no longer need it. The launcher and plugin status paths must remain aligned, and packaging tests must include the launcher. Existing installations should copy a still-available legacy cache into the persistent directory before their first update to this implementation or rebuild it afterward.
+
+## Provenance
+
+- Canonical wrapper: `ffmpeg-asr@37bd0a9b16748a28f2144981fe1f315c1f01aa8f`
+- User-reported plugin update state loss on 2026-08-22
+
+---
+
+# ADR-016: Restart only for profile creation or removal
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-25
+
+## Decision
+
+**Install or Update Profiles** must distinguish the changes it actually applies:
+
+- creating any managed profile returns `restart_required: true` and tells the operator to restart before using the newly added profile;
+- updating existing managed profiles in place returns `restart_required: false` when no profile was created or removed and states that the update is available without a restart;
+- removing a disabled or renamed managed profile during reconciliation returns `restart_required: true`, consistent with the dedicated removal action;
+- an unchanged or conflict-only result does not request a restart.
+
+The action confirmation must no longer imply that updates require a restart. It states that adding a profile requires a full restart and that updates work without one. **Remove Managed Profiles** keeps its existing restart confirmation and result behavior.
+
+## Reason
+
+Installed behavior established that Dispatcharr applies changes saved to an existing profile without reloading the application. Only adding a profile requires discovery during startup. Keeping the blanket warning made routine option changes look more disruptive than they are.
+
+Removal remains restart-gated because deleting a profile can affect loaded profile state and channel assignments, and the 2026-08-25 operator correction addressed additions versus updates rather than removal semantics.
+
+## Alternatives considered
+
+- Keep requiring a restart after every update. Rejected because it contradicts observed update behavior and the operator requirement.
+- Never request a restart from Install or Update. Rejected because newly created profiles are not usable until Dispatcharr restarts, and optional cleanup may also remove profiles.
+- Restart Dispatcharr from the plugin. Rejected because the plugin remains intentionally unprivileged and has no host-control access.
+
+## Consequences
+
+The result payload is conditional on the created, updated, and removed lists. Tests must cover each state independently and mixed reconciliation results must remain restart-gated when they contain a creation or removal.
+
+## Provenance
+
+- Operator requirement review: 2026-08-25
+- Supersedes: ADR-010 only for in-place update behavior
+
+---
+
+# ADR-017: Expose advanced FFmpeg options separately from wrapper policy
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-25
+
+## Decision
+
+Give each of the two Stream Profile slots and three Output Profile slots a separate Additional FFmpeg options string field. Keep the existing Additional options field exclusively for `ffmpeg-smart` wrapper policy.
+
+Parse the FFmpeg field with Python `shlex.split` without shell evaluation. Generate one safely quoted `-ffmpeg-option <token>` pair for every parsed token, preserving order and values containing spaces or shell metacharacters. Invalid quoting blocks the enabled profile definition with an attributable validation error.
+
+The canonical wrapper owns placement: advanced arguments follow its managed output settings and precede the fixed `-f mpegts pipe:1`. The plugin documents that advanced settings can override managed FFmpeg values and does not promise compatibility with the selected encoder or filters.
+
+## Reason
+
+The existing Additional options field configures the wrapper's stable policy surface. Mixing raw FFmpeg switches into that field would make ownership ambiguous and the wrapper previously ignored unknown flags. A separate field gives advanced operators an explicit escape hatch while retaining deterministic, injection-resistant argument handling.
+
+## Alternatives considered
+
+- Put raw FFmpeg switches into the existing Additional options field. Rejected because wrapper flags and downstream FFmpeg arguments have different owners and validation rules.
+- Store one already-quoted shell fragment in the profile. Rejected because nested parsing would be ambiguous and could require unsafe evaluation.
+- Add a checkbox or plugin field for every FFmpeg feature. Rejected because the FFmpeg option surface is large, encoder-specific, and evolves independently.
+
+## Consequences
+
+The Python field list and `plugin.json` settings must remain identical. Wrapper synchronization is mandatory before the plugin change can be considered complete, and tests must confirm exact generated token boundaries across the plugin-to-wrapper handoff.
+
+## Provenance
+
+- Operator requirement review: 2026-08-25
+- Canonical decision: `ffmpeg-asr` ADR-017
+
+---
+
+# ADR-018: Expose phase-scoped advanced options without a custom FFmpeg mode
+
+## Status
+
+Accepted; supersedes ADR-017's single Additional FFmpeg output field
+
+## Date
+
+2026-08-25
+
+## Decision
+
+Keep every managed profile on the bundled FFmpeg Smart launcher. Do not expose a full custom/native FFmpeg command because it would bypass Smart's hardware discovery, device scheduling, adaptive video copy/transcode decision, selected encoder, and hardware filter construction.
+
+Give each of the two Stream Profile slots and three Output Profile slots five scoped advanced groups that match canonical `ffmpeg-asr` ADR-018:
+
+1. Input defaults: `inherit`, `add`, or `replace`, placed before `-i` but after Smart-owned user-agent, reconnect, and hardware input setup.
+2. Stream mapping: `inherit`, `add`, `replace`, or `all`. Custom values use `-map <typed specifier>` pairs or bare typed specifiers. Add may add only non-video mappings because the inherited group already selects one video; Replace must contain exactly one positive video selector; runtime validation rejects selectors that resolve to multiple videos.
+3. Video tuning defaults: `inherit`, `add`, or `replace`, used only on the video-transcode path and unable to replace the Smart-owned video encoder or filter graph.
+4. Audio defaults: `inherit`, `add`, or `replace`, used on both video-copy and video-transcode paths. Replace is an explicit expert choice to bypass normal AAC/copy selection.
+5. MPEG-TS/output defaults: `inherit`, `add`, or `replace`, used on both paths before Smart's fixed `-f mpegts pipe:1` output.
+
+Parse every options field with `shlex.split` and emit one independently quoted repeatable wrapper argument per token. Reject invalid quoting and wrapper-owned structural tokens before profile reconciliation. An options value with the default `inherit` mode behaves as `add` so saved settings remain useful.
+
+Retain the existing beta.3 `*_ffmpeg_options` field IDs as the MPEG-TS/output text fields and add `*_ffmpeg_options_mode`. This carries saved beta.3 values forward as additive mux options. New scopes use distinct IDs.
+
+Explicit wrapper policy remains authoritative after expert settings: `-maxbr` stays a hard bitrate ceiling and `-maxchan` stays a hard channel ceiling. The plugin does not promise that other advanced options are supported by every FFmpeg build or selected encoder.
+
+## Reason
+
+FFmpeg option placement is phase-sensitive. A single final-output field cannot safely express pre-input flags, mapping replacement, transcode-only encoder tuning, or audio behavior on both copy and transcode paths. Matching the canonical wrapper's scoped model makes the effective ownership predictable without discarding its hardware-aware purpose.
+
+## Alternatives considered
+
+- Expose the complete Discord command as a custom profile. Rejected because its `-c:v copy` and native command structure bypass Smart's hardware-aware path.
+- Make the entire generated FFmpeg command editable as one default. Rejected because the encoder, devices, filters, and copy/transcode choice are resolved dynamically per stream and deployment.
+- Keep only the beta.3 final-output field. Superseded because it cannot place several common advanced switches correctly and did not apply on the video-copy path.
+- Add a dedicated field for every FFmpeg switch. Rejected because the option surface is build- and encoder-specific and changes independently.
+
+## Consequences
+
+`Plugin.fields` and `plugin.json` must remain exact mirrors. Tests must cover the complete five-slot schema, mode migration, quoting and metacharacter boundaries, generated order, empty replacement groups, mapping constraints, structural rejection, copy/transcode placement in the pinned canonical wrapper, and update-without-restart behavior.
+
+The existing restart decision remains unchanged: creating or removing profiles requires restart feedback, while updating existing profiles does not.
+
+## Provenance
+
+- Operator advanced-options review: 2026-08-25
+- Canonical wrapper: `ffmpeg-asr` ADR-018 and `v1.1.0-beta.3`
+- Supersedes: plugin ADR-017
+
+---
+
+# ADR-019: Display inherited defaults without mutating expert option fields
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-25
+
+## Decision
+
+Show the inherited value or exact runtime-derived formula in the help text beneath every advanced mode dropdown for all five managed profile slots. The displayed contracts are:
+
+1. Input: `-fflags +genpts+igndts+discardcorrupt -err_detect ignore_err`.
+2. Mapping: `-map 0:v:0 -map 0:a:0?`.
+3. Video transcode tuning: `-b:v <target> -maxrate <rate> -bufsize <buffer> -g <rounded source fps> -bf <0 or 2> <accelerator tuning> -fps_mode cfr -r <source fps> [-tag:v hvc1]`. The target starts at 8 Mbps for 1920x1080, scales by output pixel count, and has a 2 Mbps floor. Without `-maxbr`, maxrate is 125 percent and buffer is 200 percent of target. With `-maxbr`, target is capped at 85 percent of the limit, maxrate equals the limit, and buffer is twice the limit. B-frame and accelerator arguments remain hardware-derived.
+4. Audio: no arguments when audio is absent; compatible AAC uses `-c:a copy`; other audio uses AAC with asynchronous resampling and 96 kbps mono, 192 kbps stereo, 384 kbps 5.1, 512 kbps 7.1, or 64 kbps per channel for other layouts. An explicit `-maxchan` ceiling remains authoritative.
+5. MPEG-TS/output: `-avoid_negative_ts make_zero -start_at_zero -mpegts_copyts 0 -mpegts_flags +pat_pmt_at_frames+resend_headers -flush_packets 1 -max_muxing_queue_size 4096`, followed by Smart-owned `-f mpegts pipe:1`.
+
+Keep adjacent options fields blank by default and use them only for user-owned Add/Replace text. Do not prefill them with managed values. As of the reviewed Dispatcharr plugin form, each field receives only its own `onChange` callback and the manifest schema has no dependency or computed-value hook, so a mode selection cannot safely repopulate a sibling input. Prefilling would also turn managed defaults into saved user data, duplicate additive flags, risk stale video/audio values, and overwrite custom text when toggling modes.
+
+Revisit this presentation if Dispatcharr adds an official dependent-field or computed-placeholder contract that can preserve saved custom values. Until then, mode help text is the authoritative in-UI default reference and the README mirrors it.
+
+## Reason
+
+Inherit, Add, and Replace are not understandable unless the user can see what Inherit supplies and what Replace removes. Static input, mapping, and mux values can be shown exactly. Video and audio must be described as formulas because their concrete arguments depend on the source stream, profile limits, and selected accelerator at runtime.
+
+## Alternatives considered
+
+- Populate the options field when the mode dropdown changes. Rejected because the current Dispatcharr plugin field API has no cross-field change hook.
+- Set the options field's manifest default to the managed arguments. Rejected because backend default merging would make managed values indistinguishable from user input and could duplicate them in Add mode.
+- Show only examples. Rejected because an example does not identify the actual inherited contract.
+
+## Consequences
+
+The Python and JSON field schemas must contain identical default help text. Tests must cover all five scopes across all five profile slots. Wrapper-default changes require synchronized UI help, README documentation, decision text, and regression expectations in a new plugin version.
+
+## Provenance
+
+- Operator defaults-visibility correction: 2026-08-25
+- Dispatcharr `frontend/src/components/Field.jsx` and plugin settings schema reviewed 2026-08-25
+- Canonical wrapper defaults: pinned `ffmpeg-asr v1.1.0-beta.3`
+
+---
+
+# ADR-020: Repair installed script modes and surface authoritative cache maintenance
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-26
+
+## Decision
+
+Keep managed Stream and Output Profiles executing `ffmpeg-smart-plugin.sh` directly. On every enabled plugin load, idempotently restore the execute bits on both bundled shell scripts before Dispatcharr can use managed profiles. Repeat the repair before plugin-owned profile reconciliation and cache rebuild actions. Do not change generated profile commands to `/bin/bash` as a permanent workaround.
+
+Use canonical `ffmpeg-asr --cache-status` as the sole cache-validity authority. **Benchmark Status** reports `complete` only when that command returns `valid`; missing, invalid, stale, inconsistent, or unavailable validation reports `error` and instructs the operator to run **Rebuild Hardware Cache**. A running rebuild remains `running`. Parsed capabilities from a non-valid cache may be shown only as previous, unusable details.
+
+Create one persistent, admin-only Dispatcharr `SystemNotification` with notification key `ffmpeg-smart-hardware-cache`:
+
+- a missing, invalid, stale, or unverifiable cache creates or updates a high-priority **FFmpeg Smart hardware scan required** warning;
+- an active plugin-started rebuild changes it to **FFmpeg Smart hardware scan in progress**;
+- successful post-rebuild validation deletes the notification and sends Dispatcharr's dismissal update so it leaves the notification center;
+- the fixed unresolved-condition key prevents duplicates, while deletion after recovery also deletes old dismissals so a future hardware change can create a visible warning again.
+
+The WebSocket update is only an immediate UI refresh. The database-backed `SystemNotification` is the durable notice, matching Dispatcharr's account-expiration notification mechanism.
+
+Keep the wrapper's benchmark lock refusal and exit status `75`. The live Dispatcharr `v0.29.0` request path has no veto-capable pre-stream plugin hook and treats this intentional maintenance exit as an ordinary source failure, including retries, alternate-stream cycling, and `channel_error` events. The persistent in-progress notification makes the maintenance cause visible but does not claim to change that routing behavior. Clean non-retryable maintenance handling with HTTP 503/Retry-After semantics requires a separately reviewed Dispatcharr core contract; do not emulate it by disabling profiles, emitting placeholder media, or holding arbitrary viewer processes open.
+
+## Reason
+
+Dispatcharr's ZIP installer writes every member to a newly opened file and does not restore archive mode bits. A reinstall therefore changed the bundled scripts from executable to data files even though the Git tree and ZIP recorded `0755`. Registry installation immediately force-reloads enabled plugins, giving the plugin a reliable point to repair its own files before direct profile execution.
+
+The same incident exposed a second ownership error: file existence was presented as a healthy cache although the wrapper rejected its hardware fingerprint. A persistent native warning is required because an operator should not need to discover the rebuild requirement from an invisible stream-process error.
+
+## Alternatives considered
+
+- Run every managed profile through `/bin/bash`. Rejected as a long-term workaround because it hides incorrect installation state and changes the generated command contract.
+- Depend only on ZIP executable metadata. Rejected because Dispatcharr `v0.29.0` discards it during extraction.
+- Infer validity by parsing the cache in Python. Rejected because hardware fingerprinting belongs to canonical `ffmpeg-asr` ADR-019.
+- Use a one-time toast. Rejected because the warning must persist and be dismissible in Dispatcharr's normal notification center.
+- Wait behind the benchmark lock or synthesize a maintenance MPEG-TS stream. Rejected because Dispatcharr timeouts, client lifecycle, and benchmark isolation make those behaviors misleading and fragile.
+
+## Consequences
+
+The plugin must be enabled for its load-time repair and notifications to run; managed profiles are supported only while their owning plugin is enabled. Packaging validation must simulate a `0644` extraction, import the installed plugin, verify both scripts become `0755`, and execute the launcher directly. Cache-status tests must cover valid and every non-valid state. Notification tests must cover required, running, deduplication, dismissal reset, and automatic removal after successful validation.
+
+Until Dispatcharr adds non-retryable maintenance handling, benchmark-time viewer requests can still produce retry/failover and reliability events. Publication notes must not describe the plugin notification as a request-routing block.
+
+## Provenance
+
+- Operator reports: stripped executable bits, stale-cache false health, and a viewer start during a hardware scan, 2026-08-26
+- Live Dispatcharr `v0.29.0` evidence: scan PID `10972` began at `19:12:05Z`; a new viewer requested a managed channel at `19:12:29Z`; the benchmark lock caused rapid retries and alternate-stream cycling until the scan completed
+- Canonical decision: `ffmpeg-asr` ADR-019
+
+---
+
+# ADR-021: Preserve degraded proxy service and re-notify on every fallback invocation
+
+## Status
+
+Accepted; supersedes ADR-015's mandatory cache-error exit and ADR-020's benchmark-time refusal for plugin-managed streams
+
+## Date
+
+2026-08-26
+
+## Decision
+
+Keep every managed profile pointed at the plugin-owned `ffmpeg-smart-plugin.sh` launcher. The launcher enables the canonical wrapper's opt-in degraded proxy mode and sets a per-invocation marker beneath `/data/ffmpeg_smart_profiles/runtime`. Dispatcharr therefore follows this path:
+
+`managed profile -> ffmpeg-smart-plugin.sh -> ffmpeg-smart.sh -> Smart processing or degraded FFmpeg stream copy`
+
+When a required cache is missing, invalid, stale, or unavailable, or while the hardware benchmark lock is active, the wrapper bypasses FFmpeg Smart policy and hardware acceleration and runs a basic stream-copy MPEG-TS proxy. It must not fall back to CPU transcoding. The existing input, mapping, and mux expert scopes remain effective; Smart video and audio policy scopes do not apply because codecs are copied.
+
+Change the persistent notification to state that FFmpeg Smart and hardware acceleration are being bypassed until a required hardware capability scan succeeds. Monitor the fallback marker while the enabled plugin is loaded. Every distinct fallback invocation token must clear dismissals for the fixed `ffmpeg-smart-hardware-cache` notification and send a new WebSocket notification, even if the cache state itself has not changed. A user's dismissal therefore lasts only until another managed profile actually invokes degraded fallback.
+
+After clearing dismissals, broadcast Dispatcharr v0.29.0's built-in `notifications_cleared` WebSocket event. Its frontend handler immediately fetches the authoritative, user-specific notification API, so persistent state is restored without depending on a model/dict merge in the browser. Use the same refresh after plugin load, manual Benchmark Status, a new fallback invocation, and notification removal. Beta.9's explicit `is_dismissed: false` merge is superseded because live validation showed that the database state was correct but the browser still required a refresh.
+
+Dispatcharr v0.29.0 colors every successfully completed plugin action popup green and does not inspect the plugin's returned `result.status`. Benchmark Status remains a successful read-only action even when it reports that the cache is unhealthy. Clarify that distinction in the action description and result wording; do not raise a false HTTP/server error merely to force a red popup.
+
+Successful cache validation deletes the persistent notification. Rebuild completion, manual Benchmark Status, and plugin load continue synchronizing the same authoritative cache state.
+
+## Reason
+
+Dispatcharr calls the managed profile command, not a plugin action, when a viewer starts a stream. The launcher is already that command and immediately replaces itself with the canonical wrapper, so it is the correct integration boundary for enabling canonical behavior without duplicating FFmpeg logic in Python.
+
+Pure stream copy does not use the GPU decode, filter, or encode paths measured by the hardware scan. It has limited CPU, memory, and network cost and matches the existing decision to leave proxy-only Dispatcharr streams running during benchmarking. This keeps streams available while making the degraded state explicit.
+
+A database-backed notification can remain dismissed indefinitely if only its contents are updated. The wrapper invocation marker bridges the profile process to the loaded plugin so a new degraded call becomes an explicit re-notification event. The browser must then refresh from the authoritative API because a pushed object merge alone did not reliably reactivate the entry in live beta.9 validation.
+
+## Alternatives considered
+
+- Put fallback logic in `plugin.py`. Rejected because profile execution does not call a Python plugin action and the canonical wrapper owns FFmpeg behavior.
+- Point profiles directly at a native `ffmpeg` command. Rejected because it would lose the automatic transition back to Smart processing after cache recovery and bypass the canonical ownership boundary.
+- Re-show the notification on a timer without a new invocation. Rejected because dismissal should remain meaningful until degraded behavior is used again.
+- Keep rejecting benchmark-time starts. Superseded because a stream-copy proxy does not consume the hardware encode capacity being measured and avoids misleading source-failure retries.
+
+## Consequences
+
+The notification watcher must stop cleanly on plugin unload and tolerate multiple Dispatcharr processes without creating duplicate database notifications. Marker state is a wake-up signal only; cache validity remains authoritative through the canonical `--cache-status` interface. Source tests must prove launcher opt-in, degraded notification wording, unique-token dismissal reset, same-token deduplication, valid-cache cleanup, and watcher shutdown.
+
+## Provenance
+
+- Operator-approved degraded fallback and notification persistence requirements, 2026-08-26
+- Operator live validation: fallback streamed successfully, but a dismissed warning returned only as a toast because the browser retained its dismissed state, 2026-08-26
+- Operator live validation: beta.9 persisted reactivation in the database but the notification appeared only after a browser refresh; post-install Benchmark Status also exposed Dispatcharr's green action-completion color for an unhealthy result, 2026-08-26
+- Canonical decision: `ffmpeg-asr` ADR-020
+
+---
+
+# ADR-022: Pin canonical auxiliary-mapping and benchmark-lock corrections
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-26
+
+## Decision
+
+Synchronize the bundled wrapper to canonical `ffmpeg-asr v1.1.0-beta.7` at exact commit `6a735d61113646153aef5bf1a1c0a5667b1331e9`. Keep the plugin's mapping modes and saved-setting schema unchanged. Update mapping guidance to state that mapped subtitle, data, and attachment streams are copied when compatible with the fixed MPEG-TS output.
+
+Rely on the canonical wrapper's top-level benchmark-lock ownership. The plugin continues to create its orchestration lock before stopping active transcodes and to launch the canonical `--recache-only` process, while every managed profile launcher continues to enable degraded proxy fallback. Do not duplicate lock cleanup or auxiliary codec policy in `plugin.py` or the launcher.
+
+## Reason
+
+Installed beta.10 testing proved the scoped custom strings and degraded fallback design but exposed two canonical defects. Map All selected a DVB subtitle alongside one video and two audio streams, then FFmpeg exited because no subtitle codec policy was stated. During a real recheck, the top-level benchmark PID remained active after a subshell removed `.benchmark.lock`, allowing a later managed request to run normal Smart/audio policy instead of degraded `-c copy`.
+
+Both corrections belong to the canonical wrapper: Dispatcharr invokes the launcher and wrapper directly for profiles, and the plugin action is not in the media execution path. Pinning one reviewed canonical commit preserves the self-contained package and immutable-source contract.
+
+## Alternatives considered
+
+- Add plugin-side FFmpeg flags without changing the canonical wrapper. Rejected because it would fork wrapper behavior and violate the source-pin boundary.
+- Remove Map All from the UI. Rejected because compatible auxiliary streams are useful and canonical explicit copy corrects the observed failure.
+- Treat the missing lock as negligible because the observed video happened to copy. Rejected because custom audio transcoding still ran and other sources can invoke GPU video processing during the benchmark.
+- Change notification behavior again. Rejected because the persistent notification worked as designed; the fault was routing caused by premature canonical lock removal.
+
+## Consequences
+
+Plugin beta.11 must pin and byte-verify the corrected wrapper, keep `Plugin.fields` and `plugin.json` aligned, and pass all existing schema, profile, notification, fallback, and packaging tests. Installed validation must repeat the DVB-subtitle Map All case and verify that the lock persists and a managed start uses `-c copy` throughout an active benchmark before any stable promotion.
+
+The Output Profile child-process cleanup issue reproduced with original beta.10 profile values as well as custom strings. It remains a separate Dispatcharr/process-lifecycle concern and is not attributed to this advanced-options correction.
+
+## Provenance
+
+- Operator authorization to proceed after installed beta.10 custom-string testing, 2026-08-26
+- Canonical decision: `ffmpeg-asr` ADR-021
+- Canonical dev workflow: `33024572011`
+- Canonical tag workflow: `33024640090`

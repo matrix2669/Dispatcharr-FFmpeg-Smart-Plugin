@@ -1,5 +1,16 @@
 # AGENT.md
 
+## Workspace Standards Reconciliation Gate
+
+Before any substantive work, locate the maintained local `matrix2669/workspace` checkout and run `<workspace>/scripts/reconcile-standards --check .` from this repository root. The workspace `AI-INSTRUCTIONS.md`, `AGENT-STANDARD.md`, and Git history must be available.
+
+If `WORKSPACE-STANDARDS.yaml` is missing, pending, or stale, stop project work and run `<workspace>/scripts/reconcile-standards --diff .`. Review the standards change against this complete `AGENT.md`, `DECISIONS.md`, code/configuration contracts, dependencies, `BRANCHES.md`, `RELEASE.md`, upstream requirements when applicable, and related projects.
+
+A contradiction blocks work. Ask focused follow-up questions to establish whether the changed standard, proposed work, new answer, or older accepted decision is authoritative; never choose silently. Record project-decision supersessions in `DECISIONS.md` and realign every affected artifact. Only after no contradiction remains, run `<workspace>/scripts/reconcile-standards --apply --confirm-reviewed-no-conflicts .`.
+
+Missing workspace standards or Git history is a hard block. Standards exceptions require explicit user authorization and must be stated in a dedicated section of this file with exact scope, rationale, authority, approval date, and review/removal trigger; `DECISIONS.md` cannot waive workspace standards.
+
+
 ## Purpose
 
 This repository owns the `FFmpeg Smart Profiles` plugin for Dispatcharr. The plugin installs and reconciles managed Stream and Output Profiles, coordinates disruptive hardware-cache rebuilds, reports benchmark status, and ships a self-contained copy of the canonical `matrix2669/ffmpeg-asr` wrapper.
@@ -8,6 +19,7 @@ This repository owns the `FFmpeg Smart Profiles` plugin for Dispatcharr. The plu
 
 - `ffmpeg-smart-profiles/plugin.json` declares Dispatcharr settings and actions.
 - `ffmpeg-smart-profiles/plugin.py` is the Dispatcharr integration layer. It owns profile definitions, settings migration, safe database reconciliation, active-transcode coordination, benchmark lifecycle, and status reporting.
+- `ffmpeg-smart-profiles/ffmpeg-smart-plugin.sh` is the plugin-specific launcher. It selects persistent state under `/data/ffmpeg_smart_profiles`, requires an operator-built cache for normal streams, and executes the canonical wrapper.
 - `ffmpeg-smart-profiles/ffmpeg-smart.sh` is a vendored runtime dependency. Its canonical source is `matrix2669/ffmpeg-asr`; do not develop wrapper behavior independently in this repository.
 - `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json` pins the wrapper's full source commit and SHA-256 checksum.
 - `scripts/check-ffmpeg-smart-source.sh` verifies the local checksum and, unless `--offline` is used, the exact remote source bytes.
@@ -21,10 +33,10 @@ Data flow:
 
 1. Dispatcharr loads `plugin.json` and `plugin.py` from the stable `ffmpeg-smart-profiles/` directory.
 2. **Install or Update Profiles** converts saved settings into two possible Stream Profile slots and three possible Output Profile slots.
-3. Stream Profiles pass `{streamUrl}` and `{userAgent}` to the wrapper. Output Profiles pass Dispatcharr's non-seekable MPEG-TS input as `pipe:0`.
-4. The wrapper resolves stream policy, capabilities, and GPU scheduling, then returns MPEG-TS on standard output.
-5. **Rebuild Hardware Cache** creates the shared benchmark lock, stops active Dispatcharr transcodes, and launches `ffmpeg-smart.sh --recache-only` in the background.
-6. **Benchmark Status** reads the background PID, log, and capability cache without starting new work.
+3. Stream Profiles pass `{streamUrl}` and `{userAgent}` to the launcher. Output Profiles pass Dispatcharr's non-seekable MPEG-TS input as `pipe:0`.
+4. The launcher sets persistent state and required-cache policy, then the wrapper resolves stream policy, capabilities, and GPU scheduling and returns MPEG-TS on standard output.
+5. **Rebuild Hardware Cache** creates the shared benchmark lock, stops active Dispatcharr transcodes, and launches `ffmpeg-smart-plugin.sh --recache-only` in the background.
+6. **Benchmark Status** reads the background PID, log, and capability cache from `/data/ffmpeg_smart_profiles` without starting new work.
 
 ## Ownership boundaries
 
@@ -36,14 +48,17 @@ Data flow:
 ## Non-negotiable rules
 
 - Keep the plugin self-contained; the installed archive must include `ffmpeg-smart.sh` and must not depend on a Git submodule or a second repository checkout.
+- Keep mutable runtime state outside the replaceable plugin directory. The launcher, plugin status, and recache orchestration must share `/data/ffmpeg_smart_profiles` unless an explicit test override is supplied.
 - Never edit the vendored wrapper as an independent implementation. Change and validate `ffmpeg-asr` first, publish its canonical commit, then synchronize this repository through the pin workflow.
 - Never silently update an existing tag, Release, archive, or installed plugin version. Wrapper changes require a new plugin version before registry publication.
 - Profile installation must remain idempotent and transactional. Do not overwrite locked profiles, duplicate names, or same-name profiles owned by another command.
 - Keep policy normalization plugin-only. Do not require a Dispatcharr core change to migrate `-10bit`, `-hdr`, `-sdr`, `-deint`, or `-deinterlace` from Additional options into checkboxes.
+- Keep advanced FFmpeg settings aligned with the canonical wrapper's input, mapping, transcode-video, audio, and MPEG-TS/mux scopes. Parse fields with `shlex.split`, quote each wrapper argument independently, retain the beta.3 `*_ffmpeg_options` IDs as mux fields, and never expose a full custom command or wrapper-owned input, hardware, encoder, filter, format, or output controls.
+- Show each advanced scope's complete inherited default or runtime-derived formula in the mode field's help text. Keep the adjacent options field blank for user-owned Add/Replace text; Dispatcharr does not provide a dependent-field hook that can safely populate it when the mode changes.
 - Force SDR takes precedence over Allow HDR. Generate each managed policy flag at most once.
 - All managed Output Profiles must use the pipe-safe wrapper path. Do not replace them with bare `ffmpeg` templates.
-- Hardware benchmarking may stop input- or output-transcoded streams, but proxy-only streams must continue. New FFmpeg Smart transcodes remain blocked until the benchmark lock clears.
-- Do not give the plugin Docker-socket or host-control access merely to restart Dispatcharr. Profile changes return `restart_required` and instruct the operator to restart normally.
+- Hardware benchmarking may stop input- or output-transcoded streams, but proxy-only streams must continue. New managed starts use canonical degraded stream copy until the benchmark lock clears and must not use GPU decode, filtering, or encoding.
+- Do not give the plugin Docker-socket or host-control access merely to restart Dispatcharr. Profile creation and removal return `restart_required` and instruct the operator to restart normally; in-place updates do not require a restart.
 - Recorded GPU capacities are deployment evidence, not portable defaults. Re-measure on materially different hardware or benchmark policy.
 - Preserve the current licensing boundary described in `DECISIONS.md`: the repository's MIT license covers matrix2669-authored plugin work, but it does not independently license inherited wrapper code. Do not publish a new GitHub Release or distributable plugin ZIP until the wrapper's inherited licensing is resolved.
 
@@ -61,6 +76,12 @@ This is a standalone Dispatcharr plugin:
 Record every current branch in `BRANCHES.md` before substantive work. Before deleting a branch, transfer user-visible results to `CHANGELOG.md` and durable rationale to `DECISIONS.md`, then remove the live branch record.
 
 The synchronization workflow targets `dev`. Wrapper-update pull requests must pass plugin validation and human review. Promote the exact tested plugin state to `main`; do not bypass `dev` by silently syncing canonical wrapper changes into production.
+
+## Session completion and remote continuity
+
+GitHub is the authoritative continuation source. Start by fetching `origin` and resume from the exact remote head of the branch that owns the change. A repository-change request authorizes checkpoint commits and pushes to an isolated feature or fix branch. Before ending or handing off a session, preserve unrelated work, update branch/decision/validation records, run the applicable gates, commit every in-scope committable change, push every local commit, and verify through a fresh remote query that the exact GitHub head matches the intended local checkpoint. Incomplete work is pushed as explicit WIP with failures or unavailable validation recorded; never commit credentials, runtime state, excluded artifacts, or unrelated changes merely to clean the worktree.
+
+The checkpoint does not authorize merging into `dev` or `main`, synchronizing a new canonical wrapper into a release, tagging, changing a registry channel, releasing, distributing a ZIP, deploying, force-pushing, or deleting a branch. Report the work branch, `dev` integration, source pin, tag, registry, Release, and deployment states separately.
 
 ## Version and distribution requirements
 
@@ -98,6 +119,7 @@ python3 -m py_compile ffmpeg-smart-profiles/plugin.py tests/validate_dispatcharr
 python3 -m json.tool ffmpeg-smart-profiles/plugin.json >/dev/null
 python3 -m json.tool ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json >/dev/null
 bash -n ffmpeg-smart-profiles/ffmpeg-smart.sh
+bash -n ffmpeg-smart-profiles/ffmpeg-smart-plugin.sh
 bash -n scripts/check-ffmpeg-smart-source.sh
 bash -n scripts/sync-ffmpeg-smart.sh
 scripts/check-ffmpeg-smart-source.sh --offline
@@ -110,10 +132,10 @@ Behavioral or compatibility changes additionally require applicable live Dispatc
 - native plugin discovery from the packaged directory;
 - create/update/remove idempotence and conflict behavior;
 - settings normalization persistence;
-- a full restart after profile changes;
+- a full restart after profile creation or removal, plus an in-place update check that confirms no restart is requested;
 - a real `pipe:0` Output Profile test confirming the opening sample is preserved;
 - benchmark interruption of transcodes while proxy-only streams continue;
-- blocking of new wrapper transcodes while the lock exists;
+- degraded stream-copy routing for new managed starts while the benchmark lock exists, without GPU decode/filter/encode use;
 - background completion, stale-PID handling, and capability status readback;
 - tag archive and manual ZIP layout from a clean extraction.
 

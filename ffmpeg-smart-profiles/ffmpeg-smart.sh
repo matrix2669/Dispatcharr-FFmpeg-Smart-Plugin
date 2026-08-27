@@ -4,11 +4,40 @@ set -euo pipefail
 
 LOG_PREFIX="[ffmpeg-smart]"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="1.0.0"
+VERSION="1.1.0-beta.7"
 CAPACITY_BENCHMARK_VERSION="concurrency-1.2-v1"
-CACHE_FILE="$SCRIPT_DIR/.capabilities.cache"
-PROBE_SAMPLE="$SCRIPT_DIR/probe-sample.mkv"
-BENCHMARK_LOCK_FILE="$SCRIPT_DIR/.benchmark.lock"
+STATE_DIR="${FFMPEG_SMART_STATE_DIR:-$SCRIPT_DIR}"
+REQUIRE_CACHE_VALUE="${FFMPEG_SMART_REQUIRE_CACHE:-false}"
+case "$REQUIRE_CACHE_VALUE" in
+    true|TRUE|True|1|yes|YES|Yes) REQUIRE_CACHE=true ;;
+    false|FALSE|False|0|no|NO|No|'') REQUIRE_CACHE=false ;;
+    *)
+        echo "$LOG_PREFIX ERROR [configuration]: FFMPEG_SMART_REQUIRE_CACHE must be true or false" >&2
+        exit 64
+        ;;
+esac
+CACHE_FALLBACK_VALUE="${FFMPEG_SMART_CACHE_FALLBACK:-none}"
+case "$CACHE_FALLBACK_VALUE" in
+    proxy) CACHE_FALLBACK="proxy" ;;
+    none|'') CACHE_FALLBACK="none" ;;
+    *)
+        echo "$LOG_PREFIX ERROR [configuration]: FFMPEG_SMART_CACHE_FALLBACK must be none or proxy" >&2
+        exit 64
+        ;;
+esac
+FALLBACK_MARKER="${FFMPEG_SMART_FALLBACK_MARKER:-}"
+if ! mkdir -p -- "$STATE_DIR" 2>/dev/null; then
+    echo "$LOG_PREFIX ERROR [state-directory]: Cannot create persistent state directory: $STATE_DIR" >&2
+    exit 73
+fi
+STATE_DIR="$(cd "$STATE_DIR" && pwd)"
+if [[ ! -w "$STATE_DIR" ]]; then
+    echo "$LOG_PREFIX ERROR [state-directory]: Persistent state directory is not writable: $STATE_DIR" >&2
+    exit 73
+fi
+CACHE_FILE="$STATE_DIR/.capabilities.cache"
+PROBE_SAMPLE="$STATE_DIR/probe-sample.mkv"
+BENCHMARK_LOCK_FILE="$STATE_DIR/.benchmark.lock"
 PROBE_SAMPLE_URL="https://repo.jellyfin.org/archive/jellyfish/media/jellyfish-3-mbps-hd-hevc-10bit.mkv"
 
 DRI_DEVICE="${DRI_DEVICE:-}"
@@ -22,13 +51,19 @@ QSV_DEVICE_WAS_SET=false
 [[ -n "$QSV_DEVICE" ]] && QSV_DEVICE_WAS_SET=true
 
 # Device overrides must be known before hardware fingerprinting and cache load.
-CLI_ARGS=("$@")
-for ((CLI_INDEX = 0; CLI_INDEX < ${#CLI_ARGS[@]}; CLI_INDEX++)); do
-    case "${CLI_ARGS[$CLI_INDEX]}" in
+scan_device_overrides() {
+    local -a cli_args=("$@")
+    local cli_index
+    for ((cli_index = 0; cli_index < ${#cli_args[@]}; cli_index++)); do
+        case "${cli_args[$cli_index]}" in
+        -ffmpeg-option|-ffmpeg-input-option|-ffmpeg-map|-ffmpeg-video-option|-ffmpeg-audio-option|-ffmpeg-mux-option|-ffmpeg-input-mode|-ffmpeg-map-mode|-ffmpeg-video-mode|-ffmpeg-audio-mode|-ffmpeg-mux-mode)
+            (( cli_index + 1 < ${#cli_args[@]} )) || { echo "$LOG_PREFIX ERROR: ${cli_args[$cli_index]} requires one value" >&2; exit 1; }
+            cli_index=$((cli_index + 1))
+            ;;
         -device|-dri-device)
-            (( CLI_INDEX + 1 < ${#CLI_ARGS[@]} )) || { echo "$LOG_PREFIX ERROR: ${CLI_ARGS[$CLI_INDEX]} requires a device path" >&2; exit 1; }
-            CLI_INDEX=$((CLI_INDEX + 1))
-            DRI_DEVICE="${CLI_ARGS[$CLI_INDEX]}"
+            (( cli_index + 1 < ${#cli_args[@]} )) || { echo "$LOG_PREFIX ERROR: ${cli_args[$cli_index]} requires a device path" >&2; exit 1; }
+            cli_index=$((cli_index + 1))
+            DRI_DEVICE="${cli_args[$cli_index]}"
             VAAPI_DEVICE="$DRI_DEVICE"
             QSV_DEVICE="$DRI_DEVICE"
             DRI_DEVICE_WAS_SET=true
@@ -36,19 +71,21 @@ for ((CLI_INDEX = 0; CLI_INDEX < ${#CLI_ARGS[@]}; CLI_INDEX++)); do
             QSV_DEVICE_WAS_SET=true
             ;;
         -vaapi-device)
-            (( CLI_INDEX + 1 < ${#CLI_ARGS[@]} )) || { echo "$LOG_PREFIX ERROR: -vaapi-device requires a device path" >&2; exit 1; }
-            CLI_INDEX=$((CLI_INDEX + 1))
-            VAAPI_DEVICE="${CLI_ARGS[$CLI_INDEX]}"
+            (( cli_index + 1 < ${#cli_args[@]} )) || { echo "$LOG_PREFIX ERROR: -vaapi-device requires a device path" >&2; exit 1; }
+            cli_index=$((cli_index + 1))
+            VAAPI_DEVICE="${cli_args[$cli_index]}"
             VAAPI_DEVICE_WAS_SET=true
             ;;
         -qsv-device)
-            (( CLI_INDEX + 1 < ${#CLI_ARGS[@]} )) || { echo "$LOG_PREFIX ERROR: -qsv-device requires a device path" >&2; exit 1; }
-            CLI_INDEX=$((CLI_INDEX + 1))
-            QSV_DEVICE="${CLI_ARGS[$CLI_INDEX]}"
+            (( cli_index + 1 < ${#cli_args[@]} )) || { echo "$LOG_PREFIX ERROR: -qsv-device requires a device path" >&2; exit 1; }
+            cli_index=$((cli_index + 1))
+            QSV_DEVICE="${cli_args[$cli_index]}"
             QSV_DEVICE_WAS_SET=true
             ;;
-    esac
-done
+        esac
+    done
+}
+scan_device_overrides "$@"
 
 get_dri_vendor() {
     local dev="$1"
@@ -762,12 +799,24 @@ probe_capabilities() {
 }
 
 load_cache() {
-    [[ -f "$CACHE_FILE" ]] || return 1
-    source "$CACHE_FILE" || return 1
+    [[ -f "$CACHE_FILE" ]] || return 2
+    source "$CACHE_FILE" || return 3
     local current_fp
     current_fp=$(get_hw_fingerprint)
-    [[ "$HW_FINGERPRINT" == "$current_fp" ]] || return 1
+    [[ "${HW_FINGERPRINT:-}" == "$current_fp" ]] || return 4
     return 0
+}
+
+required_cache_error() {
+    local cache_status="$1"
+    local error_code="capability-cache-unavailable"
+    local detail="cannot be loaded"
+    case "$cache_status" in
+        2) error_code="capability-cache-missing"; detail="is missing" ;;
+        3) error_code="capability-cache-invalid"; detail="is invalid or unreadable" ;;
+        4) error_code="capability-cache-stale"; detail="does not match the current hardware or policy" ;;
+    esac
+    echo "$LOG_PREFIX ERROR [$error_code]: Required capability cache $detail: $CACHE_FILE. Run the integration's Rebuild Hardware Cache action or ffmpeg-smart.sh --recache-only before starting streams." >&2
 }
 
 save_cache() {
@@ -831,7 +880,18 @@ FORCE_SDR=false
 FORCE_DEINT=false
 RECACHE=false
 RECACHE_ONLY=false
+CACHE_STATUS_ONLY=false
 ACCEL="__auto__"
+FFMPEG_INPUT_MODE="inherit"
+FFMPEG_MAP_MODE="inherit"
+FFMPEG_VIDEO_MODE="inherit"
+FFMPEG_AUDIO_MODE="inherit"
+FFMPEG_MUX_MODE="inherit"
+USER_INPUT_ARGS=()
+USER_MAP_SPECS=()
+USER_VIDEO_ARGS=()
+USER_AUDIO_ARGS=()
+USER_MUX_ARGS=()
 
 detect_accel() {
     if [[ "$(uname -s)" == "Darwin" ]]; then
@@ -861,25 +921,294 @@ detect_accel() {
     fi
 }
 
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        -user_agent) AGENT="$2"; shift 2 ;;
-        -i) URL="$2"; shift 2 ;;
-        -accel) ACCEL="$2"; shift 2 ;;
-        -device|-dri-device|-qsv-device|-vaapi-device) shift 2 ;;
-        -vc) VCODEC_OUT="$2"; shift 2 ;;
-        -10bit) ALLOW_10BIT=true; shift ;;
-        -hdr) ALLOW_HDR=true; shift ;;
-        -maxres) MAX_RES="$2"; shift 2 ;;
-        -maxchan) MAX_CHANNELS="$2"; shift 2 ;;
-        -maxbr|-maxbitrate) MAX_BITRATE_INPUT="$2"; shift 2 ;;
-        -sdr) FORCE_SDR=true; shift ;;
-        -deint|-deinterlace) FORCE_DEINT=true; shift ;;
-        --recache) RECACHE=true; shift ;;
-        --recache-only) RECACHE=true; RECACHE_ONLY=true; shift ;;
-        *) shift ;;
+parse_cli_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -user_agent) AGENT="$2"; shift 2 ;;
+            -i) URL="$2"; shift 2 ;;
+            -accel) ACCEL="$2"; shift 2 ;;
+            -device|-dri-device|-qsv-device|-vaapi-device) shift 2 ;;
+            -vc) VCODEC_OUT="$2"; shift 2 ;;
+            -10bit) ALLOW_10BIT=true; shift ;;
+            -hdr) ALLOW_HDR=true; shift ;;
+            -maxres) MAX_RES="$2"; shift 2 ;;
+            -maxchan) MAX_CHANNELS="$2"; shift 2 ;;
+            -maxbr|-maxbitrate) MAX_BITRATE_INPUT="$2"; shift 2 ;;
+            -sdr) FORCE_SDR=true; shift ;;
+            -deint|-deinterlace) FORCE_DEINT=true; shift ;;
+            -ffmpeg-input-mode|-ffmpeg-map-mode|-ffmpeg-video-mode|-ffmpeg-audio-mode|-ffmpeg-mux-mode)
+                (( $# >= 2 )) || { echo "$LOG_PREFIX ERROR: $1 requires one mode" >&2; exit 1; }
+                case "$1" in
+                    -ffmpeg-input-mode) FFMPEG_INPUT_MODE="$2" ;;
+                    -ffmpeg-map-mode) FFMPEG_MAP_MODE="$2" ;;
+                    -ffmpeg-video-mode) FFMPEG_VIDEO_MODE="$2" ;;
+                    -ffmpeg-audio-mode) FFMPEG_AUDIO_MODE="$2" ;;
+                    -ffmpeg-mux-mode) FFMPEG_MUX_MODE="$2" ;;
+                esac
+                shift 2
+                ;;
+            -ffmpeg-input-option)
+                (( $# >= 2 )) || { echo "$LOG_PREFIX ERROR: -ffmpeg-input-option requires one FFmpeg argument" >&2; exit 1; }
+                USER_INPUT_ARGS+=("$2")
+                shift 2
+                ;;
+            -ffmpeg-map)
+                (( $# >= 2 )) || { echo "$LOG_PREFIX ERROR: -ffmpeg-map requires one stream specifier" >&2; exit 1; }
+                USER_MAP_SPECS+=("$2")
+                shift 2
+                ;;
+            -ffmpeg-video-option)
+                (( $# >= 2 )) || { echo "$LOG_PREFIX ERROR: -ffmpeg-video-option requires one FFmpeg argument" >&2; exit 1; }
+                USER_VIDEO_ARGS+=("$2")
+                shift 2
+                ;;
+            -ffmpeg-audio-option)
+                (( $# >= 2 )) || { echo "$LOG_PREFIX ERROR: -ffmpeg-audio-option requires one FFmpeg argument" >&2; exit 1; }
+                USER_AUDIO_ARGS+=("$2")
+                shift 2
+                ;;
+            -ffmpeg-option|-ffmpeg-mux-option)
+                (( $# >= 2 )) || { echo "$LOG_PREFIX ERROR: $1 requires one FFmpeg argument" >&2; exit 1; }
+                USER_MUX_ARGS+=("$2")
+                shift 2
+                ;;
+            --recache) RECACHE=true; shift ;;
+            --recache-only) RECACHE=true; RECACHE_ONLY=true; shift ;;
+            --cache-status) CACHE_STATUS_ONLY=true; shift ;;
+            *) shift ;;
+        esac
+    done
+}
+parse_cli_args "$@"
+
+if [[ "$CACHE_STATUS_ONLY" == "true" ]]; then
+    if [[ "$RECACHE" == "true" ]]; then
+        echo "$LOG_PREFIX ERROR [configuration]: --cache-status cannot be combined with --recache or --recache-only" >&2
+        exit 64
+    fi
+    cache_status=0
+    load_cache 2>/dev/null || cache_status=$?
+    case "$cache_status" in
+        0) cache_status_name="valid" ;;
+        2) cache_status_name="missing" ;;
+        3) cache_status_name="invalid" ;;
+        4) cache_status_name="stale" ;;
+        *) cache_status_name="unavailable" ;;
     esac
-done
+    printf 'FFMPEG_SMART_CACHE_STATUS=%s\n' "$cache_status_name"
+    [[ "$cache_status" -eq 0 ]] && exit 0
+    exit 78
+fi
+
+configuration_error() {
+    echo "$LOG_PREFIX ERROR [advanced-options]: $1" >&2
+    exit 64
+}
+
+validate_ffmpeg_mode() {
+    local scope="$1" mode="$2"
+    case "$mode" in
+        inherit|add|replace) ;;
+        *) configuration_error "$scope mode must be inherit, add, or replace" ;;
+    esac
+}
+
+validate_advanced_arg() {
+    local scope="$1" token="$2" option="${2%%=*}"
+    case "$option" in
+        -acodec|-c:a|-c:a:*|-codec:a|-codec:a:*)
+            [[ "$scope" == "audio" ]] || configuration_error "$scope options cannot contain audio option $option"
+            return
+            ;;
+    esac
+    case "$option" in
+        -i|-f|-map|-user_agent|-c|-c:*|-codec|-codec:*|-vcodec|-hwaccel*|-init_hw_device|-filter_hw_device|-vf|-filter|-filter:*|-filter_complex*|-device|-dri-device|-dri_device|-qsv-device|-qsv_device|-vaapi-device|-vaapi_device)
+            configuration_error "$scope options cannot contain wrapper-owned FFmpeg option $option"
+            ;;
+    esac
+    if [[ "$token" == "pipe:1" ]]; then
+        configuration_error "$scope options cannot contain the fixed output destination pipe:1"
+    fi
+}
+
+resolve_static_ffmpeg_args() {
+    validate_ffmpeg_mode "input" "$FFMPEG_INPUT_MODE"
+    validate_ffmpeg_mode "video" "$FFMPEG_VIDEO_MODE"
+    validate_ffmpeg_mode "audio" "$FFMPEG_AUDIO_MODE"
+    validate_ffmpeg_mode "mux" "$FFMPEG_MUX_MODE"
+    case "$FFMPEG_MAP_MODE" in
+        inherit|add|replace|all) ;;
+        *) configuration_error "mapping mode must be inherit, add, replace, or all" ;;
+    esac
+
+    local token
+    for token in ${USER_INPUT_ARGS[@]+"${USER_INPUT_ARGS[@]}"}; do validate_advanced_arg "input" "$token"; done
+    for token in ${USER_VIDEO_ARGS[@]+"${USER_VIDEO_ARGS[@]}"}; do validate_advanced_arg "video" "$token"; done
+    for token in ${USER_AUDIO_ARGS[@]+"${USER_AUDIO_ARGS[@]}"}; do validate_advanced_arg "audio" "$token"; done
+    for token in ${USER_MUX_ARGS[@]+"${USER_MUX_ARGS[@]}"}; do validate_advanced_arg "mux" "$token"; done
+    for token in ${USER_MAP_SPECS[@]+"${USER_MAP_SPECS[@]}"}; do
+        [[ -n "$token" ]] || configuration_error "mapping values cannot be empty"
+        [[ "$token" != -map* ]] || configuration_error "mapping values must be stream specifiers, not -map options"
+    done
+
+    (( ${#USER_INPUT_ARGS[@]} == 0 )) || [[ "$FFMPEG_INPUT_MODE" != "inherit" ]] || FFMPEG_INPUT_MODE="add"
+    (( ${#USER_VIDEO_ARGS[@]} == 0 )) || [[ "$FFMPEG_VIDEO_MODE" != "inherit" ]] || FFMPEG_VIDEO_MODE="add"
+    (( ${#USER_AUDIO_ARGS[@]} == 0 )) || [[ "$FFMPEG_AUDIO_MODE" != "inherit" ]] || FFMPEG_AUDIO_MODE="add"
+    (( ${#USER_MUX_ARGS[@]} == 0 )) || [[ "$FFMPEG_MUX_MODE" != "inherit" ]] || FFMPEG_MUX_MODE="add"
+    (( ${#USER_MAP_SPECS[@]} == 0 )) || [[ "$FFMPEG_MAP_MODE" != "inherit" ]] || FFMPEG_MAP_MODE="add"
+
+    if [[ "$FFMPEG_MAP_MODE" == "all" && ${#USER_MAP_SPECS[@]} -gt 0 ]]; then
+        configuration_error "mapping mode all cannot also contain custom stream specifiers"
+    fi
+    if [[ "$FFMPEG_MAP_MODE" == "replace" && ${#USER_MAP_SPECS[@]} -eq 0 ]]; then
+        configuration_error "mapping mode replace requires at least one stream specifier"
+    fi
+
+    local -a default_input=(-fflags +genpts+igndts+discardcorrupt -err_detect ignore_err)
+    local -a default_map=(-map 0:v:0 -map 0:a:0?)
+    local -a default_mux=(
+        -avoid_negative_ts make_zero
+        -start_at_zero
+        -mpegts_copyts 0
+        -mpegts_flags +pat_pmt_at_frames+resend_headers
+        -flush_packets 1
+        -max_muxing_queue_size 4096
+    )
+
+    case "$FFMPEG_INPUT_MODE" in
+        inherit) FFMPEG_INPUT_ARGS=("${default_input[@]}") ;;
+        add) FFMPEG_INPUT_ARGS=("${default_input[@]}" ${USER_INPUT_ARGS[@]+"${USER_INPUT_ARGS[@]}"}) ;;
+        replace) FFMPEG_INPUT_ARGS=(${USER_INPUT_ARGS[@]+"${USER_INPUT_ARGS[@]}"}) ;;
+    esac
+    case "$FFMPEG_MAP_MODE" in
+        inherit) FFMPEG_MAP_ARGS=("${default_map[@]}") ;;
+        add)
+            FFMPEG_MAP_ARGS=("${default_map[@]}")
+            for token in ${USER_MAP_SPECS[@]+"${USER_MAP_SPECS[@]}"}; do FFMPEG_MAP_ARGS+=(-map "$token"); done
+            ;;
+        replace)
+            FFMPEG_MAP_ARGS=()
+            for token in ${USER_MAP_SPECS[@]+"${USER_MAP_SPECS[@]}"}; do FFMPEG_MAP_ARGS+=(-map "$token"); done
+            ;;
+        all) FFMPEG_MAP_ARGS=(-map 0) ;;
+    esac
+    case "$FFMPEG_MUX_MODE" in
+        inherit) FFMPEG_MUX_ARGS=("${default_mux[@]}") ;;
+        add) FFMPEG_MUX_ARGS=("${default_mux[@]}" ${USER_MUX_ARGS[@]+"${USER_MUX_ARGS[@]}"}) ;;
+        replace) FFMPEG_MUX_ARGS=(${USER_MUX_ARGS[@]+"${USER_MUX_ARGS[@]}"}) ;;
+    esac
+}
+
+resolve_audio_ffmpeg_args() {
+    case "$FFMPEG_AUDIO_MODE" in
+        inherit) FFMPEG_AUDIO_ARGS=(${AUDIO_ARGS[@]+"${AUDIO_ARGS[@]}"}) ;;
+        add) FFMPEG_AUDIO_ARGS=(${AUDIO_ARGS[@]+"${AUDIO_ARGS[@]}"} ${USER_AUDIO_ARGS[@]+"${USER_AUDIO_ARGS[@]}"}) ;;
+        replace) FFMPEG_AUDIO_ARGS=(${USER_AUDIO_ARGS[@]+"${USER_AUDIO_ARGS[@]}"}) ;;
+    esac
+}
+
+resolve_video_tuning_args() {
+    case "$FFMPEG_VIDEO_MODE" in
+        inherit) FFMPEG_VIDEO_TUNING_ARGS=(${MANAGED_VIDEO_TUNING_ARGS[@]+"${MANAGED_VIDEO_TUNING_ARGS[@]}"}) ;;
+        add) FFMPEG_VIDEO_TUNING_ARGS=(${MANAGED_VIDEO_TUNING_ARGS[@]+"${MANAGED_VIDEO_TUNING_ARGS[@]}"} ${USER_VIDEO_ARGS[@]+"${USER_VIDEO_ARGS[@]}"}) ;;
+        replace) FFMPEG_VIDEO_TUNING_ARGS=(${USER_VIDEO_ARGS[@]+"${USER_VIDEO_ARGS[@]}"}) ;;
+    esac
+}
+
+validate_runtime_mapping() {
+    local video_stream_count="$1" selected_video_streams=0 spec
+    case "$FFMPEG_MAP_MODE" in
+        inherit|add) selected_video_streams=1 ;;
+        all) selected_video_streams="$video_stream_count" ;;
+        replace) selected_video_streams=0 ;;
+    esac
+    for spec in ${USER_MAP_SPECS[@]+"${USER_MAP_SPECS[@]}"}; do
+        if [[ "$spec" == -* ]]; then
+            case "${spec#-}" in
+                0|0:v|0:V|0:v\?|0:V\?|0:v:*|0:V:*)
+                    configuration_error "negative video mappings are unsupported; FFmpeg Smart requires exactly one mapped video stream"
+                    ;;
+            esac
+            continue
+        fi
+        case "$spec" in
+            0|0:v|0:V|0:v\?|0:V\?) selected_video_streams="$video_stream_count" ;;
+            0:v:*|0:V:*) selected_video_streams=$((selected_video_streams + 1)) ;;
+            0:a*|0:s*|0:d*|0:t*) ;;
+            *)
+                configuration_error "positive custom mappings must use input 0 with an explicit video, audio, subtitle, data, or attachment stream type"
+                ;;
+        esac
+    done
+    if [[ "$selected_video_streams" -ne 1 ]]; then
+        configuration_error "mapping must select exactly one video stream; FFmpeg Smart supports one hardware-normalized video stream per job"
+    fi
+}
+
+resolve_static_ffmpeg_args
+
+if [[ "$RECACHE_ONLY" != "true" ]]; then
+    if [[ -z "$URL" ]]; then
+        echo "$LOG_PREFIX ERROR: No stream URL provided" >&2
+        exit 1
+    fi
+    if [[ "$URL" =~ ^https?:// ]]; then
+        [[ -n "$AGENT" ]] && UA_ARGS=(-user_agent "$AGENT") || UA_ARGS=()
+        NET_ARGS=(-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 30 -rw_timeout 15000000)
+    else
+        UA_ARGS=()
+        NET_ARGS=()
+    fi
+else
+    UA_ARGS=()
+    NET_ARGS=()
+fi
+
+record_fallback_invocation() {
+    [[ -n "$FALLBACK_MARKER" ]] || return 0
+    local marker_dir marker_temp token
+    marker_dir="${FALLBACK_MARKER%/*}"
+    [[ "$marker_dir" != "$FALLBACK_MARKER" ]] || marker_dir="."
+    if ! mkdir -p -- "$marker_dir" 2>/dev/null; then
+        echo "$LOG_PREFIX WARNING [degraded-proxy-marker]: Cannot record fallback invocation at $FALLBACK_MARKER" >&2
+        return 0
+    fi
+    marker_temp="$(mktemp "${FALLBACK_MARKER}.XXXXXX" 2>/dev/null || true)"
+    token="$$-${marker_temp##*.}"
+    if [[ -z "$marker_temp" ]] ||
+       ! printf '%s\n' "$token" > "$marker_temp" 2>/dev/null ||
+       ! mv -f -- "$marker_temp" "$FALLBACK_MARKER" 2>/dev/null; then
+        [[ -z "$marker_temp" ]] || rm -f -- "$marker_temp"
+        echo "$LOG_PREFIX WARNING [degraded-proxy-marker]: Cannot record fallback invocation at $FALLBACK_MARKER" >&2
+    fi
+}
+
+run_degraded_proxy() {
+    local reason="$1"
+    record_fallback_invocation
+    echo "$LOG_PREFIX WARNING [degraded-proxy]: $reason; bypassing FFmpeg Smart policy and hardware acceleration with basic FFmpeg stream copy" >&2
+    exec ffmpeg \
+        ${UA_ARGS[@]+"${UA_ARGS[@]}"} \
+        ${NET_ARGS[@]+"${NET_ARGS[@]}"} \
+        ${FFMPEG_INPUT_ARGS[@]+"${FFMPEG_INPUT_ARGS[@]}"} \
+        -i "$URL" \
+        ${FFMPEG_MAP_ARGS[@]+"${FFMPEG_MAP_ARGS[@]}"} \
+        -c copy \
+        ${FFMPEG_MUX_ARGS[@]+"${FFMPEG_MUX_ARGS[@]}"} \
+        -f mpegts \
+        pipe:1
+}
+
+BENCHMARK_LOCK_OWNER_PID=""
+
+cleanup_benchmark_lock() {
+    local recorded_pid=""
+    [[ -n "$BENCHMARK_LOCK_OWNER_PID" ]] || return 0
+    [[ "${BASH_SUBSHELL:-0}" -eq 0 ]] || return 0
+    recorded_pid="$(head -n 1 "$BENCHMARK_LOCK_FILE" 2>/dev/null || true)"
+    [[ "$recorded_pid" == "$BENCHMARK_LOCK_OWNER_PID" ]] || return 0
+    rm -f -- "$BENCHMARK_LOCK_FILE"
+}
 
 benchmark_lock_active() {
     local lock_pid=""
@@ -897,9 +1226,13 @@ benchmark_lock_active() {
 }
 
 if [[ "$RECACHE_ONLY" == "true" ]]; then
-    echo "$$" > "$BENCHMARK_LOCK_FILE"
-    trap 'rm -f -- "$BENCHMARK_LOCK_FILE"' EXIT
+    BENCHMARK_LOCK_OWNER_PID="$$"
+    echo "$BENCHMARK_LOCK_OWNER_PID" > "$BENCHMARK_LOCK_FILE"
+    trap cleanup_benchmark_lock EXIT
 elif benchmark_lock_active; then
+    if [[ "$RECACHE" != "true" && "$CACHE_FALLBACK" == "proxy" ]]; then
+        run_degraded_proxy "Hardware benchmark is in progress"
+    fi
     echo "$LOG_PREFIX Hardware benchmark in progress; refusing to start a new transcode" >&2
     exit 75
 fi
@@ -924,7 +1257,24 @@ if [[ -n "$MAX_BITRATE_INPUT" ]]; then
     fi
 fi
 
-if [[ "$RECACHE" == "true" ]] || ! load_cache 2>/dev/null; then
+cache_status=0
+if [[ "$RECACHE" != "true" ]]; then
+    load_cache 2>/dev/null || cache_status=$?
+fi
+if [[ "$RECACHE" != "true" && "$cache_status" -ne 0 && "$REQUIRE_CACHE" == "true" ]]; then
+    if [[ "$CACHE_FALLBACK" == "proxy" ]]; then
+        case "$cache_status" in
+            2) cache_fallback_reason="Hardware capability cache is missing" ;;
+            3) cache_fallback_reason="Hardware capability cache is invalid or unreadable" ;;
+            4) cache_fallback_reason="Hardware capability cache does not match the current hardware or policy" ;;
+            *) cache_fallback_reason="Hardware capability cache is unavailable" ;;
+        esac
+        run_degraded_proxy "$cache_fallback_reason"
+    fi
+    required_cache_error "$cache_status"
+    exit 78
+fi
+if [[ "$RECACHE" == "true" || "$cache_status" -ne 0 ]]; then
     save_cache
     echo "$LOG_PREFIX v$VERSION | Probed: accel=$BEST_ACCEL codec=$BEST_CODEC 10bit=$SUPPORTS_10BIT_ENCODE hdr=$SUPPORTS_10BIT_ENCODE" >&2
 else
@@ -975,10 +1325,6 @@ if [[ -z "$ALLOW_HDR" ]]; then
     fi
 fi
 
-if [[ -z "$URL" ]]; then
-    echo "$LOG_PREFIX ERROR: No stream URL provided" >&2
-    exit 1
-fi
 case "$ACCEL" in
     qsv|vaapi|nvenc|v4l2m2m|videotoolbox|software) ;;
     *) echo "$LOG_PREFIX ERROR: Unknown accel type: $ACCEL (use: qsv, vaapi, nvenc, v4l2m2m, videotoolbox, software)" >&2; exit 1 ;;
@@ -987,14 +1333,6 @@ case "$VCODEC_OUT" in
     h264|hevc) ;;
     *) echo "$LOG_PREFIX ERROR: Unknown video codec: $VCODEC_OUT (use: h264, hevc)" >&2; exit 1 ;;
 esac
-
-if [[ "$URL" =~ ^https?:// ]]; then
-    [[ -n "$AGENT" ]] && UA_ARGS=(-user_agent "$AGENT") || UA_ARGS=()
-    NET_ARGS=(-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 30 -rw_timeout 15000000)
-else
-    UA_ARGS=()
-    NET_ARGS=()
-fi
 
 PIPE_INPUT=false
 PIPE_CAPTURE=""
@@ -1030,6 +1368,7 @@ VBITRATE_RAW=$(echo "$PROBE" | jq -r '.streams[] | select(.codec_type=="video") 
 ACODEC=$(echo "$PROBE" | jq -r '.streams[] | select(.codec_type=="audio") | .codec_name // empty' | head -n1)
 ACHANNELS=$(echo "$PROBE" | jq -r '.streams[] | select(.codec_type=="audio") | .channels // empty' | head -n1)
 AUDIO_STREAM_COUNT=$(echo "$PROBE" | jq '[.streams[] | select(.codec_type=="audio")] | length')
+VIDEO_STREAM_COUNT=$(echo "$PROBE" | jq '[.streams[] | select(.codec_type=="video")] | length')
 HAS_AUDIO=false
 [[ "$AUDIO_STREAM_COUNT" -gt 0 ]] && HAS_AUDIO=true
 
@@ -1037,6 +1376,7 @@ if [[ -z "$VCODEC" || "$VCODEC" == "null" ]]; then
     echo "$LOG_PREFIX ERROR: No video stream found" >&2
     exit 1
 fi
+validate_runtime_mapping "$VIDEO_STREAM_COUNT"
 
 SOURCE_10BIT=false
 [[ "$PIX_FMT" == *"10"* ]] && SOURCE_10BIT=true
@@ -1107,25 +1447,26 @@ if [[ "$HAS_AUDIO" == "true" ]]; then
         fi
     fi
 fi
+resolve_audio_ffmpeg_args
+MAPPED_AUXILIARY_CODEC_ARGS=(-c:s copy -c:d copy -c:t copy)
+AUDIO_POLICY_ARGS=()
+if [[ -n "$MAX_CHANNELS" && "$HAS_AUDIO" == "true" && ( "$AUDIO_SOURCE_CHANNELS" -eq 0 || "$AUDIO_SOURCE_CHANNELS" -gt "$MAX_CHANNELS" ) ]]; then
+    AUDIO_POLICY_ARGS=(-ac "$AUDIO_TARGET_CHANNELS")
+fi
 
 if [[ -n "$VIDEO_COPY_REASON" ]]; then
-    echo "$LOG_PREFIX Detected ${WIDTH}x${HEIGHT} $VCODEC/$PIX_FMT field=${FIELD_ORDER} @ $FPS_FRAC -> copy (${VIDEO_COPY_REASON}) audio=${AUDIO_INFO}" >&2
+    echo "$LOG_PREFIX Detected ${WIDTH}x${HEIGHT} $VCODEC/$PIX_FMT field=${FIELD_ORDER} @ $FPS_FRAC -> copy (${VIDEO_COPY_REASON}) audio=${AUDIO_INFO} advanced=input:${FFMPEG_INPUT_MODE},map:${FFMPEG_MAP_MODE},audio:${FFMPEG_AUDIO_MODE},mux:${FFMPEG_MUX_MODE}" >&2
     exec ffmpeg \
         "${UA_ARGS[@]}" \
         "${NET_ARGS[@]}" \
-        -fflags +genpts+igndts+discardcorrupt \
-        -err_detect ignore_err \
+        ${FFMPEG_INPUT_ARGS[@]+"${FFMPEG_INPUT_ARGS[@]}"} \
         -i "$URL" \
-        -map 0:v:0 \
-        -map 0:a:0? \
+        ${FFMPEG_MAP_ARGS[@]+"${FFMPEG_MAP_ARGS[@]}"} \
         -c:v copy \
-        "${AUDIO_ARGS[@]}" \
-        -avoid_negative_ts make_zero \
-        -start_at_zero \
-        -mpegts_copyts 0 \
-        -mpegts_flags +pat_pmt_at_frames+resend_headers \
-        -flush_packets 1 \
-        -max_muxing_queue_size 4096 \
+        ${FFMPEG_AUDIO_ARGS[@]+"${FFMPEG_AUDIO_ARGS[@]}"} \
+        ${AUDIO_POLICY_ARGS[@]+"${AUDIO_POLICY_ARGS[@]}"} \
+        "${MAPPED_AUXILIARY_CODEC_ARGS[@]}" \
+        ${FFMPEG_MUX_ARGS[@]+"${FFMPEG_MUX_ARGS[@]}"} \
         -f mpegts \
         pipe:1
 fi
@@ -1141,11 +1482,11 @@ esac
 
 ENCODERS="$(ffmpeg -hide_banner -encoders 2>/dev/null || true)"
 if [[ "$ACCEL" == "software" ]]; then
-    if [[ "$VCODEC_OUT" == "hevc" ]]; then ENCODER="libx265"; TAG_ARGS="-tag:v hvc1"; else ENCODER="libx264"; TAG_ARGS=""; fi
+    if [[ "$VCODEC_OUT" == "hevc" ]]; then ENCODER="libx265"; TAG_ARGS=(-tag:v hvc1); else ENCODER="libx264"; TAG_ARGS=(); fi
 else
     ENCODER="${VCODEC_OUT}_${ACCEL}"
     if ! grep -qw "$ENCODER" <<<"$ENCODERS"; then echo "$LOG_PREFIX ERROR: Encoder $ENCODER not available" >&2; exit 1; fi
-    [[ "$VCODEC_OUT" == "hevc" ]] && TAG_ARGS="-tag:v hvc1" || TAG_ARGS=""
+    [[ "$VCODEC_OUT" == "hevc" ]] && TAG_ARGS=(-tag:v hvc1) || TAG_ARGS=()
 fi
 
 NEED_SDR=false
@@ -1176,19 +1517,19 @@ set_hwaccel_args() {
 }
 
 set_encoder_opts() {
-    BF_ARGS="-bf 2"
+    BF_ARGS=(-bf 2)
     case "$ACCEL" in
         qsv)
-            if [[ "${BEST_LOW_POWER:-0}" == "1" ]]; then ACCEL_OPTS="-low_power true -look_ahead 0"; BF_ARGS="-bf 0"; else ACCEL_OPTS="-preset faster"; fi
+            if [[ "${BEST_LOW_POWER:-0}" == "1" ]]; then ACCEL_OPTS=(-low_power true -look_ahead 0); BF_ARGS=(-bf 0); else ACCEL_OPTS=(-preset faster); fi
             ;;
         vaapi)
-            ACCEL_OPTS="-rc_mode VBR"
-            if [[ "${BEST_LOW_POWER:-0}" == "1" ]]; then ACCEL_OPTS+=" -low_power 1"; BF_ARGS="-bf 0"; fi
+            ACCEL_OPTS=(-rc_mode VBR)
+            if [[ "${BEST_LOW_POWER:-0}" == "1" ]]; then ACCEL_OPTS+=(-low_power 1); BF_ARGS=(-bf 0); fi
             ;;
-        nvenc) ACCEL_OPTS="-preset p4 -rc vbr" ;;
-        videotoolbox) ACCEL_OPTS="-realtime false" ;;
-        software) ACCEL_OPTS="-preset faster" ;;
-        *) ACCEL_OPTS="" ;;
+        nvenc) ACCEL_OPTS=(-preset p4 -rc vbr) ;;
+        videotoolbox) ACCEL_OPTS=(-realtime false) ;;
+        software) ACCEL_OPTS=(-preset faster) ;;
+        *) ACCEL_OPTS=() ;;
     esac
 }
 
@@ -1284,6 +1625,22 @@ else
     GOP_WARN=" (fps parse failed)"
 fi
 
+MANAGED_VIDEO_TUNING_ARGS=(
+    -g "$GOP"
+    ${BF_ARGS[@]+"${BF_ARGS[@]}"}
+    ${ACCEL_OPTS[@]+"${ACCEL_OPTS[@]}"}
+    -fps_mode cfr
+    -r "$FPS_OUT"
+    ${TAG_ARGS[@]+"${TAG_ARGS[@]}"}
+)
+VIDEO_POLICY_ARGS=()
+if [[ -n "$MAX_BITRATE" ]]; then
+    VIDEO_POLICY_ARGS=(-b:v "$VBITRATE" -maxrate "$MAXRATE" -bufsize "$BUFSIZE")
+else
+    MANAGED_VIDEO_TUNING_ARGS=(-b:v "$VBITRATE" -maxrate "$MAXRATE" -bufsize "$BUFSIZE" "${MANAGED_VIDEO_TUNING_ARGS[@]}")
+fi
+resolve_video_tuning_args
+
 DEVICE_INFO=""
 case "$ACCEL" in qsv) DEVICE_INFO=" device=$QSV_DEVICE" ;; vaapi) DEVICE_INFO=" device=$VAAPI_DEVICE" ;; esac
 PROFILE_INFO=""
@@ -1292,6 +1649,7 @@ PROFILE_INFO=""
 [[ -n "$MAX_CHANNELS" ]] && PROFILE_INFO+=" maxchan=${MAX_CHANNELS}"
 [[ "$FORCE_SDR" == "true" ]] && PROFILE_INFO+=" sdr=true"
 [[ "$FORCE_DEINT" == "true" ]] && PROFILE_INFO+=" deint=true"
+PROFILE_INFO+=" advanced=input:${FFMPEG_INPUT_MODE},map:${FFMPEG_MAP_MODE},video:${FFMPEG_VIDEO_MODE},audio:${FFMPEG_AUDIO_MODE},mux:${FFMPEG_MUX_MODE}"
 
 echo "$LOG_PREFIX Detected ${WIDTH}x${HEIGHT} $VCODEC/$PIX_FMT field=${FIELD_ORDER} @ $FPS_FRAC -> $ENCODER ${TARGET_WIDTH}x${TARGET_HEIGHT} reason=${VIDEO_TRANSCODE_REASON} GOP=$GOP${GOP_WARN} audio=${AUDIO_INFO} accel=${ACCEL}${DEVICE_INFO} 10bit=${ALLOW_10BIT} hdr=${ALLOW_HDR}${PROFILE_INFO}" >&2
 
@@ -1309,32 +1667,20 @@ run_ffmpeg() {
         "${NET_ARGS[@]}" \
         "${HWACCEL_ARGS[@]}" \
         -reinit_filter 0 \
-        -fflags +genpts+igndts+discardcorrupt \
-        -err_detect ignore_err \
+        ${FFMPEG_INPUT_ARGS[@]+"${FFMPEG_INPUT_ARGS[@]}"} \
         -i "$URL" \
-        -map 0:v:0 \
-        -map 0:a:0? \
+        ${FFMPEG_MAP_ARGS[@]+"${FFMPEG_MAP_ARGS[@]}"} \
         -c:v "$ENCODER" \
         $VF_ARGS \
         $PROFILE_ARGS \
         $HDR_ARGS \
         $COLOR_ARGS \
-        -b:v "$VBITRATE" \
-        -maxrate "$MAXRATE" \
-        -bufsize "$BUFSIZE" \
-        -g "$GOP" \
-        $BF_ARGS \
-        ${ACCEL_OPTS} \
-        -fps_mode cfr \
-        -r "$FPS_OUT" \
-        $TAG_ARGS \
-        "${AUDIO_ARGS[@]}" \
-        -avoid_negative_ts make_zero \
-        -start_at_zero \
-        -mpegts_copyts 0 \
-        -mpegts_flags +pat_pmt_at_frames+resend_headers \
-        -flush_packets 1 \
-        -max_muxing_queue_size 4096 \
+        ${FFMPEG_VIDEO_TUNING_ARGS[@]+"${FFMPEG_VIDEO_TUNING_ARGS[@]}"} \
+        ${VIDEO_POLICY_ARGS[@]+"${VIDEO_POLICY_ARGS[@]}"} \
+        ${FFMPEG_AUDIO_ARGS[@]+"${FFMPEG_AUDIO_ARGS[@]}"} \
+        ${AUDIO_POLICY_ARGS[@]+"${AUDIO_POLICY_ARGS[@]}"} \
+        "${MAPPED_AUXILIARY_CODEC_ARGS[@]}" \
+        ${FFMPEG_MUX_ARGS[@]+"${FFMPEG_MUX_ARGS[@]}"} \
         -f mpegts \
         pipe:1
 }
