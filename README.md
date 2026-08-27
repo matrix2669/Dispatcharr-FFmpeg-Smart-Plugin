@@ -98,7 +98,7 @@ scripts/check-ffmpeg-smart-source.sh
 - `RELEASE.md` defines version, tag, registry, packaging, and release procedures.
 - `VERSION` is the canonical plugin version and must match both plugin declarations.
 
-The source repository uses `main` for production-ready Releases and `dev` for next-version integration. Immutable beta and completed stable tags feed the `dispatcharr-plugins:dev` registry. The stable registry changes only after an explicitly approved GitHub Release.
+The source repository uses `main` for production-ready stable code and `dev` for next-version integration. Immutable beta and completed stable tags feed the `dispatcharr-plugins:dev` registry. Stable-registry publication normally requires an explicitly approved GitHub Release; `v0.2.0` has a narrow operator-approved exception so the fully validated tag can be installed from the stable channel while Release packaging remains blocked.
 
 The existing `v0.1.0` Release predates the inherited-wrapper licensing review. New GitHub Releases and distributable plugin ZIPs remain blocked until the licensing of the inherited `ffmpeg-smart.sh` source is explicitly resolved; see `DECISIONS.md` and `RELEASE.md`.
 

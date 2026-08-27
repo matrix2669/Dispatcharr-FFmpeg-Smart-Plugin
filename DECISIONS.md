@@ -611,6 +611,7 @@ Preserve the historical fact that plugin `v0.1.0` was already tagged, released, 
 Until the upstream copyright holder explicitly licenses the inherited wrapper:
 
 - normal and beta tags may preserve internal version history and support the existing `dev` channel decision;
+- the version-specific ADR-023 exception permits `v0.2.0` alone to be referenced by the stable registry through its immutable tag archive without creating a Release or manual ZIP;
 - do not create a new GitHub Release or attach a distributable plugin ZIP containing that wrapper;
 - do not claim that adding an MIT file retroactively licenses the inherited material.
 
@@ -628,7 +629,7 @@ Copyright permission cannot be inferred from public source availability, a fork,
 
 ## Consequences
 
-Release preparation includes a licensing gate before packaging. Registry and documentation may continue to describe the existing v0.1.0 state accurately. A future source synchronization does not resolve licensing merely because it uses a matrix2669 commit.
+Release preparation includes a licensing gate before packaging. Registry and documentation may continue to describe the existing v0.1.0 state accurately and the narrowly approved v0.2.0 stable-registry exception. A future source synchronization does not resolve licensing merely because it uses a matrix2669 commit, and the exception does not apply to any later version.
 
 ## Provenance
 
@@ -1009,3 +1010,43 @@ The Output Profile child-process cleanup issue reproduced with original beta.10 
 - Canonical decision: `ffmpeg-asr` ADR-021
 - Canonical dev workflow: `33024572011`
 - Canonical tag workflow: `33024640090`
+
+---
+
+# ADR-023: Allow one stable-registry publication without a GitHub Release
+
+## Status
+
+Accepted as an explicitly user-approved workspace-standards exception; supersedes ADR-012 only for plugin `v0.2.0`
+
+## Date
+
+2026-08-26
+
+## Decision
+
+Promote the fully validated beta.11 tree to plugin stable tag `v0.2.0` on `main`, pinned to canonical stable `ffmpeg-asr v1.1.0`. Do not create a GitHub Release, manual ZIP, checksum asset, or new licensing claim.
+
+Permit `matrix2669/dispatcharr-plugins:main` to advertise only this exact completed-but-unreleased plugin tag using GitHub's immutable tag archive and the exact source commit. Keep the normal Release requirement for every other plugin version and registry entry.
+
+Review and remove the exception as soon as inherited-wrapper licensing is resolved and before any later FFmpeg Smart version is considered for the stable registry. A correction or later version must not inherit this authorization.
+
+## Reason
+
+The full beta cycle passed source, plugin, archive, installed-update, hardware-cache, degraded fallback, notification, advanced-option, `pipe:0`, and Map All validation. The operator explicitly chose to make that exact build available through the stable Dispatcharr channel now while continuing to withhold Release packaging until the inherited wrapper can be distributed under an explicit license.
+
+## Alternatives considered
+
+- Keep `v0.2.0` only in the `dev` registry until a Release can be published. Rejected by explicit operator direction after the full live validation gate passed.
+- Create the GitHub Release now without an attached ZIP. Rejected because the unresolved inherited-wrapper license remains the Release blocker and the operator explicitly prohibited it.
+- Make a permanent policy change allowing all completed tags into `main`. Rejected because the requested authorization is version-specific and must not weaken the general released-channel contract.
+
+## Consequences
+
+For this one entry, stable registry status means operator-approved deployment maturity, not existence of a GitHub Release or manual-install artifact. Registry and source documentation must disclose the exception. The tag and automatic archive remain immutable, but no statement in this decision grants or infers copyright permission for inherited code.
+
+## Provenance
+
+- Operator direction in Codex on `2026-08-26`: promote both source branches and tags and update the stable manifest, but do not create a Release until the license is resolved.
+- Fully validated plugin beta.11 tag: `v0.2.0-beta.11` at `80c40ea164e5711dfbc37e8c465e943b9e1ee9ea`
+- Canonical stable source: `ffmpeg-asr v1.1.0` at `448837f4f6267de1c6705cb670bcdb0c6991614f`

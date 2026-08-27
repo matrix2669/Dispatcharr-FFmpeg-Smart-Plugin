@@ -4,6 +4,28 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-26
+
+### Added
+
+- Add fixed, configurable managed Stream and Output Profile slots with policy checkboxes, safe reconciliation, and update-without-restart behavior for existing profiles.
+- Add safely quoted phase-scoped advanced FFmpeg Smart controls, inherited-default guidance, all-stream and typed custom mapping, and persistent runtime state outside replaceable plugin files.
+- Add authoritative hardware-cache status, persistent Dispatcharr scan notifications, direct executable-mode repair, and basic stream-copy fallback while a required scan is pending or active.
+
+### Fixed
+
+- Restore dismissed persistent fallback notifications immediately through Dispatcharr's authoritative notification refresh.
+- Preserve compatible mapped subtitle, data, and attachment streams and keep benchmark fallback authoritative until the top-level recache completes.
+
+### Changed
+
+- Synchronize the bundled wrapper to canonical stable `ffmpeg-asr v1.1.0` at exact commit `448837f4f6267de1c6705cb670bcdb0c6991614f` and SHA-256 `56cb036d803237b32d17fa0bf33bf200b3a07a43a0ca5309a4849eb561801627`.
+
+### Validation
+
+- Promote the fully validated beta.11 tree without plugin behavior changes. All 39 tests, live two-GPU recheck and fallback, persistent notification lifecycle, scoped custom strings, `pipe:0`, and four-stream Map All with copied DVB subtitle pass.
+- Publish only the immutable stable tag and the explicitly approved stable-registry metadata. No GitHub Release or distributable ZIP is created while inherited-wrapper licensing remains unresolved.
+
 ## [0.2.0-beta.11] - 2026-08-26
 
 ### Fixed

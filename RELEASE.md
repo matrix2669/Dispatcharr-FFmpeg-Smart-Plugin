@@ -49,6 +49,8 @@ Untagged `dev` commits are development state and do not replace a published test
 
 A completed stable tag does not automatically authorize a GitHub Release or `dispatcharr-plugins:main` publication.
 
+Exception: the user explicitly approved plugin `v0.2.0` for focused `dispatcharr-plugins:main` publication without a GitHub Release on `2026-08-26`, while continuing to prohibit a Release and distributable ZIP until inherited-wrapper licensing is resolved. This exception is limited to the exact immutable `v0.2.0` tag/archive and commit, must be recorded in `AGENT.md` and `DECISIONS.md`, and cannot authorize any later version.
+
 ## GitHub Release and stable registry
 
 New Releases and distributable ZIPs are currently blocked by the inherited-wrapper licensing decision in `DECISIONS.md`. The existing v0.1.0 Release is historical and does not waive this gate.
