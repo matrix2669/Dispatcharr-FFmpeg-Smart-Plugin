@@ -1239,3 +1239,8 @@ viewer counts, and final process cleanup.
   like-for-like baseline 18/15
 - Operator authorization to proceed with the corrective publication and managed
   validation in Codex on `2026-08-30`
+- Plugin workflow `33333007420`; development-registry commit
+  `50489521b1b6350bc95f300ceaf77a8bb7c372da` and workflow `33333093699`
+- Managed repository 37 beta.2-to-beta.3 update, idempotent profiles, valid
+  VAAPI/HEVC 18/14 cache with confirmed rejection at 19/15, decoded-frame live
+  matrix, both-GPU scheduler pass, and final clean process audit on `2026-08-30`
