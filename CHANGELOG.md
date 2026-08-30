@@ -4,6 +4,40 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ## [Unreleased]
 
+## [0.2.1-beta.3] - 2026-08-30
+
+### Changed
+
+- Pin the complete canonical runtime to `matrix2669/ffmpeg-adaptive
+  v0.1.0-beta.2` at exact commit
+  `4df6c12e395187fc0080f858685a3c6ebd7a8c42`.
+- Make runtime and benchmark hardware-decode paths identical, retain each
+  device's measured low-power and 10-bit encode policy at stream time, and
+  schedule capacity only on devices measured for the selected
+  accelerator/codec pair.
+- Advance the capacity-policy fingerprint so beta.2 installations require a
+  fresh hardware rebuild instead of reusing measurements made with the
+  superseded benchmark policy.
+- Bound each capacity probe by a wall-clock deadline and grow upper-bound
+  searches by 50 percent, preventing a failed high-concurrency probe from
+  indefinitely overcommitting the host.
+
+### Validation
+
+- Require all plugin tests, Python/JSON/shell checks, exact local and remote
+  seven-file source verification, repeat-sync idempotence, and clean tag-archive
+  layout and mode checks before development-registry publication.
+- The canonical wrapper's isolated pre-tag test selected one common
+  VAAPI/HEVC policy across both GPUs, measured Arc A310 capacity 18 and UHD 770
+  capacity 14, and rejected the next levels 19 and 15. The historical
+  like-for-like result was 18/15; the earlier beta.2 plugin result of 15/11 is
+  superseded because its benchmark path did not match runtime hardware decode.
+- The canonical wrapper also passed current Dispatcharr 1080p59.94,
+  1080i29.97, and 720p59.94 inputs through direct and finite `pipe:0` paths,
+  produced progressive output for the interlaced source, decoded without
+  errors, preserved monotonic nonnegative DTS, and scheduled overlapping work
+  across both GPUs.
+
 ## [0.2.1-beta.2] - 2026-08-30
 
 ### Added
@@ -271,7 +305,8 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 - Recorded final live capacity evidence at the canonical wrapper's 1.2x threshold: Arc A310 18 and UHD 770 15. These values are environment-specific and are not plugin defaults.
 - Verified the `v0.1.0` tagged tree installs from the stable plugin directory.
 
-[Unreleased]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.1-beta.2...HEAD
+[Unreleased]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.1-beta.3...HEAD
+[0.2.1-beta.3]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.1-beta.2...v0.2.1-beta.3
 [0.2.1-beta.2]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.1-beta.1...v0.2.1-beta.2
 [0.2.1-beta.1]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0...v0.2.1-beta.1
 [0.2.0]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.11...v0.2.0

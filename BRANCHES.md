@@ -18,6 +18,7 @@ This ledger records why every current branch exists and preserves the context ne
 | `feature/adaptive-input-probing` | feature | integrated | `dev` | `dev` | Pin canonical adaptive probing, migrate manual probe settings, and prepare `v0.2.1-beta.1`. |
 | `feature/ffmpeg-adaptive-migration` | feature | published | `dev` after adaptive-probing integration | `dev` | Vendor the modular MIT wrapper, remove redundant HDR/10-bit controls, and prepare `v0.2.1-beta.2`. |
 | `docs/ffmpeg-smart-beta2-live-validation` | documentation | integrated | `dev` at `3c7b07c` | `dev` | Record development publication and managed live-validation evidence. |
+| `fix/ffmpeg-adaptive-beta2-fidelity` | fix | active | `dev` at `bcf767c` | `dev` | Pin the corrected wrapper beta, invalidate the superseded capacity policy, and prepare `v0.2.1-beta.3`. |
 
 ## Branch records
 
@@ -98,6 +99,27 @@ This ledger records why every current branch exists and preserves the context ne
 - State: integrated into `dev` at
   `6902670a597d4281516f222689f38ef16f3d5b87`; the remote documentation branch is
   retained and no branch deletion is authorized.
+- Last reviewed: `2026-08-30`.
+
+### `fix/ffmpeg-adaptive-beta2-fidelity`
+
+- Purpose: package the corrected `ffmpeg-adaptive v0.1.0-beta.2` runtime after
+  pre-tag testing found that beta.1's benchmark command could under-report
+  usable hardware capabilities and its unbounded capacity search could
+  overcommit the host.
+- Base and target: `dev` at
+  `bcf767c5e7560f587f32e9a6e3aa0dce8a5a20e0`; target `dev` after source,
+  archive, registry, and managed Dispatcharr validation.
+- Canonical source: `ffmpeg-adaptive v0.1.0-beta.2` commit
+  `4df6c12e395187fc0080f858685a3c6ebd7a8c42`.
+- Scope: synchronize the complete modular runtime, advance the plugin beta,
+  record the corrected benchmark/capacity contract, publish only through the
+  development registry, update the managed test installation, rebuild its
+  stale cache, and repeat actual 1080p, 1080i, 720p, `pipe:0`, and multi-GPU
+  scheduling validation.
+- Out of scope: Stream Sort, stable promotion, GitHub Release or manual ZIP,
+  stable-registry publication, and branch deletion.
+- State: active.
 - Last reviewed: `2026-08-30`.
 
 ## Completed branch cleanup

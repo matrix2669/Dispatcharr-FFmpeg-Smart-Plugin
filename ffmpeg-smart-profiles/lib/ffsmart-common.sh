@@ -4,7 +4,7 @@
 
 FFSMART_NAME="ffmpeg-smart"
 FFSMART_CACHE_SCHEMA="2"
-FFSMART_CAPACITY_POLICY="2"
+FFSMART_CAPACITY_POLICY="3"
 
 ffsmart_log() {
     printf '[%s] %s\n' "$FFSMART_NAME" "$*" >&2
