@@ -19,7 +19,7 @@ This ledger records why every current branch exists and preserves the context ne
 | `feature/ffmpeg-adaptive-migration` | feature | published | `dev` after adaptive-probing integration | `dev` | Vendor the modular MIT wrapper, remove redundant HDR/10-bit controls, and prepare `v0.2.1-beta.2`. |
 | `docs/ffmpeg-smart-beta2-live-validation` | documentation | integrated | `dev` at `3c7b07c` | `dev` | Record development publication and managed live-validation evidence. |
 | `fix/ffmpeg-adaptive-beta2-fidelity` | fix | published | `dev` at `bcf767c` | `dev` | Pin the corrected wrapper beta, invalidate the superseded capacity policy, and prepare `v0.2.1-beta.3`. |
-| `docs/ffmpeg-smart-beta3-live-validation` | documentation | active | `dev` at `dd54d4c` | `dev` | Record beta.3 publication and managed installed validation without moving its tag. |
+| `docs/ffmpeg-smart-beta3-live-validation` | documentation | integrated | `dev` at `dd54d4c` | `dev` | Record beta.3 publication and managed installed validation without moving its tag. |
 
 ## Branch records
 
@@ -152,7 +152,9 @@ This ledger records why every current branch exists and preserves the context ne
 - Out of scope: runtime or manifest changes, a new version or tag, stable
   promotion, GitHub Release or manual ZIP, stable registry, Stream Sort, and
   branch deletion.
-- State: active.
+- State: integrated into `dev` at
+  `659098e74aeaddb1bca57a776e55b8da8b0b58a5`; the remote documentation
+  branch is retained and no branch deletion is authorized.
 - Last reviewed: `2026-08-30`.
 
 ## Completed branch cleanup
