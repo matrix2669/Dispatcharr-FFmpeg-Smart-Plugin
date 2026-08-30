@@ -37,6 +37,22 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
   produced progressive output for the interlaced source, decoded without
   errors, preserved monotonic nonnegative DTS, and scheduled overlapping work
   across both GPUs.
+- Published plugin workflow `33333007420` and development-registry workflow
+  `33333093699` passed. Managed repository 37 updated beta.2 to beta.3; the
+  exact seven-file bundle, MIT notice, removed HDR/10-bit controls, and both
+  existing profiles verified with an idempotent reconciliation and no restart.
+- The required rebuild produced a valid VAAPI/HEVC cache: Arc A310 18/reject
+  19 and UHD 770 14/reject 15, with 10-bit decode/encode available on both.
+  This run selected low-power mode on both devices because the Arc's candidates
+  tied at the displayed 14x speed; capacity and codec behavior were unchanged.
+- Repeated the installed direct and finite `pipe:0` matrix against priority-zero
+  1080p59.94, MPEG-2 1080i29.97, and 720p59.94 sources. All six HEVC outputs
+  had zero decode errors, zero interlaced decoded frames, and monotonic,
+  nonnegative DTS. An overlapping three-stream run used both GPUs and decoded
+  cleanly. Final cache status was valid and no FFmpeg/wrapper process remained.
+- Replaced the validation harness's optional stream-level `field_order` check
+  after FFprobe omitted that field for valid progressive HEVC output; the
+  repeated pass inspects every decoded frame's `interlaced_frame` value.
 
 ## [0.2.1-beta.2] - 2026-08-30
 

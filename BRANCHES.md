@@ -18,7 +18,8 @@ This ledger records why every current branch exists and preserves the context ne
 | `feature/adaptive-input-probing` | feature | integrated | `dev` | `dev` | Pin canonical adaptive probing, migrate manual probe settings, and prepare `v0.2.1-beta.1`. |
 | `feature/ffmpeg-adaptive-migration` | feature | published | `dev` after adaptive-probing integration | `dev` | Vendor the modular MIT wrapper, remove redundant HDR/10-bit controls, and prepare `v0.2.1-beta.2`. |
 | `docs/ffmpeg-smart-beta2-live-validation` | documentation | integrated | `dev` at `3c7b07c` | `dev` | Record development publication and managed live-validation evidence. |
-| `fix/ffmpeg-adaptive-beta2-fidelity` | fix | active | `dev` at `bcf767c` | `dev` | Pin the corrected wrapper beta, invalidate the superseded capacity policy, and prepare `v0.2.1-beta.3`. |
+| `fix/ffmpeg-adaptive-beta2-fidelity` | fix | published | `dev` at `bcf767c` | `dev` | Pin the corrected wrapper beta, invalidate the superseded capacity policy, and prepare `v0.2.1-beta.3`. |
+| `docs/ffmpeg-smart-beta3-live-validation` | documentation | active | `dev` at `dd54d4c` | `dev` | Record beta.3 publication and managed installed validation without moving its tag. |
 
 ## Branch records
 
@@ -35,12 +36,13 @@ This ledger records why every current branch exists and preserves the context ne
 
 - Purpose: integrate plugin and canonical-wrapper changes before stable promotion.
 - Base and target: `main`.
-- Current state: `v0.2.1-beta.2` is tagged at
-  `3c7b07cfe2d56540cd319179ef7c0d02318d2d38`, published through `origin/dev`,
+- Current state: `v0.2.1-beta.3` is tagged at
+  `dd54d4cc82a454135c4eb3b75eeeb5eb48713fe6`, published through `origin/dev`,
   advertised by the development registry, and validated in managed Dispatcharr.
-- Publication state: beta source, development-registry publication, installed
-  migration, cache rebuild, and live Stream/Output Profile checks pass;
-  `origin/main` remains the immutable `v0.2.0` stable source.
+- Publication state: corrective beta source, development-registry publication,
+  installed update, cache rebuild, actual Stream/Output Profile checks, and
+  overlapping multi-GPU scheduling pass; `origin/main` remains the immutable
+  `v0.2.0` stable source.
 - Last verified at: `2026-08-30`.
 
 ### `feature/adaptive-input-probing`
@@ -119,6 +121,37 @@ This ledger records why every current branch exists and preserves the context ne
   scheduling validation.
 - Out of scope: Stream Sort, stable promotion, GitHub Release or manual ZIP,
   stable-registry publication, and branch deletion.
+- State: integrated into `dev` at
+  `dd54d4cc82a454135c4eb3b75eeeb5eb48713fe6` and published as immutable
+  `v0.2.1-beta.3`. Plugin workflow `33333007420`, development-registry
+  workflow `33333093699`, managed repository 37 update, valid-cache rebuild,
+  actual-stream matrix, and overlapping scheduler validation pass.
+- Managed result: the installed seven-file bundle pins
+  `ffmpeg-adaptive v0.1.0-beta.2`; profile reconciliation was idempotent with
+  no retired HDR/10-bit fields or flags. The cache selected VAAPI/HEVC and
+  measured `/dev/dri/renderD129` at 18/reject 19 and
+  `/dev/dri/renderD128` at 14/reject 15, both with low-power enabled for this
+  run and 10-bit decode/encode available.
+- Live result: priority-zero 1080p59.94, MPEG-2 1080i29.97, and 720p59.94
+  sources passed direct and finite `pipe:0` paths with expected HEVC
+  resolutions, zero decode errors, zero interlaced decoded output frames, and
+  monotonic nonnegative DTS. Three overlapping streams used both GPUs and
+  decoded cleanly. Final cache remained valid and no media process remained.
+- Evidence: `docs/beta3-managed-validation-2026-08-30.md`.
+- Last reviewed: `2026-08-30`.
+
+### `docs/ffmpeg-smart-beta3-live-validation`
+
+- Purpose: preserve exact source, registry, installed-runtime, cache-boundary,
+  actual-stream, decoded-frame, scheduler, cleanup, and final-process evidence
+  for `v0.2.1-beta.3` without changing the tagged runtime.
+- Base and target: `dev` at
+  `dd54d4cc82a454135c4eb3b75eeeb5eb48713fe6`; target `dev`.
+- Scope: `BRANCHES.md`, `CHANGELOG.md`, `DECISIONS.md`, and
+  `docs/beta3-managed-validation-2026-08-30.md` only.
+- Out of scope: runtime or manifest changes, a new version or tag, stable
+  promotion, GitHub Release or manual ZIP, stable registry, Stream Sort, and
+  branch deletion.
 - State: active.
 - Last reviewed: `2026-08-30`.
 
