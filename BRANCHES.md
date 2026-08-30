@@ -16,7 +16,7 @@ This ledger records why every current branch exists and preserves the context ne
 | `main` | long-lived | active | initial project history | stable tags | Production-ready plugin source and stable tags. |
 | `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version and canonical wrapper updates. |
 | `feature/adaptive-input-probing` | feature | integrated | `dev` | `dev` | Pin canonical adaptive probing, migrate manual probe settings, and prepare `v0.2.1-beta.1`. |
-| `feature/ffmpeg-adaptive-migration` | feature | active | `dev` after adaptive-probing integration | `dev` | Vendor the modular MIT wrapper, remove redundant HDR/10-bit controls, and prepare `v0.2.1-beta.2`. |
+| `feature/ffmpeg-adaptive-migration` | feature | integrated | `dev` after adaptive-probing integration | `dev` | Vendor the modular MIT wrapper, remove redundant HDR/10-bit controls, and prepare `v0.2.1-beta.2`. |
 
 ## Branch records
 
@@ -33,9 +33,12 @@ This ledger records why every current branch exists and preserves the context ne
 
 - Purpose: integrate plugin and canonical-wrapper changes before stable promotion.
 - Base and target: `main`.
-- Current state: synchronized with `main` at stable `v0.2.0` commit `6eb5c8c8f437dcca6802967ceb193e37f984a7c1` after the completed beta.1 through beta.11 cycle.
-- Publication state: `origin/dev` and `origin/main` contain the identical stable source; beta and stable tags remain immutable.
-- Last verified at: `2026-08-26`.
+- Current state: local integration contains adaptive probing beta.1 and the
+  `ffmpeg-adaptive` migration for `v0.2.1-beta.2`; the exact release commit is
+  recorded after final archive validation and tagging.
+- Publication state: pending final beta tag and `origin/dev` publication;
+  `origin/main` remains the immutable `v0.2.0` stable source.
+- Last verified at: `2026-08-30`.
 
 ### `feature/adaptive-input-probing`
 
@@ -63,9 +66,14 @@ This ledger records why every current branch exists and preserves the context ne
   deployment.
 - Out of scope: wrapper behavior changes, Stream Sort, stable promotion, and
   stable-registry publication.
-- State: active; not integrated, tagged, published, or deployed.
+- State: integrated into local `dev`; final archive validation, immutable beta
+  tag, development-registry publication, and managed deployment remain.
 - Last reviewed: `2026-08-30`.
 
 ## Completed branch cleanup
 
-On `2026-08-26`, all local and `origin` feature, fix, integration, safety, and release branches were deleted after their results were preserved in `CHANGELOG.md` and `DECISIONS.md` and their tips were verified as merged or tree-equivalent. Only `main` and `dev` remain; tags were retained.
+On `2026-08-26`, all feature, fix, integration, safety, and release branches
+that existed at that time were deleted after their results were preserved in
+`CHANGELOG.md` and `DECISIONS.md` and their tips were verified as merged or
+tree-equivalent. Tags were retained. The later branches listed above belong to
+the `v0.2.1` beta cycle.
