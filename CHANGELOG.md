@@ -4,6 +4,22 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ## [Unreleased]
 
+## [0.2.1-beta.1] - 2026-08-27
+
+### Added
+
+- Bundle canonical adaptive input probing with metadata validation and 1-second/1-MB, 2-second/2-MB, then native-default tiers.
+
+### Changed
+
+- Synchronize the bundled wrapper to canonical `ffmpeg-asr v1.1.1-beta.1` at exact commit `ecc64244dae2c0e80761da6f16be92d95b91d29a` and SHA-256 `785a2ffe283452006ffa50d36e12fd2a013f54e0bd233f6d3c8d87f8a46f0f71`.
+- Remove and persistently normalize saved manual `-analyzeduration` and `-probesize` input settings when profiles are installed or updated because the canonical wrapper now owns both values.
+- Clarify in the Install / Update confirmation that updates do not require a restart, but a browser refresh may be needed to display settings changes.
+
+### Validation
+
+- Require canonical source/checksum, plugin schema, profile generation, saved-setting migration, packaging, and live HDHomeRun plus CSPAN3 HE-AACv2 checks before development-channel publication.
+
 ## [0.2.0] - 2026-08-26
 
 ### Added

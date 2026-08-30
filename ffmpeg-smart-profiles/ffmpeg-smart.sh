@@ -4,7 +4,7 @@ set -euo pipefail
 
 LOG_PREFIX="[ffmpeg-smart]"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="1.1.0"
+VERSION="1.1.1-beta.1"
 CAPACITY_BENCHMARK_VERSION="concurrency-1.2-v1"
 STATE_DIR="${FFMPEG_SMART_STATE_DIR:-$SCRIPT_DIR}"
 REQUIRE_CACHE_VALUE="${FFMPEG_SMART_REQUIRE_CACHE:-false}"
@@ -1022,7 +1022,7 @@ validate_advanced_arg() {
             ;;
     esac
     case "$option" in
-        -i|-f|-map|-user_agent|-c|-c:*|-codec|-codec:*|-vcodec|-hwaccel*|-init_hw_device|-filter_hw_device|-vf|-filter|-filter:*|-filter_complex*|-device|-dri-device|-dri_device|-qsv-device|-qsv_device|-vaapi-device|-vaapi_device)
+        -i|-f|-map|-user_agent|-analyzeduration|-probesize|-c|-c:*|-codec|-codec:*|-vcodec|-hwaccel*|-init_hw_device|-filter_hw_device|-vf|-filter|-filter:*|-filter_complex*|-device|-dri-device|-dri_device|-qsv-device|-qsv_device|-vaapi-device|-vaapi_device)
             configuration_error "$scope options cannot contain wrapper-owned FFmpeg option $option"
             ;;
     esac
@@ -1143,6 +1143,144 @@ validate_runtime_mapping() {
     if [[ "$selected_video_streams" -ne 1 ]]; then
         configuration_error "mapping must select exactly one video stream; FFmpeg Smart supports one hardware-normalized video stream per job"
     fi
+}
+
+add_selected_audio_index() {
+    local index="$1" existing
+    (( index >= 0 && index < AUDIO_STREAM_COUNT )) || return 0
+    for existing in ${SELECTED_AUDIO_INDEXES[@]+"${SELECTED_AUDIO_INDEXES[@]}"}; do
+        [[ "$existing" == "$index" ]] && return 0
+    done
+    SELECTED_AUDIO_INDEXES+=("$index")
+}
+
+remove_selected_audio_index() {
+    local index="$1" existing
+    local -a retained=()
+    for existing in ${SELECTED_AUDIO_INDEXES[@]+"${SELECTED_AUDIO_INDEXES[@]}"}; do
+        [[ "$existing" == "$index" ]] || retained+=("$existing")
+    done
+    SELECTED_AUDIO_INDEXES=(${retained[@]+"${retained[@]}"})
+}
+
+select_all_audio_indexes() {
+    local index
+    SELECTED_AUDIO_INDEXES=()
+    for ((index = 0; index < AUDIO_STREAM_COUNT; index++)); do
+        SELECTED_AUDIO_INDEXES+=("$index")
+    done
+}
+
+resolve_selected_stream_indexes() {
+    local spec normalized index
+    SELECTED_VIDEO_INDEX=0
+    SELECTED_AUDIO_INDEXES=()
+
+    case "$FFMPEG_MAP_MODE" in
+        inherit|add)
+            (( AUDIO_STREAM_COUNT > 0 )) && SELECTED_AUDIO_INDEXES=(0)
+            ;;
+        all)
+            select_all_audio_indexes
+            ;;
+    esac
+
+    for spec in ${USER_MAP_SPECS[@]+"${USER_MAP_SPECS[@]}"}; do
+        normalized="$spec"
+        if [[ "$normalized" == -* ]]; then
+            normalized="${normalized#-}"
+            normalized="${normalized%\?}"
+            if [[ "$normalized" =~ ^0:a:([0-9]+)$ ]]; then
+                remove_selected_audio_index "${BASH_REMATCH[1]}"
+            elif [[ "$normalized" == "0:a" || "$normalized" == "0:a:*" ]]; then
+                SELECTED_AUDIO_INDEXES=()
+            fi
+            continue
+        fi
+
+        normalized="${normalized%\?}"
+        case "$normalized" in
+            0)
+                SELECTED_VIDEO_INDEX=0
+                select_all_audio_indexes
+                ;;
+            0:v|0:V)
+                SELECTED_VIDEO_INDEX=0
+                ;;
+            0:a|0:a:*)
+                if [[ "$normalized" =~ ^0:a:([0-9]+)$ ]]; then
+                    add_selected_audio_index "${BASH_REMATCH[1]}"
+                else
+                    # Metadata and disposition selectors are deliberately
+                    # validated conservatively because FFmpeg resolves them.
+                    select_all_audio_indexes
+                fi
+                ;;
+            0:v:*|0:V:*)
+                if [[ "$normalized" =~ ^0:[vV]:([0-9]+)$ ]]; then
+                    SELECTED_VIDEO_INDEX="${BASH_REMATCH[1]}"
+                fi
+                ;;
+        esac
+    done
+}
+
+probe_metadata_complete() {
+    VIDEO_STREAM_COUNT="$(jq -r '[.streams[]? | select(.codec_type=="video")] | length' <<<"$PROBE" 2>/dev/null || true)"
+    AUDIO_STREAM_COUNT="$(jq -r '[.streams[]? | select(.codec_type=="audio")] | length' <<<"$PROBE" 2>/dev/null || true)"
+    [[ "$VIDEO_STREAM_COUNT" =~ ^[0-9]+$ && "$AUDIO_STREAM_COUNT" =~ ^[0-9]+$ ]] || return 1
+    (( VIDEO_STREAM_COUNT > 0 )) || return 1
+
+    validate_runtime_mapping "$VIDEO_STREAM_COUNT"
+    resolve_selected_stream_indexes
+
+    jq -e --argjson index "$SELECTED_VIDEO_INDEX" '
+        [.streams[]? | select(.codec_type=="video")][$index] |
+        (.codec_name // "") != "" and
+        (.width // 0) > 0 and
+        (.height // 0) > 0 and
+        (.pix_fmt // "") != ""
+    ' <<<"$PROBE" >/dev/null 2>&1 || return 1
+
+    local index
+    for index in ${SELECTED_AUDIO_INDEXES[@]+"${SELECTED_AUDIO_INDEXES[@]}"}; do
+        jq -e --argjson index "$index" '
+            [.streams[]? | select(.codec_type=="audio")][$index] |
+            (.codec_name // "") != "" and
+            (.channels // 0) > 0 and
+            ((.sample_rate // 0 | tonumber?) // 0) > 0
+        ' <<<"$PROBE" >/dev/null 2>&1 || return 1
+    done
+    return 0
+}
+
+run_input_probe() {
+    local tier="$1" analyze_duration="$2" probe_size="$3" status
+    local -a tier_args=()
+    if [[ -n "$analyze_duration" ]]; then
+        tier_args=(-analyzeduration "$analyze_duration" -probesize "$probe_size")
+    fi
+
+    set +e
+    PROBE="$(ffprobe "${UA_ARGS[@]}" ${tier_args[@]+"${tier_args[@]}"} -v error -print_format json -show_streams "$PROBE_TARGET" 2>/dev/null)"
+    status=$?
+    set -e
+    if [[ "$status" -ne 0 ]]; then
+        echo "$LOG_PREFIX ERROR [input-probe-$tier]: ffprobe failed; probe limits were not escalated" >&2
+        return 2
+    fi
+    if ! probe_metadata_complete; then
+        return 1
+    fi
+
+    INPUT_PROBE_TIER="$tier"
+    PROBE_INPUT_ARGS=(${tier_args[@]+"${tier_args[@]}"})
+    if [[ -n "$analyze_duration" ]]; then
+        echo "$LOG_PREFIX Input probe selected tier=$tier analyzeduration=$analyze_duration probesize=$probe_size" >&2
+    else
+        echo "$LOG_PREFIX Input probe selected tier=$tier analyzeduration=default probesize=default" >&2
+    fi
+    return 0
 }
 
 resolve_static_ffmpeg_args
@@ -1352,32 +1490,52 @@ if [[ "$URL" == "pipe:0" || "$URL" == "-" ]]; then
     PROBE_TARGET="$PIPE_CAPTURE"
 fi
 
-PROBE=$(ffprobe "${UA_ARGS[@]}" -v quiet -print_format json -show_streams "$PROBE_TARGET" 2>&1) || {
-    echo "$LOG_PREFIX ERROR: ffprobe failed - cannot access stream" >&2
+PROBE=""
+INPUT_PROBE_TIER=""
+PROBE_INPUT_ARGS=()
+probe_status=0
+run_input_probe fast 1000000 1000000 || probe_status=$?
+if [[ "$probe_status" -eq 1 ]]; then
+    echo "$LOG_PREFIX Input probe tier=fast returned incomplete selected-stream metadata; retrying tier=expanded" >&2
+    probe_status=0
+    run_input_probe expanded 2000000 2000000 || probe_status=$?
+fi
+if [[ "$probe_status" -eq 1 ]]; then
+    echo "$LOG_PREFIX Input probe tier=expanded returned incomplete selected-stream metadata; retrying tier=default" >&2
+    probe_status=0
+    run_input_probe default "" "" || probe_status=$?
+fi
+if [[ "$probe_status" -eq 1 ]]; then
+    echo "$LOG_PREFIX ERROR [input-probe-default]: ffprobe returned incomplete selected-stream metadata" >&2
     exit 1
-}
+elif [[ "$probe_status" -ne 0 ]]; then
+    exit 1
+fi
 
-VCODEC=$(echo "$PROBE" | jq -r '.streams[] | select(.codec_type=="video") | .codec_name' | head -n1)
-FPS_FRAC=$(echo "$PROBE" | jq -r '.streams[] | select(.codec_type=="video") | .r_frame_rate' | head -n1)
-PIX_FMT=$(echo "$PROBE" | jq -r '.streams[] | select(.codec_type=="video") | .pix_fmt // empty' | head -n1)
-COLOR_TRANSFER=$(echo "$PROBE" | jq -r '.streams[] | select(.codec_type=="video") | .color_transfer // empty' | head -n1)
-FIELD_ORDER=$(echo "$PROBE" | jq -r '.streams[] | select(.codec_type=="video") | .field_order // "unknown"' | head -n1)
-WIDTH=$(echo "$PROBE" | jq -r '.streams[] | select(.codec_type=="video") | .width // 0' | head -n1)
-HEIGHT=$(echo "$PROBE" | jq -r '.streams[] | select(.codec_type=="video") | .height // 0' | head -n1)
-VBITRATE_RAW=$(echo "$PROBE" | jq -r '.streams[] | select(.codec_type=="video") | .bit_rate // empty' | head -n1)
-ACODEC=$(echo "$PROBE" | jq -r '.streams[] | select(.codec_type=="audio") | .codec_name // empty' | head -n1)
-ACHANNELS=$(echo "$PROBE" | jq -r '.streams[] | select(.codec_type=="audio") | .channels // empty' | head -n1)
-AUDIO_STREAM_COUNT=$(echo "$PROBE" | jq '[.streams[] | select(.codec_type=="audio")] | length')
-VIDEO_STREAM_COUNT=$(echo "$PROBE" | jq '[.streams[] | select(.codec_type=="video")] | length')
+VIDEO_SELECTOR="[.streams[] | select(.codec_type==\"video\")][$SELECTED_VIDEO_INDEX]"
+VCODEC=$(jq -r "$VIDEO_SELECTOR | .codec_name" <<<"$PROBE")
+FPS_FRAC=$(jq -r "$VIDEO_SELECTOR | .r_frame_rate" <<<"$PROBE")
+PIX_FMT=$(jq -r "$VIDEO_SELECTOR | .pix_fmt // empty" <<<"$PROBE")
+COLOR_TRANSFER=$(jq -r "$VIDEO_SELECTOR | .color_transfer // empty" <<<"$PROBE")
+FIELD_ORDER=$(jq -r "$VIDEO_SELECTOR | .field_order // \"unknown\"" <<<"$PROBE")
+WIDTH=$(jq -r "$VIDEO_SELECTOR | .width // 0" <<<"$PROBE")
+HEIGHT=$(jq -r "$VIDEO_SELECTOR | .height // 0" <<<"$PROBE")
+VBITRATE_RAW=$(jq -r "$VIDEO_SELECTOR | .bit_rate // empty" <<<"$PROBE")
+PRIMARY_AUDIO_INDEX=0
+if (( ${#SELECTED_AUDIO_INDEXES[@]} > 0 )); then
+    PRIMARY_AUDIO_INDEX="${SELECTED_AUDIO_INDEXES[0]}"
+fi
+AUDIO_SELECTOR="[.streams[] | select(.codec_type==\"audio\")][$PRIMARY_AUDIO_INDEX]"
+ACODEC=$(jq -r "$AUDIO_SELECTOR | .codec_name // empty" <<<"$PROBE")
+ACHANNELS=$(jq -r "$AUDIO_SELECTOR | .channels // empty" <<<"$PROBE")
+SELECTED_AUDIO_STREAM_COUNT="${#SELECTED_AUDIO_INDEXES[@]}"
 HAS_AUDIO=false
-[[ "$AUDIO_STREAM_COUNT" -gt 0 ]] && HAS_AUDIO=true
+[[ "$SELECTED_AUDIO_STREAM_COUNT" -gt 0 ]] && HAS_AUDIO=true
 
 if [[ -z "$VCODEC" || "$VCODEC" == "null" ]]; then
     echo "$LOG_PREFIX ERROR: No video stream found" >&2
     exit 1
 fi
-validate_runtime_mapping "$VIDEO_STREAM_COUNT"
-
 SOURCE_10BIT=false
 [[ "$PIX_FMT" == *"10"* ]] && SOURCE_10BIT=true
 IS_HDR=false
@@ -1460,6 +1618,7 @@ if [[ -n "$VIDEO_COPY_REASON" ]]; then
         "${UA_ARGS[@]}" \
         "${NET_ARGS[@]}" \
         ${FFMPEG_INPUT_ARGS[@]+"${FFMPEG_INPUT_ARGS[@]}"} \
+        ${PROBE_INPUT_ARGS[@]+"${PROBE_INPUT_ARGS[@]}"} \
         -i "$URL" \
         ${FFMPEG_MAP_ARGS[@]+"${FFMPEG_MAP_ARGS[@]}"} \
         -c:v copy \
@@ -1668,6 +1827,7 @@ run_ffmpeg() {
         "${HWACCEL_ARGS[@]}" \
         -reinit_filter 0 \
         ${FFMPEG_INPUT_ARGS[@]+"${FFMPEG_INPUT_ARGS[@]}"} \
+        ${PROBE_INPUT_ARGS[@]+"${PROBE_INPUT_ARGS[@]}"} \
         -i "$URL" \
         ${FFMPEG_MAP_ARGS[@]+"${FFMPEG_MAP_ARGS[@]}"} \
         -c:v "$ENCODER" \

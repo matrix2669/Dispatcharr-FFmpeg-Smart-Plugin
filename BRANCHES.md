@@ -15,6 +15,7 @@ This ledger records why every current branch exists and preserves the context ne
 |---|---|---|---|---|---|
 | `main` | long-lived | active | initial project history | stable tags | Production-ready plugin source and stable tags. |
 | `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version and canonical wrapper updates. |
+| `feature/adaptive-input-probing` | feature | active | `dev` | `dev` | Pin canonical adaptive probing, migrate manual probe settings, and prepare `v0.2.1-beta.1`. |
 
 ## Branch records
 
@@ -34,6 +35,15 @@ This ledger records why every current branch exists and preserves the context ne
 - Current state: synchronized with `main` at stable `v0.2.0` commit `6eb5c8c8f437dcca6802967ceb193e37f984a7c1` after the completed beta.1 through beta.11 cycle.
 - Publication state: `origin/dev` and `origin/main` contain the identical stable source; beta and stable tags remain immutable.
 - Last verified at: `2026-08-26`.
+
+### `feature/adaptive-input-probing`
+
+- Purpose: package canonical metadata-validated adaptive probing without duplicating wrapper behavior in the plugin.
+- Base and target: `dev` at `6654a202e286f4c8b80d7845040880f76862d1f2`; target `dev` after live beta validation.
+- Canonical source: `ffmpeg-asr v1.1.1-beta.1` commit `ecc64244dae2c0e80761da6f16be92d95b91d29a`, SHA-256 `785a2ffe283452006ffa50d36e12fd2a013f54e0bd233f6d3c8d87f8a46f0f71`.
+- Scope: immutable wrapper pin, profile-setting migration, documentation, decision record, tests, beta tag, development registry, and live test deployment.
+- State: active; no stable promotion, GitHub Release, distributable ZIP, or stable-registry update is authorized.
+- Last reviewed: `2026-08-27`.
 
 ## Completed branch cleanup
 

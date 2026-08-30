@@ -1050,3 +1050,50 @@ For this one entry, stable registry status means operator-approved deployment ma
 - Operator direction in Codex on `2026-08-26`: promote both source branches and tags and update the stable manifest, but do not create a Release until the license is resolved.
 - Fully validated plugin beta.11 tag: `v0.2.0-beta.11` at `80c40ea164e5711dfbc37e8c465e943b9e1ee9ea`
 - Canonical stable source: `ffmpeg-asr v1.1.0` at `448837f4f6267de1c6705cb670bcdb0c6991614f`
+
+---
+
+# ADR-024: Pin canonical adaptive probing and normalize manual probe windows
+
+## Status
+
+Accepted
+
+## Date
+
+2026-08-27
+
+## Decision
+
+Package canonical `ffmpeg-asr v1.1.1-beta.1` from exact commit `ecc64244dae2c0e80761da6f16be92d95b91d29a` and SHA-256 `785a2ffe283452006ffa50d36e12fd2a013f54e0bd233f6d3c8d87f8a46f0f71` as plugin `v0.2.1-beta.1`. Keep adaptive probing entirely in the canonical wrapper; do not add FFprobe or FFmpeg retry policy to `plugin.py` or the launcher.
+
+Continue serializing advanced FFmpeg settings as one repeatable wrapper option per argv token. A setting such as `-analyzeduration 1000000` therefore intentionally becomes `-ffmpeg-input-option -analyzeduration -ffmpeg-input-option 1000000`; combining them into one wrapper value would pass one invalid FFmpeg token and weaken the existing no-shell-evaluation boundary.
+
+Because adaptive probing now owns `-analyzeduration` and `-probesize`, reject them as new advanced input options. During Install / Update, remove existing flag/value or `flag=value` forms from every managed profile input-options field, preserve unrelated input options, persist the normalized settings, and report the change to the operator. This migration covers the manually configured fast limits used during controlled testing and prevents an upgraded profile from failing canonical validation.
+
+Create the authorized beta tag, publish only to the development plugin registry, and deploy to the live Dispatcharr environment for HDHomeRun and CSPAN3 HE-AACv2 testing. Do not update the stable registry, create a GitHub Release or ZIP, or promote either repository to stable.
+
+## Reason
+
+The plugin's repeatable-token representation is the intended safe quoting model, not duplicated FFmpeg execution. The canonical wrapper reconstructs the original argument vector without evaluating user text. Adaptive probing, however, must guarantee that FFprobe and final FFmpeg use the same tier, so manual probe-window overrides can no longer remain authoritative.
+
+An existing saved manual probe setting would otherwise be rendered correctly by the plugin but rejected by the new wrapper at stream start. Normalizing it during the explicit profile reconciliation action preserves service and makes the ownership transfer visible rather than silently ignoring or overriding the operator's saved values.
+
+## Alternatives considered
+
+- Combine each FFmpeg flag and value into one `-ffmpeg-input-option` value. Rejected because FFmpeg requires separate argv tokens and the wrapper intentionally accepts one token per repeatable option.
+- Let manual probe settings override adaptive behavior. Rejected because preprobe and final-input tiers could diverge and recreate the CSPAN3 incomplete-audio failure.
+- Reject old settings without migration. Rejected because a previously valid managed profile would fail after upgrade until manually edited.
+- Implement the fallback in the plugin. Rejected because profile execution invokes the canonical wrapper directly and wrapper behavior must remain single-source.
+
+## Consequences
+
+Install / Update may persist cleaned input-option fields and asks the operator to refresh the settings page. Its confirmation keeps the no-restart promise for existing profile updates while warning that a browser refresh may be needed to display settings changes. Other advanced input options retain their existing tokenization and semantics. Tests must cover direct rejection, pair and equals-form migration, unrelated-option preservation, setting persistence, version agreement, and exact canonical checksum.
+
+Development deployment must run the full managed profile against representative HDHomeRun and CSPAN3 inputs before any broader publication decision. Existing process lifecycle, profile commands, hardware-cache behavior, and Dispatcharr integration remain unchanged.
+
+## Provenance
+
+- Canonical decision: `ffmpeg-asr` ADR-022
+- Operator decision Q&A and beta tagging/deployment authorization, 2026-08-27
+- Operator-observed generated parameter form for manually added 1-second/1-MB input settings, 2026-08-27
