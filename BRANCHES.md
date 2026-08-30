@@ -17,7 +17,7 @@ This ledger records why every current branch exists and preserves the context ne
 | `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version and canonical wrapper updates. |
 | `feature/adaptive-input-probing` | feature | integrated | `dev` | `dev` | Pin canonical adaptive probing, migrate manual probe settings, and prepare `v0.2.1-beta.1`. |
 | `feature/ffmpeg-adaptive-migration` | feature | published | `dev` after adaptive-probing integration | `dev` | Vendor the modular MIT wrapper, remove redundant HDR/10-bit controls, and prepare `v0.2.1-beta.2`. |
-| `docs/ffmpeg-smart-beta2-live-validation` | documentation | active | `dev` at `3c7b07c` | `dev` | Record development publication and managed live-validation evidence. |
+| `docs/ffmpeg-smart-beta2-live-validation` | documentation | integrated | `dev` at `3c7b07c` | `dev` | Record development publication and managed live-validation evidence. |
 
 ## Branch records
 
@@ -95,7 +95,9 @@ This ledger records why every current branch exists and preserves the context ne
 - Scope: `BRANCHES.md` and `CHANGELOG.md` only.
 - Out of scope: runtime or manifest changes, new versions or tags, stable
   promotion, GitHub Release, stable registry, Stream Sort, and branch deletion.
-- State: active; validation evidence is ready for review and integration.
+- State: integrated into `dev` at
+  `6902670a597d4281516f222689f38ef16f3d5b87`; the remote documentation branch is
+  retained and no branch deletion is authorized.
 - Last reviewed: `2026-08-30`.
 
 ## Completed branch cleanup
