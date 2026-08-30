@@ -4,6 +4,23 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ## [Unreleased]
 
+## [0.2.1-beta.2] - 2026-08-30
+
+### Added
+
+- Bundle the complete seven-file `ffmpeg-adaptive` runtime with one immutable commit, per-file SHA-256 and mode pins, remote byte verification, and the dependency's MIT notice.
+
+### Changed
+
+- Move the canonical runtime to `matrix2669/ffmpeg-adaptive v0.1.0-beta.1` at exact commit `80d648bbb0f93c45d5a7198bd7bf9260e9febd32` while preserving the accepted adaptive probing behavior.
+- Remove redundant per-profile Allow 10-bit and Allow HDR controls because both behaviors are automatic; retain Force SDR and Force deinterlace.
+- During Install / Update, remove retired saved 10-bit/HDR fields and `-10bit`/`-hdr` options, migrate `-sdr`/`-deint`/`-deinterlace` into the remaining controls, and preserve unrelated options.
+- Allow new plugin versions containing the independently published MIT runtime to use the normal Release gate while retaining the original provenance of historical inherited-wrapper tags.
+
+### Validation
+
+- Require complete source checksum/mode verification, source-sync idempotence, 42 plugin tests, Python/JSON/shell checks, exact archive layout, managed settings migration, cache rebuild, `pipe:0`, and representative actual 1080p, 1080i, and 720p stream checks before stable promotion.
+
 ## [0.2.1-beta.1] - 2026-08-27
 
 ### Added
@@ -235,7 +252,10 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 - Recorded final live capacity evidence at the canonical wrapper's 1.2x threshold: Arc A310 18 and UHD 770 15. These values are environment-specific and are not plugin defaults.
 - Verified the `v0.1.0` tagged tree installs from the stable plugin directory.
 
-[Unreleased]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.6...HEAD
+[Unreleased]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.1-beta.2...HEAD
+[0.2.1-beta.2]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.1-beta.1...v0.2.1-beta.2
+[0.2.1-beta.1]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0...v0.2.1-beta.1
+[0.2.0]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.11...v0.2.0
 [0.2.0-beta.6]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.5...v0.2.0-beta.6
 [0.2.0-beta.5]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.4...v0.2.0-beta.5
 [0.2.0-beta.4]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0-beta.3...v0.2.0-beta.4

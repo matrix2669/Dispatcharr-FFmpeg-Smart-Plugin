@@ -16,22 +16,22 @@ Missing workspace standards or Git history is a hard block. Standards exceptions
 - Rationale: the complete beta.11 cycle passed automated, archive, installed, hardware, fallback, notification, and custom-option validation, and the operator explicitly wants that exact completed build in the stable Dispatcharr channel while continuing to withhold Release packaging until inherited-wrapper licensing is resolved.
 - Authority: explicit user direction in Codex on `2026-08-26`: promote both source branches and tags and update the stable manifest, but do not create a Release until the license is resolved.
 - Approval date: `2026-08-26`.
-- Review/removal trigger: review immediately when inherited-wrapper licensing is resolved and before any later plugin version is considered for `dispatcharr-plugins:main`. Remove this exception after the stable channel returns to a Release-backed version or FFmpeg Smart is withdrawn from `main`; it cannot be reused for a correction or later version.
+- Review/removal trigger: reviewed on `2026-08-30` when the new MIT runtime resolved licensing for later versions. Retain this record while `v0.2.0` remains the stable-registry build; remove the active exception after the stable channel returns to a Release-backed version or FFmpeg Smart is withdrawn from `main`. It cannot be reused for a correction or later version.
 
 
 ## Purpose
 
-This repository owns the `FFmpeg Smart Profiles` plugin for Dispatcharr. The plugin installs and reconciles managed Stream and Output Profiles, coordinates disruptive hardware-cache rebuilds, reports benchmark status, and ships a self-contained copy of the canonical `matrix2669/ffmpeg-asr` wrapper.
+This repository owns the `FFmpeg Smart Profiles` plugin for Dispatcharr. The plugin installs and reconciles managed Stream and Output Profiles, coordinates disruptive hardware-cache rebuilds, reports benchmark status, and ships a self-contained copy of the canonical `matrix2669/ffmpeg-adaptive` runtime.
 
 ## Architecture
 
 - `ffmpeg-smart-profiles/plugin.json` declares Dispatcharr settings and actions.
 - `ffmpeg-smart-profiles/plugin.py` is the Dispatcharr integration layer. It owns profile definitions, settings migration, safe database reconciliation, active-transcode coordination, benchmark lifecycle, and status reporting.
 - `ffmpeg-smart-profiles/ffmpeg-smart-plugin.sh` is the plugin-specific launcher. It selects persistent state under `/data/ffmpeg_smart_profiles`, requires an operator-built cache for normal streams, and executes the canonical wrapper.
-- `ffmpeg-smart-profiles/ffmpeg-smart.sh` is a vendored runtime dependency. Its canonical source is `matrix2669/ffmpeg-asr`; do not develop wrapper behavior independently in this repository.
-- `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json` pins the wrapper's full source commit and SHA-256 checksum.
-- `scripts/check-ffmpeg-smart-source.sh` verifies the local checksum and, unless `--offline` is used, the exact remote source bytes.
-- `scripts/sync-ffmpeg-smart.sh` resolves a branch, tag, or full commit, replaces the vendored wrapper, and updates the pin.
+- `ffmpeg-smart-profiles/ffmpeg-smart.sh` and `ffmpeg-smart-profiles/lib/*.sh` are one vendored modular runtime dependency. Their canonical source is `matrix2669/ffmpeg-adaptive`; do not develop wrapper behavior independently in this repository.
+- `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json` pins every runtime file to one full source commit, SHA-256 checksum, and installed mode. `FFMPEG_ADAPTIVE_LICENSE` preserves the dependency's MIT notice.
+- `scripts/check-ffmpeg-smart-source.sh` verifies the complete local bundle and, unless `--offline` is used, every exact remote source file.
+- `scripts/sync-ffmpeg-smart.sh` resolves a branch, tag, or full commit, replaces the complete vendored runtime, and updates its pins.
 - `.github/workflows/ffmpeg-smart-sync.yml` checks the canonical source and opens a reviewable update pull request.
 - `.github/workflows/ffmpeg-smart-verify.yml` validates the source pin, plugin tests, JSON, Python, and shell syntax.
 - `tests/test_plugin.py` covers behavior that can be isolated from Dispatcharr.
@@ -49,26 +49,26 @@ Data flow:
 ## Ownership boundaries
 
 - This repository owns Dispatcharr integration, profile policy defaults, settings UX, maintenance orchestration, packaging, and plugin releases.
-- `matrix2669/ffmpeg-asr` owns all wrapper behavior, hardware discovery, stream policy resolution, benchmarking, cache schema, and GPU scheduling.
+- `matrix2669/ffmpeg-adaptive` owns all wrapper behavior, hardware discovery, stream policy resolution, benchmarking, cache schema, and GPU scheduling.
 - `matrix2669/dispatcharr-plugins` owns only which immutable plugin tag each `dev` or `main` registry channel advertises.
 - The official Dispatcharr repository owns the plugin API, manifest contract, models, Redis keys, loader behavior, archive extraction, and minimum-version semantics.
 
 ## Non-negotiable rules
 
-- Keep the plugin self-contained; the installed archive must include `ffmpeg-smart.sh` and must not depend on a Git submodule or a second repository checkout.
+- Keep the plugin self-contained; the installed archive must include `ffmpeg-smart.sh`, every pinned `lib/*.sh` module, and the dependency's MIT notice, and must not depend on a Git submodule or a second repository checkout.
 - Keep mutable runtime state outside the replaceable plugin directory. The launcher, plugin status, and recache orchestration must share `/data/ffmpeg_smart_profiles` unless an explicit test override is supplied.
-- Never edit the vendored wrapper as an independent implementation. Change and validate `ffmpeg-asr` first, publish its canonical commit, then synchronize this repository through the pin workflow.
+- Never edit the vendored runtime as an independent implementation. Change and validate `ffmpeg-adaptive` first, publish its canonical commit, then synchronize this repository through the pin workflow.
 - Never silently update an existing tag, Release, archive, or installed plugin version. Wrapper changes require a new plugin version before registry publication.
 - Profile installation must remain idempotent and transactional. Do not overwrite locked profiles, duplicate names, or same-name profiles owned by another command.
-- Keep policy normalization plugin-only. Do not require a Dispatcharr core change to migrate `-10bit`, `-hdr`, `-sdr`, `-deint`, or `-deinterlace` from Additional options into checkboxes.
+- Keep policy normalization plugin-only. Remove retired `-10bit` and `-hdr` settings and flags, and migrate `-sdr`, `-deint`, or `-deinterlace` from Additional options into the remaining checkboxes without requiring a Dispatcharr core change.
 - Keep advanced FFmpeg settings aligned with the canonical wrapper's input, mapping, transcode-video, audio, and MPEG-TS/mux scopes. Parse fields with `shlex.split`, quote each wrapper argument independently, retain the beta.3 `*_ffmpeg_options` IDs as mux fields, and never expose a full custom command or wrapper-owned input, hardware, encoder, filter, format, or output controls.
 - Show each advanced scope's complete inherited default or runtime-derived formula in the mode field's help text. Keep the adjacent options field blank for user-owned Add/Replace text; Dispatcharr does not provide a dependent-field hook that can safely populate it when the mode changes.
-- Force SDR takes precedence over Allow HDR. Generate each managed policy flag at most once.
+- HDR and 10-bit selection remain automatic. Only Force SDR and Force deinterlace generate managed policy flags, at most once each.
 - All managed Output Profiles must use the pipe-safe wrapper path. Do not replace them with bare `ffmpeg` templates.
 - Hardware benchmarking may stop input- or output-transcoded streams, but proxy-only streams must continue. New managed starts use canonical degraded stream copy until the benchmark lock clears and must not use GPU decode, filtering, or encoding.
 - Do not give the plugin Docker-socket or host-control access merely to restart Dispatcharr. Profile creation and removal return `restart_required` and instruct the operator to restart normally; in-place updates do not require a restart.
 - Recorded GPU capacities are deployment evidence, not portable defaults. Re-measure on materially different hardware or benchmark policy.
-- Preserve the current licensing boundary described in `DECISIONS.md`: the repository's MIT license covers matrix2669-authored plugin work, but it does not independently license inherited wrapper code. Do not publish a new GitHub Release or distributable plugin ZIP until the wrapper's inherited licensing is resolved.
+- Preserve the dependency notice for the MIT-licensed `ffmpeg-adaptive` runtime. New plugin versions that contain only the independently licensed runtime may proceed through normal Release gates; this does not retroactively relicense or authorize repackaging historical tags that bundled the inherited `ffmpeg-asr` source.
 
 ## Development workflow
 
@@ -127,6 +127,7 @@ python3 -m py_compile ffmpeg-smart-profiles/plugin.py tests/validate_dispatcharr
 python3 -m json.tool ffmpeg-smart-profiles/plugin.json >/dev/null
 python3 -m json.tool ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json >/dev/null
 bash -n ffmpeg-smart-profiles/ffmpeg-smart.sh
+for module in ffmpeg-smart-profiles/lib/*.sh; do bash -n "$module"; done
 bash -n ffmpeg-smart-profiles/ffmpeg-smart-plugin.sh
 bash -n scripts/check-ffmpeg-smart-source.sh
 bash -n scripts/sync-ffmpeg-smart.sh
@@ -150,7 +151,7 @@ Behavioral or compatibility changes additionally require applicable live Dispatc
 ## Future-agent checklist
 
 - [ ] Read `AGENT.md`, `DECISIONS.md`, `BRANCHES.md`, `CHANGELOG.md`, and `RELEASE.md`
-- [ ] Review all relevant project history and the current `ffmpeg-asr` source pin
+- [ ] Review all relevant project history and the current `ffmpeg-adaptive` source pin
 - [ ] Confirm the branch base, intended target, and registry channel
 - [ ] Refresh the branch ledger before substantive work
 - [ ] Keep plugin integration changes separate from canonical wrapper changes

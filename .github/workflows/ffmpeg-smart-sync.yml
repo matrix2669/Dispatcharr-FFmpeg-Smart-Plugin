@@ -1,4 +1,4 @@
-name: Sync FFmpeg Smart wrapper
+name: Sync FFmpeg Adaptive runtime
 
 on:
   schedule:
@@ -17,12 +17,12 @@ jobs:
         with:
           ref: dev
           fetch-depth: 0
-      - name: Sync from ffmpeg-asr main
-        run: scripts/sync-ffmpeg-smart.sh main
+      - name: Sync from the tracked ffmpeg-adaptive ref
+        run: scripts/sync-ffmpeg-smart.sh
       - name: Check for an update
         id: changes
         run: |
-          if git diff --quiet -- ffmpeg-smart-profiles/ffmpeg-smart.sh ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json; then
+          if git diff --quiet -- ffmpeg-smart-profiles/ffmpeg-smart.sh ffmpeg-smart-profiles/lib ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json; then
             echo "changed=false" >>"$GITHUB_OUTPUT"
           else
             echo "changed=true" >>"$GITHUB_OUTPUT"
@@ -34,6 +34,7 @@ jobs:
           python3 -m unittest discover -s tests -v
           python3 -m json.tool ffmpeg-smart-profiles/plugin.json >/dev/null
           bash -n ffmpeg-smart-profiles/ffmpeg-smart.sh
+          for module in ffmpeg-smart-profiles/lib/*.sh; do bash -n "$module"; done
       - name: Open update pull request
         if: steps.changes.outputs.changed == 'true'
         env:
@@ -50,11 +51,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "$branch"
-          git add ffmpeg-smart-profiles/ffmpeg-smart.sh ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json
-          git commit -m "Sync ffmpeg-smart.sh from ffmpeg-asr $short_commit"
+          git add ffmpeg-smart-profiles/ffmpeg-smart.sh ffmpeg-smart-profiles/lib ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json
+          git commit -m "Sync FFmpeg Adaptive runtime $short_commit"
           git push --force origin "HEAD:refs/heads/$branch"
           gh pr create \
             --base dev \
             --head "$branch" \
-            --title "Sync ffmpeg-smart.sh from ffmpeg-asr $short_commit" \
-            --body "Updates the bundled wrapper to matrix2669/ffmpeg-asr@$source_commit. The source checksum and plugin validation completed successfully."
+            --title "Sync FFmpeg Adaptive runtime $short_commit" \
+            --body "Updates the bundled runtime to matrix2669/ffmpeg-adaptive@$source_commit. All source checksums and plugin validation completed successfully."

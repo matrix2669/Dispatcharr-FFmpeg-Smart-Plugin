@@ -4,7 +4,9 @@ on:
   push:
     paths:
       - "ffmpeg-smart-profiles/ffmpeg-smart.sh"
+      - "ffmpeg-smart-profiles/lib/**"
       - "ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json"
+      - "ffmpeg-smart-profiles/FFMPEG_ADAPTIVE_LICENSE"
       - "ffmpeg-smart-profiles/plugin.json"
       - "ffmpeg-smart-profiles/plugin.py"
       - "VERSION"
@@ -16,7 +18,9 @@ on:
   pull_request:
     paths:
       - "ffmpeg-smart-profiles/ffmpeg-smart.sh"
+      - "ffmpeg-smart-profiles/lib/**"
       - "ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json"
+      - "ffmpeg-smart-profiles/FFMPEG_ADAPTIVE_LICENSE"
       - "ffmpeg-smart-profiles/plugin.json"
       - "ffmpeg-smart-profiles/plugin.py"
       - "VERSION"
@@ -44,5 +48,6 @@ jobs:
           python3 -m json.tool ffmpeg-smart-profiles/plugin.json >/dev/null
           python3 -m json.tool ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json >/dev/null
           bash -n ffmpeg-smart-profiles/ffmpeg-smart.sh
+          for module in ffmpeg-smart-profiles/lib/*.sh; do bash -n "$module"; done
           bash -n scripts/check-ffmpeg-smart-source.sh
           bash -n scripts/sync-ffmpeg-smart.sh
