@@ -20,6 +20,25 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 ### Validation
 
 - Require complete source checksum/mode verification, source-sync idempotence, 42 plugin tests, Python/JSON/shell checks, exact archive layout, managed settings migration, cache rebuild, `pipe:0`, and representative actual 1080p, 1080i, and 720p stream checks before stable promotion.
+- Passed all 42 source tests and clean-tag archive checks, installed the exact
+  seven-file runtime and MIT dependency notice through the development registry,
+  removed all retired HDR/10-bit fields and values, and confirmed a second
+  managed-profile reconciliation makes no changes.
+- Rebuilt a valid schema-2 cache selecting VAAPI/H.264 with low-power disabled;
+  the live host measured capacity 15 on `/dev/dri/renderD129` and 11 on
+  `/dev/dri/renderD128`. These values are environment measurements, not plugin
+  defaults or a strict comparison with historical HEVC fixtures.
+- Passed managed Stream and finite `pipe:0` Output Profile checks against current
+  priority-zero 1080p59.94 H.264, 1080i29.97 MPEG-2, and 720p59.94 H.264
+  Dispatcharr sources. The interlaced input automatically became progressive
+  H.264, all Output Profile results were progressive 720p H.264, all FFmpeg
+  decode commands exited successfully, and every result had monotonic,
+  nonnegative DTS. The direct 1080p stream-copy sample retained 260 transient
+  decoder diagnostics from joining the live H.264 source mid-GOP; its decode
+  completed successfully and the downstream transcoded Output Profile decoded
+  without diagnostics.
+- Confirmed zero live, VOD, and catch-up viewers before and after testing and no
+  remaining FFmpeg process after the harness completed.
 
 ## [0.2.1-beta.1] - 2026-08-27
 

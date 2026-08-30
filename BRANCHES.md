@@ -16,7 +16,8 @@ This ledger records why every current branch exists and preserves the context ne
 | `main` | long-lived | active | initial project history | stable tags | Production-ready plugin source and stable tags. |
 | `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version and canonical wrapper updates. |
 | `feature/adaptive-input-probing` | feature | integrated | `dev` | `dev` | Pin canonical adaptive probing, migrate manual probe settings, and prepare `v0.2.1-beta.1`. |
-| `feature/ffmpeg-adaptive-migration` | feature | integrated | `dev` after adaptive-probing integration | `dev` | Vendor the modular MIT wrapper, remove redundant HDR/10-bit controls, and prepare `v0.2.1-beta.2`. |
+| `feature/ffmpeg-adaptive-migration` | feature | published | `dev` after adaptive-probing integration | `dev` | Vendor the modular MIT wrapper, remove redundant HDR/10-bit controls, and prepare `v0.2.1-beta.2`. |
+| `docs/ffmpeg-smart-beta2-live-validation` | documentation | active | `dev` at `3c7b07c` | `dev` | Record development publication and managed live-validation evidence. |
 
 ## Branch records
 
@@ -33,10 +34,11 @@ This ledger records why every current branch exists and preserves the context ne
 
 - Purpose: integrate plugin and canonical-wrapper changes before stable promotion.
 - Base and target: `main`.
-- Current state: local integration contains adaptive probing beta.1 and the
-  `ffmpeg-adaptive` migration for `v0.2.1-beta.2`; the exact release commit is
-  recorded after final archive validation and tagging.
-- Publication state: pending final beta tag and `origin/dev` publication;
+- Current state: `v0.2.1-beta.2` is tagged at
+  `3c7b07cfe2d56540cd319179ef7c0d02318d2d38`, published through `origin/dev`,
+  advertised by the development registry, and validated in managed Dispatcharr.
+- Publication state: beta source, development-registry publication, installed
+  migration, cache rebuild, and live Stream/Output Profile checks pass;
   `origin/main` remains the immutable `v0.2.0` stable source.
 - Last verified at: `2026-08-30`.
 
@@ -66,8 +68,34 @@ This ledger records why every current branch exists and preserves the context ne
   deployment.
 - Out of scope: wrapper behavior changes, Stream Sort, stable promotion, and
   stable-registry publication.
-- State: integrated into local `dev`; final archive validation, immutable beta
-  tag, development-registry publication, and managed deployment remain.
+- State: published as immutable `v0.2.1-beta.2` at
+  `3c7b07cfe2d56540cd319179ef7c0d02318d2d38`. Source workflow `33320334916`,
+  extracted-archive validation, development-registry workflow `33320510384`,
+  and the managed Dispatcharr update pass.
+- Managed validation: the installed seven-file runtime and MIT dependency notice
+  match the tag; obsolete HDR/10-bit UI fields, saved keys, and options are
+  absent; a second profile reconciliation is idempotent. The schema-2 cache
+  selects VAAPI/H.264 with low-power disabled and measured capacities of 15 on
+  `/dev/dri/renderD129` and 11 on `/dev/dri/renderD128`.
+- Live validation: the priority-zero CBS 2 New York 1080p59.94 H.264 source,
+  PIX11 New York 1080i29.97 MPEG-2 source, and FOX 5 New York 720p59.94 H.264
+  source all pass the managed Stream Profile and finite `pipe:0` Output Profile.
+  The interlaced source becomes progressive H.264 automatically; every Output
+  Profile result is progressive 720p H.264 with monotonic, nonnegative DTS and a
+  successful full-video decode. Final viewer counts and FFmpeg process audit are
+  both zero.
+- Last reviewed: `2026-08-30`.
+
+### `docs/ffmpeg-smart-beta2-live-validation`
+
+- Purpose: preserve exact source, registry, installed-runtime, migration, cache,
+  actual-stream, and final process/viewer evidence for `v0.2.1-beta.2`.
+- Base and target: `dev` at
+  `3c7b07cfe2d56540cd319179ef7c0d02318d2d38`; target `dev`.
+- Scope: `BRANCHES.md` and `CHANGELOG.md` only.
+- Out of scope: runtime or manifest changes, new versions or tags, stable
+  promotion, GitHub Release, stable registry, Stream Sort, and branch deletion.
+- State: active; validation evidence is ready for review and integration.
 - Last reviewed: `2026-08-30`.
 
 ## Completed branch cleanup
