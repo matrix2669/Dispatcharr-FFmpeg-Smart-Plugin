@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-VERSION="0.1.0-beta.1"
+VERSION="0.1.0-beta.2"
 FFSMART_ENTRYPOINT="${BASH_SOURCE[0]}"
 FFSMART_ROOT="$(cd "$(dirname "$FFSMART_ENTRYPOINT")" && pwd)"
 

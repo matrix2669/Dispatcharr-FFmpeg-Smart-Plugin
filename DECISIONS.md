@@ -1151,3 +1151,91 @@ Automated tests must verify UI/manifest agreement, absence of generated retired 
 - Wrapper `PROVENANCE.md`, `LICENSE`, validation reports, and ADR-001 through ADR-004
 - Prior clean-room comparison: 22/22 exact rewrite/standalone command outcomes, 82 clean hardware decodes, and actual 1080p, 1080i, and 720p stream coverage
 - Operator direction and approval in Codex on `2026-08-30`
+
+---
+
+# ADR-026: Correct benchmark/runtime fidelity before further publication
+
+## Status
+
+Accepted; supersedes ADR-025's runtime pin and its beta.2 capacity evidence
+
+## Date
+
+2026-08-30
+
+## Decision
+
+Package `matrix2669/ffmpeg-adaptive v0.1.0-beta.2` from exact commit
+`4df6c12e395187fc0080f858685a3c6ebd7a8c42` as plugin `v0.2.1-beta.3`.
+Retain the complete seven-file immutable pin and MIT dependency notice from
+ADR-025.
+
+Treat a capacity measurement as valid for scheduling only when its device,
+accelerator, codec, hardware-decode path, low-power mode, and 10-bit encode
+policy match the corresponding runtime path. Select one common working
+accelerator/codec policy for compatible GPUs, benchmark each device on that
+policy, and retain per-device low-power and 10-bit capability. If an explicitly
+selected device has no matching measured capacity, use a conservative capacity
+of one instead of borrowing another policy's result.
+
+Every capacity probe must have a wall-clock deadline. Upper-bound exploration
+must increase by 50 percent rather than doubling, while retaining a maximum
+level and binary boundary confirmation. Advance the canonical capacity-policy
+fingerprint so existing beta.1 cache measurements become stale and require an
+operator-triggered rebuild.
+
+Publish the corrective plugin only as an immutable beta through
+`dispatcharr-plugins:dev`, install it through the managed Dispatcharr update
+path, rebuild the stale cache with zero viewers, and repeat representative
+1080p, 1080i, 720p, finite `pipe:0`, and overlapping multi-GPU checks. This
+decision does not authorize stable promotion, a GitHub Release or manual ZIP,
+the stable registry, Stream Sort changes, or branch deletion.
+
+## Reason
+
+Comparative validation showed that the beta.1 wrapper benchmark uploaded
+software-decoded frames while runtime used hardware decode. It also did not
+apply each selected device's low-power choice at runtime and allowed a capacity
+search to launch an unsafe high-concurrency level without a deadline. The
+resulting 15/11 cache therefore indicated a fidelity defect, not a real loss of
+hardware capability.
+
+After aligning benchmark and runtime paths, the same host selected VAAPI/HEVC,
+measured 18 streams on the Arc A310 and 14 on the UHD 770, and rejected levels
+19 and 15. The historical like-for-like result was 18/15. A one-stream boundary
+difference is expected measurement variation; the earlier four-stream UHD 770
+drop is superseded.
+
+## Alternatives considered
+
+- Keep beta.1 and describe 15/11 as more accurate. Rejected because the
+  benchmark did not exercise the runtime hardware-decode path.
+- Restore historical capacities manually. Rejected because cache values are
+  measured deployment evidence, not portable configuration.
+- Measure every device independently and schedule them under the fastest
+  device's policy. Rejected because capacity is not transferable across
+  accelerator/codec combinations.
+- Search by doubling without a deadline. Rejected because one failed level can
+  oversubscribe the host and make the benchmark unable to terminate itself.
+
+## Consequences
+
+Upgrading from plugin beta.2 makes the existing cache stale by design. Managed
+starts remain in the established degraded stream-copy path until the operator
+completes a successful rebuild. Cache results remain environment-specific and
+must not become plugin defaults. Automated verification must pin the exact
+corrective tag and commit; installed validation must verify the rebuilt policy,
+capacity boundary, actual streams, pipe safety, both-GPU scheduling, final
+viewer counts, and final process cleanup.
+
+## Provenance
+
+- `matrix2669/ffmpeg-adaptive v0.1.0-beta.2` at
+  `4df6c12e395187fc0080f858685a3c6ebd7a8c42`
+- Wrapper ADR-005, `PROVENANCE.md`, and
+  `docs/beta2-capacity-fidelity-validation-2026-08-30.md`
+- Isolated host results: Arc A310 18/reject 19; UHD 770 14/reject 15; historical
+  like-for-like baseline 18/15
+- Operator authorization to proceed with the corrective publication and managed
+  validation in Codex on `2026-08-30`

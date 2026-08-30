@@ -178,7 +178,7 @@ ffsmart_build_filters() {
     [[ "$FFSMART_DEINTERLACE" == true ]] && ffsmart_is_interlaced_input && need_deint=true
     [[ "$FFSMART_FORCE_SDR" == true ]] && ffsmart_is_hdr_input && need_tonemap=true
     [[ "$FFSMART_VIDEO_PIX_FMT" =~ (10|p010) ]] && input_tenbit=true
-    if [[ "$FFSMART_TARGET_CODEC" == hevc && "$input_tenbit" == true && "${FFSMART_CACHE_BEST_10BIT_ENCODE:-false}" == true ]]; then
+    if [[ "$FFSMART_TARGET_CODEC" == hevc && "$input_tenbit" == true && "${FFSMART_SELECTED_10BIT_ENCODE:-false}" == true ]]; then
         tenbit=true
     fi
 
@@ -225,11 +225,13 @@ ffsmart_build_hardware_args() {
     case "$FFSMART_SELECTED_ACCEL" in
         qsv)
             encoder="${FFSMART_TARGET_CODEC}_qsv"
-            FFSMART_HW_INPUT_ARGS=(-init_hw_device "qsv=ffsmart:hw,child_device=$device" -filter_hw_device ffsmart -hwaccel qsv -hwaccel_output_format qsv)
+            ffsmart_build_hardware_decode_args qsv "$device" || return
+            FFSMART_HW_INPUT_ARGS=("${FFSMART_HW_DECODE_ARGS[@]}")
             FFSMART_ENCODER_ARGS=(-c:v "$encoder") ;;
         vaapi)
             encoder="${FFSMART_TARGET_CODEC}_vaapi"
-            FFSMART_HW_INPUT_ARGS=(-init_hw_device "vaapi=ffsmart:$device" -filter_hw_device ffsmart -hwaccel vaapi -hwaccel_device ffsmart -hwaccel_output_format vaapi)
+            ffsmart_build_hardware_decode_args vaapi "$device" || return
+            FFSMART_HW_INPUT_ARGS=("${FFSMART_HW_DECODE_ARGS[@]}")
             FFSMART_ENCODER_ARGS=(-c:v "$encoder") ;;
         nvenc)
             encoder="${FFSMART_TARGET_CODEC}_nvenc"; FFSMART_ENCODER_ARGS=(-c:v "$encoder") ;;
@@ -241,7 +243,7 @@ ffsmart_build_hardware_args() {
             if [[ "$FFSMART_TARGET_CODEC" == hevc ]]; then encoder=libx265; else encoder=libx264; fi
             FFSMART_ENCODER_ARGS=(-c:v "$encoder" -preset veryfast) ;;
     esac
-    [[ "${FFSMART_CACHE_BEST_LOW_POWER:-0}" == 1 && "$FFSMART_SELECTED_ACCEL" =~ ^(qsv|vaapi)$ ]] && FFSMART_ENCODER_ARGS+=( -low_power 1 )
+    [[ "${FFSMART_SELECTED_LOW_POWER:-0}" == 1 && "$FFSMART_SELECTED_ACCEL" =~ ^(qsv|vaapi)$ ]] && FFSMART_ENCODER_ARGS+=( -low_power 1 )
     return 0
 }
 
@@ -317,7 +319,8 @@ ffsmart_run_normal_pipeline() {
     fi
 
     ffsmart_log "Video transcode: $(ffsmart_join_by '; ' "${FFSMART_VIDEO_REASONS[@]}")"
-    ffsmart_select_device "$FFSMART_SELECTED_ACCEL" || return
+    ffsmart_select_device "$FFSMART_SELECTED_ACCEL" "$FFSMART_TARGET_CODEC" || return
+    ffsmart_apply_selected_device_policy
     ffsmart_build_hardware_args
     ffsmart_build_filters
     ffsmart_resolve_rate_control

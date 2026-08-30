@@ -190,7 +190,7 @@ def advanced_ffmpeg_fields(prefix, label):
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.2.1-beta.2"
+    version = "0.2.1-beta.3"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
