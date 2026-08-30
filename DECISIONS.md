@@ -66,7 +66,7 @@ Automation and documentation target `dev` for incoming work. `main` and `dev` ar
 
 ## Status
 
-Accepted
+Accepted; canonical source identity updated by ADR-025
 
 ## Date
 
@@ -112,7 +112,7 @@ Cross-repository changes are deliberately staged. The plugin can change profile 
 
 ## Status
 
-Accepted
+Accepted; single-file pin structure superseded by ADR-025
 
 ## Date
 
@@ -156,7 +156,7 @@ CI can reject drift. The synchronization workflow needs repository-level permiss
 
 ## Status
 
-Accepted; supersedes dynamic-template exploration
+Accepted; policy-control list partially superseded by ADR-025
 
 ## Date
 
@@ -248,7 +248,7 @@ Conflicts require operator resolution. Legacy migration remains narrowly named a
 
 ## Status
 
-Accepted
+Accepted; HDR/10-bit controls and migration behavior superseded by ADR-025
 
 ## Date
 
@@ -596,7 +596,7 @@ Compatibility changes may require synchronized updates to this repository, `disp
 
 ## Status
 
-Accepted; blocks new GitHub Releases and distributable ZIPs until resolved
+Accepted for historical inherited-wrapper tags; resolved for new MIT-runtime versions by ADR-025
 
 ## Date
 
@@ -1057,7 +1057,7 @@ For this one entry, stable registry status means operator-approved deployment ma
 
 ## Status
 
-Accepted
+Accepted; source pin superseded by ADR-025 while adaptive probing remains accepted
 
 ## Date
 
@@ -1097,3 +1097,57 @@ Development deployment must run the full managed profile against representative 
 - Canonical decision: `ffmpeg-asr` ADR-022
 - Operator decision Q&A and beta tagging/deployment authorization, 2026-08-27
 - Operator-observed generated parameter form for manually added 1-second/1-MB input settings, 2026-08-27
+
+---
+
+# ADR-025: Adopt the modular MIT runtime and retire redundant HDR/10-bit controls
+
+## Status
+
+Accepted; supersedes ADR-002's canonical repository identity, ADR-003's single-file pin, ADR-004 and ADR-006's HDR/10-bit controls, ADR-014 for new versions, and ADR-024's source pin
+
+## Date
+
+2026-08-30
+
+## Decision
+
+Package `matrix2669/ffmpeg-adaptive v0.1.0-beta.1` from exact commit `80d648bbb0f93c45d5a7198bd7bf9260e9febd32` as plugin `v0.2.1-beta.2`. Treat its entrypoint and six `lib/*.sh` modules as one immutable runtime: record every relative path, SHA-256 checksum, and installed mode in `FFMPEG_SMART_SOURCE.json`; verify every file locally and against the same remote commit; and include the complete module set plus `FFMPEG_ADAPTIVE_LICENSE` in every installed or packaged plugin copy.
+
+Keep wrapper behavior single-source in `ffmpeg-adaptive`. The plugin continues to own only Dispatcharr integration, saved-setting migration, profile defaults, and operational orchestration.
+
+Remove all per-profile Allow 10-bit and Allow HDR fields. The new runtime chooses HDR and 10-bit automatically from input and hardware capability. Keep Force SDR and Force deinterlace as the only policy checkboxes, generating canonical `-sdr` and `-deint` respectively. During Install / Update:
+
+- remove saved `*_10bit` and `*_hdr` keys;
+- strip legacy `-10bit` and `-hdr` tokens from Additional options without replacing them with another control;
+- move `-sdr`, `-deint`, and the historical `-deinterlace` alias into the remaining checkboxes;
+- preserve unrelated settings and report both removals and migrations to the operator.
+
+The prior inherited `ffmpeg-asr` tags retain their recorded licensing provenance and must not be repackaged or retroactively relicensed. New plugin versions beginning with `v0.2.1-beta.2` bundle only the independently published MIT `ffmpeg-adaptive` runtime and may proceed through normal Release and stable-registry approval gates. This decision authorizes the beta tag, development-registry update, and managed Dispatcharr validation only; it does not authorize stable promotion, a GitHub Release, a stable-registry change, or deletion of historical branches/tags.
+
+## Reason
+
+The validated rewrite preserves the accepted external behavior while establishing an independent modular implementation and explicit MIT provenance. Because HDR and 10-bit are already automatic capabilities, their plugin switches were redundant and could imply that unchecked values disabled behavior when they did not. Removing both the controls and their legacy flags leaves one unambiguous override: `-sdr` requests conversion, while absence of that flag retains automatic HDR/10-bit policy.
+
+The modular runtime cannot be safely distributed as its entrypoint alone. Vendoring and pinning the complete dependency graph preserves the plugin's offline, self-contained installation contract and makes source drift reviewable at file granularity.
+
+## Alternatives considered
+
+- Continue pinning the unlicensed inherited runtime. Rejected because the independent MIT project is now the authoritative maintained implementation and resolves the new-version distribution boundary.
+- Flatten the modular rewrite back into one plugin-local file. Rejected because it would create a second implementation structure and break canonical-source byte identity.
+- Keep disabled-looking HDR/10-bit checkboxes for compatibility. Rejected because they are behaviorally redundant and misstate the automatic policy.
+- Convert old `-10bit`/`-hdr` flags to hidden saved values. Rejected because the canonical CLI intentionally removed them and automatic selection requires no replacement.
+- Promote directly to stable. Rejected because beta registry installation and managed-stream validation must establish the plugin packaging and settings migration before a separate stable decision.
+
+## Consequences
+
+Plugin archives grow from one wrapper file to a seven-file runtime plus its dependency license. Sync and verification workflows must watch the module directory and update the whole pin atomically. Existing installations require a normal versioned plugin update; profile reconciliation persists removal of retired fields and tokens. The cache schema changes with the canonical runtime, so managed deployment must rebuild hardware capabilities while viewer counts are zero before normal Smart processing is considered valid.
+
+Automated tests must verify UI/manifest agreement, absence of generated retired flags, saved-setting cleanup, remaining policy migration, complete file checksums and modes, module syntax, source-sync idempotence, and exact archive layout. Managed validation must cover installed module discovery, profile update behavior, cache rebuild, `pipe:0`, and representative actual stream types before stable promotion is considered.
+
+## Provenance
+
+- `matrix2669/ffmpeg-adaptive v0.1.0-beta.1` at `80d648bbb0f93c45d5a7198bd7bf9260e9febd32`
+- Wrapper `PROVENANCE.md`, `LICENSE`, validation reports, and ADR-001 through ADR-004
+- Prior clean-room comparison: 22/22 exact rewrite/standalone command outcomes, 82 clean hardware decodes, and actual 1080p, 1080i, and 720p stream coverage
+- Operator direction and approval in Codex on `2026-08-30`

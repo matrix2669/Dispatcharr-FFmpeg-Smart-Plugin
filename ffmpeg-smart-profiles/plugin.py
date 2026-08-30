@@ -21,6 +21,17 @@ LOG_FILE = RUNTIME_DIR / "recache.log"
 BENCHMARK_LOCK_FILE = STATE_DIR / ".benchmark.lock"
 CACHE_FILE = STATE_DIR / ".capabilities.cache"
 FALLBACK_MARKER_FILE = RUNTIME_DIR / "fallback-invocation"
+RUNTIME_MODULE_PATHS = tuple(
+    PLUGIN_DIR / "lib" / name
+    for name in (
+        "ffsmart-cache.sh",
+        "ffsmart-cli.sh",
+        "ffsmart-common.sh",
+        "ffsmart-hardware.sh",
+        "ffsmart-policy.sh",
+        "ffsmart-probe.sh",
+    )
+)
 CACHE_NOTIFICATION_KEY = "ffmpeg-smart-hardware-cache"
 NOTIFICATION_WATCH_INTERVAL = 1.0
 logger = logging.getLogger(__name__)
@@ -33,6 +44,9 @@ def _repair_script_permissions():
         mode = script.stat().st_mode
         if mode & 0o111 != 0o111:
             script.chmod(mode | 0o111)
+    for module_path in RUNTIME_MODULE_PATHS:
+        if not module_path.is_file():
+            raise RuntimeError(f"Bundled runtime module is missing: {module_path}")
 
 
 _repair_script_permissions()
@@ -44,11 +58,11 @@ LEGACY_OUTPUT_NAMES = {
     "FFmpeg Smart - 1080p 8M Stereo",
 }
 POLICY_DEFAULTS = {
-    "stream_1": {"10bit": True, "hdr": True, "sdr": False, "deint": False},
-    "stream_2": {"10bit": False, "hdr": False, "sdr": False, "deint": False},
-    "output_1": {"10bit": False, "hdr": False, "sdr": True, "deint": True},
-    "output_2": {"10bit": False, "hdr": False, "sdr": False, "deint": False},
-    "output_3": {"10bit": False, "hdr": False, "sdr": False, "deint": False},
+    "stream_1": {"sdr": False, "deint": False},
+    "stream_2": {"sdr": False, "deint": False},
+    "output_1": {"sdr": True, "deint": True},
+    "output_2": {"sdr": False, "deint": False},
+    "output_3": {"sdr": False, "deint": False},
 }
 ADVANCED_MODE_OPTIONS = [
     {"value": "inherit", "label": "Use FFmpeg Smart default"},
@@ -74,32 +88,16 @@ def policy_fields(
     prefix,
     label,
     *,
-    ten_bit_default=False,
-    hdr_default=False,
     sdr_default=False,
     deint_default=False,
 ):
     return [
         {
-            "id": f"{prefix}_10bit",
-            "label": f"{label}: allow 10-bit",
-            "type": "boolean",
-            "default": ten_bit_default,
-            "help_text": "Unchecked leaves 10-bit on the wrapper's automatic hardware policy.",
-        },
-        {
-            "id": f"{prefix}_hdr",
-            "label": f"{label}: allow HDR",
-            "type": "boolean",
-            "default": hdr_default,
-            "help_text": "Force SDR overrides this setting when both are checked.",
-        },
-        {
             "id": f"{prefix}_sdr",
             "label": f"{label}: force SDR",
             "type": "boolean",
             "default": sdr_default,
-            "help_text": "Takes precedence over Allow HDR.",
+            "help_text": "Convert HDR input to SDR. Otherwise HDR and 10-bit selection remain automatic.",
         },
         {
             "id": f"{prefix}_deint",
@@ -192,7 +190,7 @@ def advanced_ffmpeg_fields(prefix, label):
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.2.1-beta.1"
+    version = "0.2.1-beta.2"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
@@ -206,12 +204,7 @@ class Plugin:
     fields = [
         {"id": "stream_1_enabled", "label": "Enable Stream Profile 1", "type": "boolean", "default": True},
         {"id": "stream_1_name", "label": "Stream Profile 1 name", "type": "string", "default": "FFmpeg Smart"},
-        *policy_fields(
-            "stream_1",
-            "Stream Profile 1",
-            ten_bit_default=True,
-            hdr_default=True,
-        ),
+        *policy_fields("stream_1", "Stream Profile 1"),
         {
             "id": "stream_1_options",
             "label": "Stream Profile 1 options",
@@ -279,7 +272,7 @@ class Plugin:
             "id": "flag_reference_policy",
             "label": "Managed policy flags",
             "type": "info",
-            "description": "The controls above generate -10bit, -hdr, -sdr, and -deint. Force SDR overrides Allow HDR. If a policy flag is entered in Additional options, Install / Update moves it to the matching checkbox and removes the duplicate.",
+            "description": "HDR and 10-bit selection are automatic. The controls above generate only -sdr and -deint. Install / Update removes retired -10bit/-hdr flags and moves -sdr/-deint to their matching checkboxes.",
         },
         {
             "id": "flag_reference_managed",
@@ -369,18 +362,29 @@ class Plugin:
         settings = context.get("settings") or {}
         logger = context.get("logger")
         if action == "install_profiles":
-            normalized_settings, normalized_flags = self._normalize_policy_settings(settings)
+            (
+                normalized_settings,
+                normalized_flags,
+                removed_automatic_flags,
+            ) = self._normalize_policy_settings(settings)
             normalized_settings, normalized_probe_options = (
                 self._normalize_adaptive_probe_settings(normalized_settings)
             )
             result = self._install_profiles(normalized_settings, logger)
-            if normalized_flags or normalized_probe_options:
+            if normalized_flags or removed_automatic_flags or normalized_probe_options:
                 self._save_normalized_settings(normalized_settings)
             if normalized_flags:
                 result["normalized_policy_flags"] = normalized_flags
                 result["message"] += (
                     " Policy flags were moved from Additional options to their "
                     "checkboxes; refresh the settings page to see the changes."
+                )
+            if removed_automatic_flags:
+                result["removed_automatic_policy_flags"] = removed_automatic_flags
+                result["message"] += (
+                    " Retired 10-bit/HDR settings and flags were removed because "
+                    "the wrapper now selects both automatically; refresh the "
+                    "settings page to see the changes."
                 )
             if normalized_probe_options:
                 result["normalized_probe_options"] = normalized_probe_options
@@ -696,14 +700,19 @@ class Plugin:
     def _normalize_policy_settings(settings):
         normalized = dict(settings or {})
         flag_fields = {
-            "-10bit": "10bit",
-            "-hdr": "hdr",
             "-sdr": "sdr",
             "-deint": "deint",
             "-deinterlace": "deint",
         }
+        retired_flags = {"-10bit", "-hdr"}
         moved = []
+        removed = []
         for prefix in POLICY_DEFAULTS:
+            for retired_suffix in ("10bit", "hdr"):
+                retired_key = f"{prefix}_{retired_suffix}"
+                if retired_key in normalized:
+                    normalized.pop(retired_key)
+                    removed.append(f"{prefix}:{retired_key}")
             options_key = f"{prefix}_options"
             options = str(normalized.get(options_key, "") or "")
             try:
@@ -714,6 +723,9 @@ class Plugin:
                 continue
             remaining = []
             for token in tokens:
+                if token in retired_flags:
+                    removed.append(f"{prefix}:{token}")
+                    continue
                 field_suffix = flag_fields.get(token)
                 if field_suffix is None:
                     remaining.append(token)
@@ -722,7 +734,7 @@ class Plugin:
                 moved.append(f"{prefix}:{token}")
             if len(remaining) != len(tokens):
                 normalized[options_key] = " ".join(shlex.quote(token) for token in remaining)
-        return normalized, moved
+        return normalized, moved, removed
 
     @staticmethod
     def _normalize_adaptive_probe_settings(settings):
@@ -773,20 +785,14 @@ class Plugin:
 
     @classmethod
     def _profile_options(cls, settings, prefix, additional_options, label):
-        settings, _ = cls._normalize_policy_settings(settings)
+        settings, _, _ = cls._normalize_policy_settings(settings)
         options = cls._validate_options(settings.get(f"{prefix}_options", additional_options), label)
         generated = []
         defaults = POLICY_DEFAULTS[prefix]
 
-        if settings.get(f"{prefix}_10bit", defaults["10bit"]):
-            generated.append("-10bit")
-
-        allow_hdr = bool(settings.get(f"{prefix}_hdr", defaults["hdr"]))
         force_sdr = bool(settings.get(f"{prefix}_sdr", defaults["sdr"]))
         if force_sdr:
             generated.append("-sdr")
-        elif allow_hdr:
-            generated.append("-hdr")
 
         if settings.get(f"{prefix}_deint", defaults["deint"]):
             generated.append("-deint")

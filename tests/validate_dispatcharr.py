@@ -19,10 +19,20 @@ spec.loader.exec_module(module)
 manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 plugin = module.Plugin()
 
-assert plugin.version == "0.2.1-beta.1"
+assert plugin.version == "0.2.1-beta.2"
 assert manifest["version"] == plugin.version
 assert (PLUGIN_DIR / "ffmpeg-smart.sh").is_file()
 assert (PLUGIN_DIR / "ffmpeg-smart-plugin.sh").is_file()
+assert (PLUGIN_DIR / "FFMPEG_ADAPTIVE_LICENSE").is_file()
+for module_name in (
+    "ffsmart-cache.sh",
+    "ffsmart-cli.sh",
+    "ffsmart-common.sh",
+    "ffsmart-hardware.sh",
+    "ffsmart-policy.sh",
+    "ffsmart-probe.sh",
+):
+    assert (PLUGIN_DIR / "lib" / module_name).is_file()
 assert os.access(PLUGIN_DIR / "ffmpeg-smart.sh", os.X_OK)
 assert os.access(PLUGIN_DIR / "ffmpeg-smart-plugin.sh", os.X_OK)
 assert module.STATE_DIR == Path("/data/ffmpeg_smart_profiles")
@@ -34,7 +44,8 @@ outputs = plugin._output_definitions({})
 assert len(streams) == 1
 assert streams[0]["name"] == "FFmpeg Smart"
 assert streams[0]["command"] == str(PLUGIN_DIR / "ffmpeg-smart-plugin.sh")
-assert streams[0]["parameters"].endswith("-10bit -hdr")
+assert "-10bit" not in streams[0]["parameters"]
+assert "-hdr" not in streams[0]["parameters"]
 
 assert len(outputs) == 1
 assert outputs[0]["name"] == "FFMpeg Smart - 720p Mobile"
@@ -80,7 +91,7 @@ assert advanced_tokens.index("-ffmpeg-video-mode") < advanced_tokens.index("-ffm
 assert advanced_tokens.index("-ffmpeg-audio-mode") < advanced_tokens.index("-ffmpeg-mux-mode")
 assert "expr:gte(t,n_forced*2)" in advanced_tokens
 
-# Force SDR must win without raising an error when both controls are enabled.
+# Legacy HDR settings must be ignored while Force SDR remains explicit.
 override = plugin._stream_definitions(
     {"stream_1_hdr": True, "stream_1_sdr": True}
 )[0]["parameters"]
@@ -93,19 +104,20 @@ legacy_stream = plugin._stream_definitions(
 legacy_output = plugin._output_definitions(
     {"output_1_options": "-maxres 720 -maxbr 2M -maxchan 2 -sdr -deint"}
 )[0]["parameters"]
-assert legacy_stream.count("-10bit") == 1
-assert legacy_stream.count("-hdr") == 1
+assert "-10bit" not in legacy_stream
+assert "-hdr" not in legacy_stream
 assert legacy_output.count("-sdr") == 1
 assert legacy_output.count("-deint") == 1
 
-normalized, moved = plugin._normalize_policy_settings(
+normalized, moved, removed = plugin._normalize_policy_settings(
     {"output_2_options": "-maxres 1080 -10bit -hdr -sdr -deinterlace"}
 )
 assert normalized["output_2_options"] == "-maxres 1080"
-assert normalized["output_2_10bit"] is True
-assert normalized["output_2_hdr"] is True
+assert "output_2_10bit" not in normalized
+assert "output_2_hdr" not in normalized
 assert normalized["output_2_sdr"] is True
 assert normalized["output_2_deint"] is True
-assert len(moved) == 4
+assert moved == ["output_2:-sdr", "output_2:-deinterlace"]
+assert removed == ["output_2:-10bit", "output_2:-hdr"]
 
 print("Installed Dispatcharr plugin defaults and generated profiles passed")

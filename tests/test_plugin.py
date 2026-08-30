@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import json
 import os
 import shlex
@@ -133,8 +134,8 @@ class ProfileDefinitionTests(unittest.TestCase):
         outputs = plugin._output_definitions({})
 
         self.assertEqual([profile["name"] for profile in streams], ["FFmpeg Smart"])
-        self.assertIn("-10bit", streams[0]["parameters"])
-        self.assertIn("-hdr", streams[0]["parameters"])
+        self.assertNotIn("-10bit", streams[0]["parameters"])
+        self.assertNotIn("-hdr", streams[0]["parameters"])
         self.assertEqual([profile["name"] for profile in outputs], ["FFMpeg Smart - 720p Mobile"])
         self.assertTrue(
             all(profile["command"].endswith("ffmpeg-smart-plugin.sh") for profile in streams + outputs)
@@ -324,7 +325,7 @@ class ProfileDefinitionTests(unittest.TestCase):
                 }
             )
 
-    def test_policy_checkboxes_generate_flags_and_sdr_overrides_hdr(self):
+    def test_policy_checkboxes_generate_only_sdr_and_deinterlace_flags(self):
         plugin = Plugin()
         outputs = plugin._output_definitions(
             {
@@ -338,15 +339,19 @@ class ProfileDefinitionTests(unittest.TestCase):
         )
 
         parameters = outputs[0]["parameters"]
-        self.assertIn("-10bit", parameters)
         self.assertIn("-sdr", parameters)
+        self.assertNotIn("-10bit", parameters)
         self.assertNotIn("-hdr", parameters)
         self.assertIn("-deint", parameters)
 
-    def test_legacy_policy_flags_are_absorbed_by_checkbox_defaults(self):
+    def test_legacy_policy_flags_are_removed_and_remaining_flags_are_normalized(self):
         plugin = Plugin()
-        normalized, moved = plugin._normalize_policy_settings(
-            {"stream_1_options": "-10bit -hdr -maxres 1080"}
+        normalized, moved, removed = plugin._normalize_policy_settings(
+            {
+                "stream_1_10bit": True,
+                "stream_1_hdr": True,
+                "stream_1_options": "-10bit -hdr -maxres 1080 -sdr -deinterlace",
+            }
         )
         streams = plugin._stream_definitions(
             {"stream_1_options": "-10bit -hdr -maxres 1080"}
@@ -355,14 +360,25 @@ class ProfileDefinitionTests(unittest.TestCase):
             {"output_1_options": "-maxres 720 -sdr -deint"}
         )
 
-        self.assertEqual(streams[0]["parameters"].count("-10bit"), 1)
-        self.assertEqual(streams[0]["parameters"].count("-hdr"), 1)
+        self.assertNotIn("-10bit", streams[0]["parameters"])
+        self.assertNotIn("-hdr", streams[0]["parameters"])
         self.assertEqual(outputs[0]["parameters"].count("-sdr"), 1)
         self.assertEqual(outputs[0]["parameters"].count("-deint"), 1)
         self.assertEqual(normalized["stream_1_options"], "-maxres 1080")
-        self.assertTrue(normalized["stream_1_10bit"])
-        self.assertTrue(normalized["stream_1_hdr"])
-        self.assertEqual(moved, ["stream_1:-10bit", "stream_1:-hdr"])
+        self.assertNotIn("stream_1_10bit", normalized)
+        self.assertNotIn("stream_1_hdr", normalized)
+        self.assertTrue(normalized["stream_1_sdr"])
+        self.assertTrue(normalized["stream_1_deint"])
+        self.assertEqual(moved, ["stream_1:-sdr", "stream_1:-deinterlace"])
+        self.assertEqual(
+            removed,
+            [
+                "stream_1:stream_1_10bit",
+                "stream_1:stream_1_hdr",
+                "stream_1:-10bit",
+                "stream_1:-hdr",
+            ],
+        )
 
     def test_manual_probe_limits_are_removed_from_saved_input_options(self):
         plugin = Plugin()
@@ -418,14 +434,18 @@ class ProfileDefinitionTests(unittest.TestCase):
 
         saved = save_settings.call_args.args[0]
         self.assertEqual(saved["output_2_options"], "-maxres 1080")
-        self.assertTrue(saved["output_2_10bit"])
-        self.assertTrue(saved["output_2_hdr"])
+        self.assertNotIn("output_2_10bit", saved)
+        self.assertNotIn("output_2_hdr", saved)
         self.assertTrue(saved["output_2_sdr"])
         self.assertTrue(saved["output_2_deint"])
         self.assertEqual(saved["output_2_ffmpeg_input_options"], "")
         self.assertEqual(
             result["normalized_probe_options"],
             ["output_2:-analyzeduration", "output_2:-probesize"],
+        )
+        self.assertEqual(
+            result["removed_automatic_policy_flags"],
+            ["output_2:-10bit", "output_2:-hdr"],
         )
         self.assertIn("refresh the settings page", result["message"])
 
@@ -806,6 +826,7 @@ class PersistentStateTests(unittest.TestCase):
             shutil.copyfile(source_dir / plugin_path.name, plugin_path)
             shutil.copyfile(source_dir / launcher.name, launcher)
             shutil.copyfile(source_dir / wrapper.name, wrapper)
+            shutil.copytree(source_dir / "lib", plugin_dir / "lib")
             launcher.chmod(0o644)
             wrapper.chmod(0o644)
 
@@ -861,6 +882,7 @@ class PersistentStateTests(unittest.TestCase):
             with (
                 patch("plugin.SCRIPT_PATH", wrapper),
                 patch("plugin.LAUNCHER_PATH", launcher),
+                patch("plugin.RUNTIME_MODULE_PATHS", ()),
                 patch("plugin.STATE_DIR", runtime.parent),
                 patch("plugin.RUNTIME_DIR", runtime),
             ):
@@ -868,6 +890,22 @@ class PersistentStateTests(unittest.TestCase):
 
             self.assertEqual(wrapper.stat().st_mode & 0o777, 0o755)
             self.assertEqual(launcher.stat().st_mode & 0o777, 0o755)
+
+    def test_script_check_rejects_an_incomplete_modular_bundle(self):
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            wrapper = temp_path / "ffmpeg-smart.sh"
+            launcher = temp_path / "ffmpeg-smart-plugin.sh"
+            missing_module = temp_path / "lib" / "ffsmart-cache.sh"
+            wrapper.write_text("#!/bin/bash\n", encoding="utf-8")
+            launcher.write_text("#!/bin/bash\n", encoding="utf-8")
+            with (
+                patch("plugin.SCRIPT_PATH", wrapper),
+                patch("plugin.LAUNCHER_PATH", launcher),
+                patch("plugin.RUNTIME_MODULE_PATHS", (missing_module,)),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "runtime module is missing"):
+                    plugin._repair_script_permissions()
 
 
 class ReleaseMetadataTests(unittest.TestCase):
@@ -905,35 +943,77 @@ class ReleaseMetadataTests(unittest.TestCase):
 
         for filename in (
             "FFMPEG_SMART_SOURCE.json",
+            "FFMPEG_ADAPTIVE_LICENSE",
             "ffmpeg-smart-plugin.sh",
             "ffmpeg-smart.sh",
             "plugin.json",
             "plugin.py",
+            "lib/ffsmart-cache.sh",
+            "lib/ffsmart-cli.sh",
+            "lib/ffsmart-common.sh",
+            "lib/ffsmart-hardware.sh",
+            "lib/ffsmart-policy.sh",
+            "lib/ffsmart-probe.sh",
         ):
             self.assertTrue((runtime_dir / filename).is_file(), filename)
 
+        dependency_license = (runtime_dir / "FFMPEG_ADAPTIVE_LICENSE").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("MIT License", dependency_license)
+        self.assertIn("Copyright (c) 2026 Jarred Saperton", dependency_license)
+
+    def test_source_manifest_pins_the_complete_modular_runtime(self):
+        runtime_dir = REPO_ROOT / "ffmpeg-smart-profiles"
+        metadata = json.loads(
+            (runtime_dir / "FFMPEG_SMART_SOURCE.json").read_text(encoding="utf-8")
+        )
+        expected_paths = {
+            "ffmpeg-smart.sh",
+            "lib/ffsmart-cache.sh",
+            "lib/ffsmart-cli.sh",
+            "lib/ffsmart-common.sh",
+            "lib/ffsmart-hardware.sh",
+            "lib/ffsmart-policy.sh",
+            "lib/ffsmart-probe.sh",
+        }
+
+        self.assertEqual(metadata["repository"], "matrix2669/ffmpeg-adaptive")
+        self.assertRegex(metadata["commit"], r"^[0-9a-f]{40}$")
+        self.assertEqual({entry["path"] for entry in metadata["files"]}, expected_paths)
+        for entry in metadata["files"]:
+            runtime_path = runtime_dir / entry["path"]
+            self.assertEqual(
+                hashlib.sha256(runtime_path.read_bytes()).hexdigest(),
+                entry["sha256"],
+            )
+            self.assertEqual(
+                runtime_path.stat().st_mode & 0o777,
+                int(entry["mode"], 8),
+            )
+
     def test_bundled_wrapper_copies_mapped_auxiliary_streams(self):
-        wrapper = (
-            REPO_ROOT / "ffmpeg-smart-profiles" / "ffmpeg-smart.sh"
+        policy_module = (
+            REPO_ROOT / "ffmpeg-smart-profiles" / "lib" / "ffsmart-policy.sh"
         ).read_text(encoding="utf-8")
 
         self.assertIn(
-            "MAPPED_AUXILIARY_CODEC_ARGS=(-c:s copy -c:d copy -c:t copy)",
-            wrapper,
+            "FFSMART_AUXILIARY_ARGS=(-c:s copy -c:d copy -c:t copy)",
+            policy_module,
         )
         self.assertEqual(
-            wrapper.count('"${MAPPED_AUXILIARY_CODEC_ARGS[@]}"'),
+            policy_module.count('"${FFSMART_AUXILIARY_ARGS[@]}"'),
             2,
         )
 
     def test_bundled_wrapper_keeps_benchmark_lock_owner_scoped(self):
-        wrapper = (
-            REPO_ROOT / "ffmpeg-smart-profiles" / "ffmpeg-smart.sh"
+        common_module = (
+            REPO_ROOT / "ffmpeg-smart-profiles" / "lib" / "ffsmart-common.sh"
         ).read_text(encoding="utf-8")
 
-        self.assertIn('[[ "${BASH_SUBSHELL:-0}" -eq 0 ]] || return 0', wrapper)
-        self.assertIn('BENCHMARK_LOCK_OWNER_PID="$$"', wrapper)
-        self.assertIn("trap cleanup_benchmark_lock EXIT", wrapper)
+        self.assertIn("if (( ${BASH_SUBSHELL:-0} != 0 )); then", common_module)
+        self.assertIn('FFSMART_LOCK_OWNER_PID="$$"', common_module)
+        self.assertIn("trap ffsmart_exit_cleanup EXIT HUP INT TERM", common_module)
 
 
 if __name__ == "__main__":

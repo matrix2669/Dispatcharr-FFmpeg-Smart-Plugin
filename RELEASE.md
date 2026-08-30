@@ -11,7 +11,7 @@
 
 ## Required validation
 
-Run the complete automated gate from `AGENT.md`, including tests, compilation, JSON checks, shell syntax, and offline source-pin verification. With network access, verify the pinned bytes against the immutable `ffmpeg-asr` commit.
+Run the complete automated gate from `AGENT.md`, including tests, compilation, JSON checks, shell syntax, and offline source-pin verification. With network access, verify every pinned runtime file against the immutable `ffmpeg-adaptive` commit.
 
 Also verify, as applicable:
 
@@ -20,7 +20,7 @@ Also verify, as applicable:
 - profile installation/update/removal conflict and restart behavior;
 - a real Output Profile through `pipe:0` when the wrapper changed;
 - recache maintenance coordination when plugin orchestration changed;
-- the exact tag archive contains `ffmpeg-smart-profiles/plugin.json`, `plugin.py`, executable `ffmpeg-smart.sh`, and `FFMPEG_SMART_SOURCE.json` beneath the stable plugin directory;
+- the exact tag archive contains `ffmpeg-smart-profiles/plugin.json`, `plugin.py`, executable `ffmpeg-smart.sh`, every pinned `lib/*.sh` module with its recorded mode, `FFMPEG_SMART_SOURCE.json`, and `FFMPEG_ADAPTIVE_LICENSE` beneath the stable plugin directory;
 - the registry metadata references the exact tag and full commit.
 
 If the supported, minimum, tested, or deployed Dispatcharr version changed, complete the official-repository compatibility refresh gate in `AGENT.md` before continuing.
@@ -49,23 +49,29 @@ Untagged `dev` commits are development state and do not replace a published test
 
 A completed stable tag does not automatically authorize a GitHub Release or `dispatcharr-plugins:main` publication.
 
-Exception: the user explicitly approved plugin `v0.2.0` for focused `dispatcharr-plugins:main` publication without a GitHub Release on `2026-08-26`, while continuing to prohibit a Release and distributable ZIP until inherited-wrapper licensing is resolved. This exception is limited to the exact immutable `v0.2.0` tag/archive and commit, must be recorded in `AGENT.md` and `DECISIONS.md`, and cannot authorize any later version.
+Historical exception: the user explicitly approved plugin `v0.2.0` for focused `dispatcharr-plugins:main` publication without a GitHub Release on `2026-08-26`, while continuing to prohibit a Release and distributable ZIP for that inherited-wrapper build. This exception remains limited to the exact immutable `v0.2.0` tag/archive and commit and cannot authorize a correction or later version.
 
 ## GitHub Release and stable registry
 
-New Releases and distributable ZIPs are currently blocked by the inherited-wrapper licensing decision in `DECISIONS.md`. The existing v0.1.0 Release is historical and does not waive this gate.
+New versions bundling the pinned MIT-licensed `ffmpeg-adaptive` runtime may proceed through the normal Release gate below. Historical tags that bundled inherited `ffmpeg-asr` source retain their original provenance and must not be repackaged under this permission.
 
-After licensing is explicitly resolved:
-
-1. Record the license source, copyright holder authorization, attribution, and compatibility decision.
+1. Verify the exact tag bundles only the recorded MIT `ffmpeg-adaptive` files and preserves `FFMPEG_ADAPTIVE_LICENSE`.
 2. Obtain explicit user approval to publish this exact stable tag as a GitHub Release.
 3. Build `dispatcharr-ffmpeg-smart-plugin-vMAJOR.MINOR.PATCH.zip` with this layout:
 
    ```text
    ffmpeg-smart-profiles/
+   ├── FFMPEG_ADAPTIVE_LICENSE
    ├── FFMPEG_SMART_SOURCE.json
    ├── ffmpeg-smart-plugin.sh
    ├── ffmpeg-smart.sh
+   ├── lib/
+   │   ├── ffsmart-cache.sh
+   │   ├── ffsmart-cli.sh
+   │   ├── ffsmart-common.sh
+   │   ├── ffsmart-hardware.sh
+   │   ├── ffsmart-policy.sh
+   │   └── ffsmart-probe.sh
    ├── plugin.json
    └── plugin.py
    ```

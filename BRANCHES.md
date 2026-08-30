@@ -15,7 +15,8 @@ This ledger records why every current branch exists and preserves the context ne
 |---|---|---|---|---|---|
 | `main` | long-lived | active | initial project history | stable tags | Production-ready plugin source and stable tags. |
 | `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version and canonical wrapper updates. |
-| `feature/adaptive-input-probing` | feature | active | `dev` | `dev` | Pin canonical adaptive probing, migrate manual probe settings, and prepare `v0.2.1-beta.1`. |
+| `feature/adaptive-input-probing` | feature | integrated | `dev` | `dev` | Pin canonical adaptive probing, migrate manual probe settings, and prepare `v0.2.1-beta.1`. |
+| `feature/ffmpeg-adaptive-migration` | feature | active | `dev` after adaptive-probing integration | `dev` | Vendor the modular MIT wrapper, remove redundant HDR/10-bit controls, and prepare `v0.2.1-beta.2`. |
 
 ## Branch records
 
@@ -42,8 +43,28 @@ This ledger records why every current branch exists and preserves the context ne
 - Base and target: `dev` at `6654a202e286f4c8b80d7845040880f76862d1f2`; target `dev` after live beta validation.
 - Canonical source: `ffmpeg-asr v1.1.1-beta.1` commit `ecc64244dae2c0e80761da6f16be92d95b91d29a`, SHA-256 `785a2ffe283452006ffa50d36e12fd2a013f54e0bd233f6d3c8d87f8a46f0f71`.
 - Scope: immutable wrapper pin, profile-setting migration, documentation, decision record, tests, beta tag, development registry, and live test deployment.
-- State: active; no stable promotion, GitHub Release, distributable ZIP, or stable-registry update is authorized.
+- State: integrated into local `dev` as the base for the standalone-wrapper
+  migration; its tag and development deployment remain immutable historical
+  evidence.
 - Last reviewed: `2026-08-27`.
+
+### `feature/ffmpeg-adaptive-migration`
+
+- Purpose: move the plugin's pinned canonical runtime from the prior
+  `ffmpeg-asr` beta to the modular MIT-licensed `ffmpeg-adaptive` beta without
+  changing accepted stream behavior.
+- Base and target: `dev` after merging `feature/adaptive-input-probing`; target
+  `dev` after automated, archive, and managed Dispatcharr validation.
+- Canonical source: `ffmpeg-adaptive v0.1.0-beta.1` commit
+  `80d648bbb0f93c45d5a7198bd7bf9260e9febd32`.
+- Scope: multi-file source pin/check/sync, bundled `lib/` runtime, removal and
+  migration of retired HDR/10-bit settings and flags, version `0.2.1-beta.2`,
+  tests, documentation, beta tag, development registry, and live test
+  deployment.
+- Out of scope: wrapper behavior changes, Stream Sort, stable promotion, and
+  stable-registry publication.
+- State: active; not integrated, tagged, published, or deployed.
+- Last reviewed: `2026-08-30`.
 
 ## Completed branch cleanup
 

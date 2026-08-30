@@ -20,7 +20,7 @@ Install **FFmpeg Smart Profiles**, enable it, then run **Install or Update Profi
 
 Every managed profile points to the bundled `ffmpeg-smart-plugin.sh` launcher. The launcher keeps mutable state in `/data/ffmpeg_smart_profiles`, enables the canonical degraded proxy option, and then executes the bundled `ffmpeg-smart.sh`. With a valid cache, Output Profiles use its pipe-safe `-i pipe:0` mode, which samples the stream for probing and prepends the sampled packets when transcoding starts. When a required scan is pending or active, the same launcher skips Smart probing and uses direct FFmpeg stream copy instead.
 
-Every slot has an enable checkbox, editable profile name, checkboxes for 10-bit, HDR, SDR, and deinterlacing, editable additional `ffmpeg-smart` policy options, and scoped advanced FFmpeg controls. If Allow HDR and Force SDR are both checked, Force SDR takes precedence and only `-sdr` is written to the profile. Running **Install or Update Profiles** reconciles renamed or disabled managed profiles when the corresponding cleanup setting is enabled. Existing development profiles that used the native `ffmpeg` command are migrated to the script when their names match the original bundled templates.
+Every slot has an enable checkbox, editable profile name, Force SDR and Force deinterlace checkboxes, editable additional `ffmpeg-smart` policy options, and scoped advanced FFmpeg controls. HDR and 10-bit selection are automatic; Force SDR emits `-sdr` when conversion is required. Running **Install or Update Profiles** removes retired `-10bit`/`-hdr` settings and flags, moves legacy `-sdr`/`-deint` options to their checkboxes, and reconciles renamed or disabled managed profiles when the corresponding cleanup setting is enabled. Existing development profiles that used the native `ffmpeg` command are migrated to the script when their names match the original bundled templates.
 
 The advanced controls retain FFmpeg Smart's hardware benefits while exposing options at the phase where FFmpeg expects them:
 
@@ -78,16 +78,16 @@ Because benchmark-time starts now take the degraded stream-copy path, Dispatchar
 - `bash`, `ffmpeg`, `ffprobe`, `jq`, and GNU `timeout`
 - `/dev/dri/renderD*` mapped into the Dispatcharr container for QSV/VAAPI
 
-## Bundled wrapper updates
+## Bundled runtime updates
 
-`matrix2669/ffmpeg-asr` is the source of truth for `ffmpeg-smart.sh`. The plugin records the exact source commit and SHA-256 checksum in `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json`. CI verifies that the bundled copy is byte-for-byte identical to that immutable source.
+`matrix2669/ffmpeg-adaptive` is the source of truth for the modular `ffmpeg-smart.sh` runtime. The plugin records one exact source commit plus the path, SHA-256 checksum, and installed mode of the entrypoint and every `lib/*.sh` module in `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json`. CI verifies that the complete bundle is byte-for-byte identical to that immutable source.
 
-The daily **Sync FFmpeg Smart wrapper** workflow, which can also be run manually, checks `ffmpeg-asr/main`. When the wrapper changes, it updates the bundled copy and source metadata, runs validation, and opens a pull request for review. Existing plugin releases remain pinned and never change silently.
+The daily **Sync FFmpeg Adaptive runtime** workflow, which can also be run manually, checks the metadata's tracked `ffmpeg-adaptive` ref. When any runtime file changes, it updates the complete bundle and source metadata, runs validation, and opens a pull request for review. Existing plugin releases remain pinned and never change silently.
 
 To synchronize locally:
 
 ```bash
-scripts/sync-ffmpeg-smart.sh main
+scripts/sync-ffmpeg-smart.sh
 scripts/check-ffmpeg-smart-source.sh
 ```
 
@@ -102,8 +102,8 @@ scripts/check-ffmpeg-smart-source.sh
 
 The source repository uses `main` for production-ready stable code and `dev` for next-version integration. Immutable beta and completed stable tags feed the `dispatcharr-plugins:dev` registry. Stable-registry publication normally requires an explicitly approved GitHub Release; `v0.2.0` has a narrow operator-approved exception so the fully validated tag can be installed from the stable channel while Release packaging remains blocked.
 
-The existing `v0.1.0` Release predates the inherited-wrapper licensing review. New GitHub Releases and distributable plugin ZIPs remain blocked until the licensing of the inherited `ffmpeg-smart.sh` source is explicitly resolved; see `DECISIONS.md` and `RELEASE.md`.
+Historical tags through `v0.2.1-beta.1` retain their recorded `ffmpeg-asr` provenance and must not be repackaged under a new license. Starting with `v0.2.1-beta.2`, the bundled runtime is the independently published MIT-licensed `ffmpeg-adaptive` project, so new plugin versions may use the normal Release and stable-publication gates in `RELEASE.md`.
 
 ## License
 
-matrix2669-authored plugin code is MIT licensed. The bundled wrapper retains the licensing provenance of its canonical `ffmpeg-asr` source; see `DECISIONS.md` for the current distribution boundary.
+The plugin is MIT licensed. Its bundled `ffmpeg-adaptive` dependency is also MIT licensed; the dependency notice is preserved as `ffmpeg-smart-profiles/FFMPEG_ADAPTIVE_LICENSE`. Historical tags retain their original provenance.
