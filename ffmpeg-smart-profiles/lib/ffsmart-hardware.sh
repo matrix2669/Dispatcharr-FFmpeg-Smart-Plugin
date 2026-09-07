@@ -9,6 +9,37 @@ ffsmart_decoder_available() {
 }
 
 FFSMART_HW_DECODE_ARGS=()
+FFSMART_BENCHMARK_LOG_FAILURE=false
+FFSMART_BENCHMARK_RUN_DIR=""
+
+ffsmart_benchmark_log_path() {
+    printf '%s/%s' "${FFSMART_BENCHMARK_RUN_DIR:-$FFSMART_STATE_DIR}" "$1"
+}
+
+ffsmart_prepare_benchmark_log() {
+    local log_file="$1"
+    if ! : > "$log_file"; then
+        FFSMART_BENCHMARK_LOG_FAILURE=true
+        ffsmart_fail 73 benchmark-log-write "Cannot write benchmark diagnostic: $log_file"
+        return 73
+    fi
+}
+
+ffsmart_publish_benchmark_log() {
+    local target="$FFSMART_STATE_DIR/benchmark-latest.log" temporary="$target.tmp.$$" log
+    {
+        printf 'FFmpeg Smart benchmark diagnostics\n'
+        printf 'completed_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        for log in "$FFSMART_BENCHMARK_RUN_DIR"/*.log; do
+            [[ -e "$log" ]] || continue
+            printf '\n===== %s =====\n' "${log##*/}"
+            cat -- "$log"
+        done
+    } > "$temporary" || return 1
+    rm -f -- "$FFSMART_STATE_DIR"/candidate-*.log "$FFSMART_STATE_DIR"/capacity-*.log "$FFSMART_STATE_DIR"/10bit-*.log
+    mv -f -- "$temporary" "$target" || return 1
+    rm -rf -- "$FFSMART_BENCHMARK_RUN_DIR"
+}
 ffsmart_build_hardware_decode_args() {
     local accel="$1" node="$2"
     FFSMART_HW_DECODE_ARGS=()
@@ -104,9 +135,11 @@ ffsmart_extract_speed() {
 
 ffsmart_benchmark_candidate() {
     local node="$1" accel="$2" codec="$3" low_power="$4" duration="${5:-5}"
-    local log_file="$FFSMART_STATE_DIR/candidate-${node##*/}-${accel}-${codec}-${low_power}.log" speed
+    local log_file speed
+    log_file="$(ffsmart_benchmark_log_path "candidate-${node##*/}-${accel}-${codec}-${low_power}.log")"
+    ffsmart_prepare_benchmark_log "$log_file" || return
     ffsmart_build_benchmark_command "$node" "$accel" "$codec" "$low_power" "$duration" || return 1
-    if "${FFSMART_BENCH_CMD[@]}" > /dev/null 2> "$log_file"; then
+    if "${FFSMART_BENCH_CMD[@]}" > /dev/null 2>> "$log_file"; then
         speed="$(ffsmart_extract_speed "$log_file")"
         awk -v s="$speed" 'BEGIN { exit !(s > 0) }' || return 1
         printf '%s' "$speed"
@@ -116,7 +149,9 @@ ffsmart_benchmark_candidate() {
 }
 
 ffsmart_probe_10bit() {
-    local node="$1" accel="$2" direction="$3" log_file="$FFSMART_STATE_DIR/10bit-${node##*/}-${accel}-${direction}.log"
+    local node="$1" accel="$2" direction="$3" log_file
+    log_file="$(ffsmart_benchmark_log_path "10bit-${node##*/}-${accel}-${direction}.log")"
+    ffsmart_prepare_benchmark_log "$log_file" || return
     [[ -s "$FFSMART_HEVC10_SAMPLE" ]] || return 1
     case "$accel:$direction" in
         qsv:decode)
@@ -149,9 +184,10 @@ ffsmart_capacity_level_stable() {
     timeout_marker="$FFSMART_STATE_DIR/.capacity-timeout.$$"
     rm -f -- "$timeout_marker"
     for ((index=1; index<=level; index++)); do
-        log="$FFSMART_STATE_DIR/capacity-${node##*/}-${level}-${index}.log"
+        log="$(ffsmart_benchmark_log_path "capacity-${node##*/}-${level}-${index}.log")"
+        ffsmart_prepare_benchmark_log "$log" || return
         ffsmart_build_benchmark_command "$node" "$accel" "$codec" "$low_power" "$duration" || return 1
-        "${FFSMART_BENCH_CMD[@]}" > /dev/null 2> "$log" &
+        "${FFSMART_BENCH_CMD[@]}" > /dev/null 2>> "$log" &
         pids+=("$!")
         logs+=("$log")
     done
@@ -283,6 +319,9 @@ ffsmart_measure_capacity() {
 ffsmart_rebuild_cache() {
     local force_rebenchmark="${1:-true}"
     ffsmart_lock_acquire || return
+    FFSMART_BENCHMARK_LOG_FAILURE=false
+    FFSMART_BENCHMARK_RUN_DIR="$FFSMART_STATE_DIR/.benchmark-run.$$"
+    mkdir -p -- "$FFSMART_BENCHMARK_RUN_DIR" || { ffsmart_fail 73 benchmark-log-write "Cannot create benchmark diagnostics directory"; return 73; }
     ffsmart_ensure_benchmark_samples || return
     if [[ "$force_rebenchmark" == true ]]; then
         FFSMART_REUSE_SIGNATURES=()
@@ -303,6 +342,7 @@ ffsmart_rebuild_cache() {
             node_best_low="$(ffsmart_device_get low_power "$node")"
             ffsmart_log "Reused hardware result node=$node signature=$(ffsmart_device_get signature "$node") accel=$node_best_accel codec=$node_best_codec capacity=$(ffsmart_device_get capacity "$node")"
         fi
+        [[ "$FFSMART_BENCHMARK_LOG_FAILURE" == false ]] || return 73
         if [[ -z "$node_best_accel" ]]; then
         for accel in qsv vaapi; do
             [[ "$accel" == qsv ]] && [[ "$(ffsmart_device_get signature "$node")" == 0x8086:* ]] || [[ "$accel" == vaapi ]] || continue
@@ -329,6 +369,8 @@ ffsmart_rebuild_cache() {
             best_speed="$node_best_speed"; best_node="$node"; best_accel="$node_best_accel"; best_codec="$node_best_codec"; best_low_power="$node_best_low"
         fi
     done
+
+    [[ "$FFSMART_BENCHMARK_LOG_FAILURE" == false ]] || return 73
 
     if [[ -n "$best_node" ]]; then
         for node in "${FFSMART_RENDER_NODES[@]}"; do
@@ -365,6 +407,7 @@ ffsmart_rebuild_cache() {
         if ffsmart_probe_10bit "$node" "$accel" encode; then e10=true; else e10=false; fi
         ffsmart_device_set decode10 "$node" "$d10"
         ffsmart_device_set encode10 "$node" "$e10"
+        [[ "$FFSMART_BENCHMARK_LOG_FAILURE" == false ]] || return 73
     done
 
     if (( compatible_nodes > 1 )); then
@@ -373,6 +416,7 @@ ffsmart_rebuild_cache() {
             [[ -n "$(ffsmart_device_get capacity "$node" || true)" ]] && continue
             capacity="$(ffsmart_measure_capacity "$node" "$accel" "$(ffsmart_device_get codec "$node")" "$(ffsmart_device_get low_power "$node")" "$(ffsmart_device_get speed "$node")")"
             ffsmart_device_set capacity "$node" "$capacity"
+            [[ "$FFSMART_BENCHMARK_LOG_FAILURE" == false ]] || return 73
         done
     else
         for node in "${FFSMART_RENDER_NODES[@]}"; do
@@ -414,6 +458,7 @@ ffsmart_rebuild_cache() {
     fi
     FFSMART_CACHE_FINGERPRINT="$(ffsmart_current_fingerprint)"
     ffsmart_cache_write
+    ffsmart_publish_benchmark_log || { ffsmart_fail 73 benchmark-log-write "Cannot consolidate successful benchmark diagnostics"; return 73; }
     ffsmart_log "Capability cache rebuilt: accel=$best_accel codec=$best_codec primary=$FFSMART_CACHE_PRIMARY_DEVICE secondary=$FFSMART_CACHE_SECONDARY_DEVICE"
 }
 

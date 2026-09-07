@@ -4,6 +4,13 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ## [Unreleased]
 
+## [0.2.1-beta.4] - 2026-09-07
+
+### Fixed
+
+- Pin `ffmpeg-adaptive v0.1.0-beta.3` so a benchmark diagnostic write failure
+  fails the rebuild and successful rebuilds retain one consolidated log.
+
 ## [0.2.1-beta.3] - 2026-08-30
 
 ### Changed
