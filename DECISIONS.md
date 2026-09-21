@@ -1308,8 +1308,8 @@ robust PID identity parsing. Expired empty or `starting` benchmark placeholders
 are stale and reclaimable, while fresh placeholders and live PID-owned locks
 remain protected. Startup cleanup releases admission even when PID-file removal
 fails and never masks the original startup error. Canonical runtime changes remain owned by
-`ffmpeg-adaptive`; the complete immutable bundle must be synchronized and
-reviewed before plugin publication.
+`ffmpeg-adaptive`; this beta.5 bundle was synchronized and reviewed before
+publication, and future runtime changes require the same immutable-source gate.
 
 ## Provenance
 
@@ -1317,3 +1317,57 @@ reviewed before plugin publication.
   2026-09-21.
 - Plugin repair branch `fix/benchmark-outcome-beta5` from remote `dev` commit
   `38f7d17ca1698343cd5ca4dc82e29edb237400d2`.
+
+---
+
+# ADR-028: Record beta.5 publication and completed managed validation
+
+## Status
+
+Accepted for the immutable beta.5 development release; the managed update and
+bounded hardware validation are complete. Stable/main promotion and GitHub
+Release remain separate gates.
+
+## Date
+
+2026-09-21
+
+## Decision
+
+Record the exact plugin tag, wrapper source, CI runs, development-registry
+publication, archive checksum, managed update evidence, benchmark outcome, and
+bounded hardware proof. The plugin tag is `v0.2.1-beta.5` at
+`a5c0777875056591e4e02c989993f43b3f43aa72`; the wrapper beta.4 source is
+`913a958fd5f9edc231c49a70539a09f611fdcc5a`; and the registry publication is
+`1e55f15ba3824f85209258b6b0dd3280c554924d`. These immutable artifacts and
+their passing CI/archive gates may be described as published development state.
+
+The official Dispatcharr v0.31.0 update passed at zero viewers with settings
+and enabled state preserved and no update offered. A benchmark began at
+`2026-09-21 17:45:40 UTC` after a zero-viewer/no-other-media check, stopped
+zero streams, and completed at `2026-09-21T17:51:16.719376+00:00` with return
+code 0, complete outcome, valid canonical cache, no PID, and no lock. It
+measured VAAPI/HEVC 10-bit decode and encode: `renderD129` capacity 19 at 14x
+and `renderD128` capacity 14 at 11.6x. The 1,508,339-byte consolidated log
+had no stray root candidate/capacity/10-bit logs or `.benchmark-run`
+directories. A bounded real-hardware managed-launcher fixture generated four
+seconds of H.264, fed it via `pipe:0`, and produced a 4.025-second 720p HEVC
+VAAPI output; it decoded 120 frames with `-xerror` and no errors. It did not fetch a
+provider channel or create a
+Dispatcharr profile; the final `17:52:25 UTC` snapshot had zero viewers,
+transcodes, and ffmpeg/ffprobe processes.
+
+## Consequences
+
+Release and registry provenance plus the completed bounded validation are
+durable. The fixture proof is not a provider-channel or Dispatcharr-profile
+validation. Stable/main promotion and GitHub Release remain outside this
+development publication.
+
+## Provenance
+
+- Plugin CI: tag `35631993818`; dev `35631991578`.
+- Wrapper reviewed CI definition `10a6e4b8e16b66857df3b03a7bb6d0bb88fc9929`,
+  run `35633440274`; the earlier ShellCheck 0.9 runs were false positives.
+- Registry CI `35633913052`; exact archive SHA-256 is
+  `db31ce469ea52433af24cf4568463a782fced202124cdf3440c854fcf9754836`.

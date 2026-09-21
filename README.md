@@ -12,6 +12,33 @@ https://raw.githubusercontent.com/matrix2669/dispatcharr-plugins/main/manifest.j
 
 Install **FFmpeg Smart Profiles**, enable it, then run **Install or Update Profiles**.
 
+The immutable development release is plugin tag `v0.2.1-beta.5` at commit
+`a5c0777875056591e4e02c989993f43b3f43aa72`, bundling `ffmpeg-adaptive` beta.4
+at commit `913a958fd5f9edc231c49a70539a09f611fdcc5a`. The exact tag archive
+(`https://api.github.com/repos/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/zipball/v0.2.1-beta.5`)
+passed native installer validation and has SHA-256
+`db31ce469ea52433af24cf4568463a782fced202124cdf3440c854fcf9754836`.
+The development registry root/detail manifests were published at commit
+`1e55f15ba3824f85209258b6b0dd3280c554924d`, which passed CI.
+
+The official Dispatcharr v0.31.0 managed update installed beta.5 at the
+approved zero-viewer gate, offered no further update, preserved enabled state
+and settings, and retained prerelease semantics for future updates. The
+hardware benchmark then completed at `2026-09-21T17:51:16.719376+00:00` with
+return code 0, a complete outcome, a valid canonical cache, no PID, and no
+benchmark lock. It measured VAAPI/HEVC 10-bit decode and encode, with primary
+`renderD129` capacity 19 at 14x and secondary `renderD128` capacity 14 at
+11.6x. The consolidated log was 1,508,339 bytes and contained no stray root
+candidate/capacity/10-bit logs or `.benchmark-run` directories.
+
+A bounded real-hardware managed-launcher check generated a four-second H.264
+fixture and fed it via `pipe:0`, producing a 4.025-second 720p HEVC VAAPI
+output; full decode with `-xerror` measured 120 frames without errors. This was a
+fixture/launcher proof, not a provider-channel fetch or Dispatcharr profile
+creation. The final `2026-09-21 17:52:25 UTC` snapshot had zero viewers,
+input/output transcodes, and ffmpeg/ffprobe processes, with runtime and
+manifest pins unchanged.
+
 ## Managed profiles
 
 - `FFmpeg Smart` Stream Profile, using the bundled adaptive hardware-aware wrapper.
@@ -97,6 +124,8 @@ scripts/check-ffmpeg-smart-source.sh
 - `BRANCHES.md` records why every current branch exists.
 - `DECISIONS.md` preserves architectural rationale and superseded approaches.
 - `CHANGELOG.md` records user-visible history.
+- `docs/beta5-validation-2026-09-21.md` records the immutable beta.5 and
+  completed managed validation evidence.
 - `RELEASE.md` defines version, tag, registry, packaging, and release procedures.
 - `VERSION` is the canonical plugin version and must match both plugin declarations.
 

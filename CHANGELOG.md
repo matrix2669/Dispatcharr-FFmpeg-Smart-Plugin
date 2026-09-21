@@ -27,8 +27,8 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 - Restore GPU/device capacity summaries from the canonical V2 cache format
   without using display parsing to decide cache validity.
 - Synchronize the complete seven-file wrapper bundle to immutable work-branch
-  commit `913a958fd5f9edc231c49a70539a09f611fdcc5a`, the accepted beta.4
-  candidate before its future tag is published.
+  commit `913a958fd5f9edc231c49a70539a09f611fdcc5a`, published as wrapper
+  beta.4.
 
 ### Validation
 
@@ -38,8 +38,30 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
   summaries, malformed cache records, and robust PID zombie handling.
   Added regressions for stale lock placeholders and cleanup failures.
 - Beta.4's existing version and source-pin failures remain recorded as negative
-  evidence; final Astra review, future dev/tag/registry publication, and live
-  Dispatcharr update and benchmark validation remain pending.
+  evidence. Astra final review passed; immutable plugin tag
+  `v0.2.1-beta.5` (`a5c0777875056591e4e02c989993f43b3f43aa72`) and wrapper
+  beta.4 (`913a958fd5f9edc231c49a70539a09f611fdcc5a`) passed their exact CI
+  gates, and development-registry commit
+  `1e55f15ba3824f85209258b6b0dd3280c554924d` passed CI.
+- The exact beta.5 tag archive passed native installer validation from
+  `https://api.github.com/repos/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/zipball/v0.2.1-beta.5`
+  with SHA-256
+  `db31ce469ea52433af24cf4568463a782fced202124cdf3440c854fcf9754836`.
+- Official Dispatcharr v0.31.0 managed update proof: beta.5 installed with no
+  update offered, enabled/settings state preserved, and prerelease semantics
+  retained. The zero-viewer benchmark started at `2026-09-21 17:45:40 UTC`,
+  stopped zero streams, and completed at
+  `2026-09-21T17:51:16.719376+00:00` with return code 0, complete outcome,
+  valid cache, no PID, and no lock. It measured VAAPI/HEVC 10-bit decode and
+  encode: `renderD129` capacity 19 at 14x and `renderD128` capacity 14 at
+  11.6x; `benchmark-latest.log` was 1,508,339 bytes with no stray root
+  candidate/capacity/10-bit logs or `.benchmark-run` directories. A bounded
+  real-hardware managed-launcher fixture test generated four seconds of H.264,
+  fed it via `pipe:0`, and produced a 4.025-second 720p HEVC VAAPI output; it
+  decoded 120 frames with `-xerror` and no errors. It did not fetch a provider
+  channel or create a Dispatcharr profile.
+  The final `17:52:25 UTC` snapshot had zero viewers, transcodes, and
+  ffmpeg/ffprobe processes, with runtime and manifest pins unchanged.
 
 ## [0.2.1-beta.4] - 2026-09-07
 

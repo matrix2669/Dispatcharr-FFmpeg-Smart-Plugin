@@ -20,7 +20,7 @@ This ledger records why every current branch exists and preserves the context ne
 | `docs/ffmpeg-smart-beta2-live-validation` | documentation | integrated | `dev` at `3c7b07c` | `dev` | Record development publication and managed live-validation evidence. |
 | `fix/ffmpeg-adaptive-beta2-fidelity` | fix | published | `dev` at `bcf767c` | `dev` | Pin the corrected wrapper beta, invalidate the superseded capacity policy, and prepare `v0.2.1-beta.3`. |
 | `docs/ffmpeg-smart-beta3-live-validation` | documentation | integrated | `dev` at `dd54d4c` | `dev` | Record beta.3 publication and managed installed validation without moving its tag. |
-| `fix/benchmark-outcome-beta5` | fix | active | `dev` at `38f7d17` | `dev` | Repair benchmark outcome persistence, truthful status/notifications, version agreement, and source-sync ref tracking, then complete the reviewed beta.5 wrapper pin, dev tag/registry, and zero-viewer live update/benchmark gates. Stable/main promotion, GitHub Release, unrelated work, and branch deletion remain excluded. |
+| `fix/benchmark-outcome-beta5` | fix | active | `dev` at `38f7d17` | `dev` | Reviewed beta.5 plugin, wrapper, development-registry, zero-viewer managed update, and completed bounded hardware validation. Stable/main promotion, GitHub Release, unrelated work, and branch deletion remain excluded. |
 
 ## Branch records
 
@@ -28,6 +28,9 @@ This ledger records why every current branch exists and preserves the context ne
 
 - Purpose: production-ready plugin source and stable tags.
 - Current stable tag: `v0.2.0` at `6eb5c8c8f437dcca6802967ceb193e37f984a7c1`.
+- Current `main` branch continuity: `6654a202e286f4c8b80d7845040880f76862d1f2`; the stable branch remains unchanged. Older branch-record dates and bases below are historical context.
+- Main continuity was checked on `2026-09-21`; its older validation date below
+  remains historical evidence.
 - Canonical source: bundled wrapper pins `ffmpeg-asr v1.1.0` commit `448837f4f6267de1c6705cb670bcdb0c6991614f` with SHA-256 `56cb036d803237b32d17fa0bf33bf200b3a07a43a0ca5309a4849eb561801627`.
 - Distribution state: the stable tag is advertised through `dispatcharr-plugins:main` under the explicitly approved version-specific exception; no GitHub Release or distributable ZIP is authorized until inherited-wrapper licensing is resolved.
 - Validation: 39 plugin tests, Python/JSON/shell checks, exact canonical-source verification, immutable archive layout and executable-mode checks, installed fallback/notification behavior, completed 18/15 hardware capacity scan, and four-stream Map All validation pass.
@@ -37,15 +40,19 @@ This ledger records why every current branch exists and preserves the context ne
 
 - Purpose: integrate plugin and canonical-wrapper changes before stable promotion.
 - Base and target: `main`.
-- Current state: remote `dev` is at beta.4 preparation commit
-  `38f7d17ca1698343cd5ca4dc82e29edb237400d2`; it is not review-ready because
-  the plugin version remained beta.3 and its source-pin test exposed a stale
-  tracking ref/commit contract. The beta.3 tag and its prior publication remain
-  immutable historical evidence.
-- Publication state: no beta.4/beta.5 publication, registry update, installed
-  update, or live validation is claimed for this repair; `origin/main` remains
-  the immutable `v0.2.0` stable source.
-- Last verified at: `2026-08-30`.
+- Current immutable runtime/release source is reviewed beta.5 commit
+  `a5c0777875056591e4e02c989993f43b3f43aa72`; plugin tag
+  `v0.2.1-beta.5`, wrapper beta.4, and development-registry publication are
+  immutable and their CI gates passed. Documentation-only follow-ups may
+  advance remote `dev` without changing that source. The earlier beta.4
+  preparation commit `38f7d17...` and its defects remain historical
+  negative-control evidence.
+- Publication state: beta.5 dev publication, approved zero-viewer managed
+  update, and bounded hardware validation are complete. The benchmark returned
+  zero with complete outcome, valid cache, no PID/lock, and the fixture/pipe
+  proof passed; no provider channel was fetched and no Dispatcharr profile was
+  created. `main` remains stable-only.
+- Last verified at: `2026-09-21`.
 
 ### `feature/adaptive-input-probing`
 
@@ -162,7 +169,7 @@ This ledger records why every current branch exists and preserves the context ne
 ### `fix/benchmark-outcome-beta5`
 
 - Purpose: correct the beta.4 benchmark lifecycle and release metadata before
-  the next immutable development beta.
+  and document the reviewed beta.5 development release and live validation.
 - Base and target: remote `dev` at
   `38f7d17ca1698343cd5ca4dc82e29edb237400d2`; target `dev` after parent
   review and wrapper synchronization.
@@ -170,17 +177,20 @@ This ledger records why every current branch exists and preserves the context ne
   notification semantics, version agreement, source-sync ref/commit contract,
   tests, CI shell gates, and owned records.
 - Canonical source pin: the complete seven-file bundle is synchronized to
-  immutable work-branch commit
-  `913a958fd5f9edc231c49a70539a09f611fdcc5a`, the accepted wrapper beta.4
-  candidate before its future tag is published. The parent owns final Astra review, the
-  beta.5 dev tag and development-registry publication, and the zero-viewer
-  managed update/benchmark gate. No tag, registry update, live install, live
-  benchmark, merge, or publication has occurred on this branch.
+  published wrapper beta.4 commit
+  `913a958fd5f9edc231c49a70539a09f611fdcc5a`. Plugin tag
+  `v0.2.1-beta.5` is commit `a5c0777875056591e4e02c989993f43b3f43aa72`; the
+  development registry publication, zero-viewer managed update, and bounded
+  hardware validation passed their gates. The benchmark returned zero with a
+  complete outcome, valid cache, no PID/lock, and the fixture/pipe proof
+  passed; no provider channel or Dispatcharr profile was used.
 - Excluded: stable/main promotion, GitHub Release or manual stable ZIP,
   unrelated project work, and branch deletion.
-- Validation so far: 69 plugin unit tests, Python compilation, JSON checks,
-  shell syntax, and offline source verification pass locally. Live Dispatcharr
-  validation and final archive review remain parent gates.
+- Validation: 69 plugin unit tests, Python compilation, JSON checks, shell
+  syntax, offline source verification, exact archive validation, managed update,
+  completed benchmark, and bounded hardware fixture/pipe proof pass.
+- Evidence: `docs/beta5-validation-2026-09-21.md`; the bounded proof is not a
+  provider-channel or Dispatcharr-profile validation.
 - Last reviewed: `2026-09-21`.
 
 ## Completed branch cleanup
