@@ -100,6 +100,30 @@ ffsmart_lock_is_live() {
     return 1
 }
 
+# Streaming callers treat a fresh maintenance placeholder as admission-blocking
+# while benchmark acquisition deliberately leaves it consumable by
+# ffsmart_lock_is_live/ffsmart_lock_acquire.
+ffsmart_lock_is_maintenance() {
+    [[ -f "$FFSMART_LOCK_FILE" ]] || return 1
+    local owner="" modified="" now=""
+    read -r owner _ < "$FFSMART_LOCK_FILE" || true
+    if [[ "$owner" == starting ]]; then
+        if modified="$(stat -c %Y "$FFSMART_LOCK_FILE" 2>/dev/null)"; then :
+        elif modified="$(stat -f %m "$FFSMART_LOCK_FILE" 2>/dev/null)"; then :
+        else
+            rm -f -- "$FFSMART_LOCK_FILE"
+            return 1
+        fi
+        now="$(date +%s)"
+        if (( now - modified < 60 )); then
+            return 0
+        fi
+        rm -f -- "$FFSMART_LOCK_FILE"
+        return 1
+    fi
+    ffsmart_lock_is_live
+}
+
 FFSMART_LOCK_OWNER_PID=""
 FFSMART_LOCK_OWNER_START=""
 ffsmart_lock_release() {

@@ -730,7 +730,7 @@ ffsmart_rebuild_cache() {
         for node in "${FFSMART_RENDER_NODES[@]}"; do
             accel="$(ffsmart_device_get accel "$node" || true)"; [[ -n "$accel" ]] || continue
             [[ -n "$(ffsmart_device_get capacity "$node" || true)" ]] && continue
-            if ffsmart_measure_capacity "$node" "$accel" "$(ffsmart_device_get codec "$node")" "$(ffsmart_device_get low_power "$node")" "$(ffsmart_device_get speed "$node")"; then
+            if ffsmart_measure_capacity "$node" "$accel" "$(ffsmart_device_get codec "$node")" "$(ffsmart_device_get low_power "$node")" "$(ffsmart_device_get speed "$node")" >/dev/null; then
                 capacity="$FFSMART_CAPACITY_RESULT"
             else
                 local status=$?

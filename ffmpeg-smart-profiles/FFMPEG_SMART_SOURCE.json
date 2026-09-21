@@ -1,12 +1,12 @@
 {
   "repository": "matrix2669/ffmpeg-adaptive",
-  "tracking_ref": "51c4e3b6e9f1aed6e1d820e8f324071059701e80",
-  "commit": "51c4e3b6e9f1aed6e1d820e8f324071059701e80",
+  "tracking_ref": "913a958fd5f9edc231c49a70539a09f611fdcc5a",
+  "commit": "913a958fd5f9edc231c49a70539a09f611fdcc5a",
   "files": [
     {
       "path": "ffmpeg-smart.sh",
       "mode": "0755",
-      "sha256": "a99041cdbbd3f8566d481a89059a3968dc28d46ccf43862b8990b9766687e430"
+      "sha256": "dbbf92c33cb2674cca99f103a537c2626170ad132f97eb00ff4c0ad5ea9dff16"
     },
     {
       "path": "lib/ffsmart-cache.sh",
@@ -21,12 +21,12 @@
     {
       "path": "lib/ffsmart-common.sh",
       "mode": "0644",
-      "sha256": "c79bacea65f3854cb1a2411c9306db3fbd6ec3b3d6bc58b6dcc905c782f3fc75"
+      "sha256": "1c544633dd21c2027a4cf266d02287f10b3f9cef032bd073fc177bb58d4e3bcf"
     },
     {
       "path": "lib/ffsmart-hardware.sh",
       "mode": "0644",
-      "sha256": "3d4a11770d82e3b14bda67bc7199e8db9be9dd225fe898df33c568c003991fc3"
+      "sha256": "3c003a6308098014cf933531f179c96cba2db9a474e298d93f1fc16ac9a99272"
     },
     {
       "path": "lib/ffsmart-policy.sh",

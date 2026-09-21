@@ -4,8 +4,8 @@
 
 - Repository: `matrix2669/ffmpeg-adaptive`
 - Current recorded source: immutable work-branch commit
-  `51c4e3b6e9f1aed6e1d820e8f324071059701e80`, the wrapper beta.4 candidate
-  before its future tag is published.
+  `913a958fd5f9edc231c49a70539a09f611fdcc5a`, the accepted wrapper beta.4
+  candidate before its future tag is published.
 - Contract: the seven bundled runtime files are byte- and mode-pinned in
   `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json`; the MIT notice is shipped
   in `FFMPEG_ADAPTIVE_LICENSE`. Wrapper behavior remains owned by the canonical

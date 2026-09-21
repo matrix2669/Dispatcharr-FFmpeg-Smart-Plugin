@@ -53,7 +53,7 @@ ffsmart_main() {
         if [[ "$FFSMART_RECACHE_ONLY" == true ]]; then
             return 0
         fi
-    elif ffsmart_lock_is_live; then
+    elif ffsmart_lock_is_maintenance; then
         if [[ "$fallback_mode" == proxy ]]; then
             ffsmart_run_degraded_proxy "Hardware benchmark is in progress"
             return

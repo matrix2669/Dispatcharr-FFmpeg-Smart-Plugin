@@ -27,8 +27,8 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 - Restore GPU/device capacity summaries from the canonical V2 cache format
   without using display parsing to decide cache validity.
 - Synchronize the complete seven-file wrapper bundle to immutable work-branch
-  commit `51c4e3b6e9f1aed6e1d820e8f324071059701e80`, the beta.4 candidate before
-  its future tag is published.
+  commit `913a958fd5f9edc231c49a70539a09f611fdcc5a`, the accepted beta.4
+  candidate before its future tag is published.
 
 ### Validation
 

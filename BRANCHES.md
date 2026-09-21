@@ -171,8 +171,8 @@ This ledger records why every current branch exists and preserves the context ne
   tests, CI shell gates, and owned records.
 - Canonical source pin: the complete seven-file bundle is synchronized to
   immutable work-branch commit
-  `51c4e3b6e9f1aed6e1d820e8f324071059701e80`, the wrapper beta.4 candidate
-  before its future tag is published. The parent owns final Astra review, the
+  `913a958fd5f9edc231c49a70539a09f611fdcc5a`, the accepted wrapper beta.4
+  candidate before its future tag is published. The parent owns final Astra review, the
   beta.5 dev tag and development-registry publication, and the zero-viewer
   managed update/benchmark gate. No tag, registry update, live install, live
   benchmark, merge, or publication has occurred on this branch.
