@@ -1304,7 +1304,10 @@ truncated records are ignored for display and never determine cache validity.
 Status and notification tests must cover nonzero exit with a valid old cache,
 success, process disappearance, restart races, competing workers, truthful
 messaging, V2 multi-device/software-only summaries, malformed records, and
-robust PID identity parsing. Canonical runtime changes remain owned by
+robust PID identity parsing. Expired empty or `starting` benchmark placeholders
+are stale and reclaimable, while fresh placeholders and live PID-owned locks
+remain protected. Startup cleanup releases admission even when PID-file removal
+fails and never masks the original startup error. Canonical runtime changes remain owned by
 `ffmpeg-adaptive`; the complete immutable bundle must be synchronized and
 reviewed before plugin publication.
 

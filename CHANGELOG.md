@@ -15,6 +15,10 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
   and protect newer benchmark runs from late completion callbacks.
 - Serialize benchmark admission across plugin workers and keep notifications
   accurate when an existing valid cache remains after a failed rebuild.
+- Remove expired empty/`starting` benchmark placeholders so stale locks can be
+  reclaimed, while retaining fresh placeholders and live PID-owned locks.
+- Make startup cleanup release benchmark admission even when PID-file removal
+  fails; cleanup errors no longer mask the original startup failure.
 - Synchronize `VERSION`, `Plugin.version`, and `plugin.json` at beta.5. The
   beta.4 archive had an update-loop defect because `Plugin.version` remained at
   beta.3; its source test also exposed a stale hard-coded runtime pin.
@@ -32,6 +36,7 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
   completion, process disappearance, restart races, worker admission, truthful
   notifications, source-ref synchronization, canonical V2 cache display
   summaries, malformed cache records, and robust PID zombie handling.
+  Added regressions for stale lock placeholders and cleanup failures.
 - Beta.4's existing version and source-pin failures remain recorded as negative
   evidence; final Astra review, future dev/tag/registry publication, and live
   Dispatcharr update and benchmark validation remain pending.

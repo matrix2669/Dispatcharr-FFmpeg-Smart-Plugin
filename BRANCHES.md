@@ -178,7 +178,7 @@ This ledger records why every current branch exists and preserves the context ne
   benchmark, merge, or publication has occurred on this branch.
 - Excluded: stable/main promotion, GitHub Release or manual stable ZIP,
   unrelated project work, and branch deletion.
-- Validation so far: 65 plugin unit tests, Python compilation, JSON checks,
+- Validation so far: 69 plugin unit tests, Python compilation, JSON checks,
   shell syntax, and offline source verification pass locally. Live Dispatcharr
   validation and final archive review remain parent gates.
 - Last reviewed: `2026-09-21`.

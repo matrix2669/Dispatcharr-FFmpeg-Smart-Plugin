@@ -1031,10 +1031,7 @@ class Plugin:
                 run_id=run_id,
             )
         except Exception:
-            self._terminate_recache_process(process)
-            PID_FILE.unlink(missing_ok=True)
-            self._release_claimed_benchmark_lock()
-            self._release_recache_admission(run_id)
+            self._cleanup_failed_recache_start(process, run_id)
             try:
                 self._write_benchmark_outcome(
                     "error",
@@ -1056,10 +1053,7 @@ class Plugin:
         try:
             monitor.start()
         except Exception:
-            self._terminate_recache_process(process)
-            PID_FILE.unlink(missing_ok=True)
-            self._release_claimed_benchmark_lock()
-            self._release_recache_admission(run_id)
+            self._cleanup_failed_recache_start(process, run_id)
             try:
                 self._write_benchmark_outcome(
                     "error",
@@ -1083,6 +1077,19 @@ class Plugin:
             ),
             "stopped_streams": stopped,
         }
+
+    def _cleanup_failed_recache_start(self, process, run_id):
+        cleanup = (
+            (lambda: self._terminate_recache_process(process), "terminate benchmark process"),
+            (lambda: PID_FILE.unlink(missing_ok=True), "remove benchmark PID file"),
+            (self._release_claimed_benchmark_lock, "release benchmark lock"),
+            (lambda: self._release_recache_admission(run_id), "release benchmark admission"),
+        )
+        for operation, description in cleanup:
+            try:
+                operation()
+            except Exception:
+                logger.debug("Could not %s after benchmark startup failure", description, exc_info=True)
 
     @classmethod
     def _monitor_recache_completion(cls, process, run_id=None):
@@ -1236,9 +1243,16 @@ class Plugin:
             return True
         if not owner or owner == "starting":
             try:
-                return time.time() - BENCHMARK_LOCK_FILE.stat().st_mtime < 60
+                fresh = time.time() - BENCHMARK_LOCK_FILE.stat().st_mtime < 60
             except OSError:
                 return False
+            if fresh:
+                return True
+            try:
+                BENCHMARK_LOCK_FILE.unlink()
+            except OSError:
+                pass
+            return False
         try:
             BENCHMARK_LOCK_FILE.unlink()
         except OSError:

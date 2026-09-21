@@ -11,7 +11,7 @@ import types
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import call, patch
+from unittest.mock import MagicMock, call, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ffmpeg-smart-profiles"))
 
@@ -922,6 +922,94 @@ class CapabilityStatusTests(unittest.TestCase):
                 patch.object(Plugin, "_process_identity_is_live", return_value=True),
             ):
                 self.assertTrue(Plugin._benchmark_lock_is_live())
+
+    def test_stale_placeholder_lock_is_removed_and_can_be_reclaimed(self):
+        for contents in ("", "starting\n"):
+            with self.subTest(contents=repr(contents)), TemporaryDirectory() as temp_dir:
+                lock_file = Path(temp_dir) / ".benchmark.lock"
+                lock_file.write_text(contents, encoding="utf-8")
+                old_mtime = lock_file.stat().st_mtime
+                with (
+                    patch("plugin.BENCHMARK_LOCK_FILE", lock_file),
+                    patch("plugin.time.time", return_value=old_mtime + 120),
+                ):
+                    self.assertFalse(Plugin._benchmark_lock_is_live())
+                    self.assertFalse(lock_file.exists())
+                    self.assertTrue(Plugin._claim_benchmark_lock())
+                    Plugin._release_claimed_benchmark_lock()
+
+    def test_fresh_placeholder_lock_is_retained(self):
+        with TemporaryDirectory() as temp_dir:
+            lock_file = Path(temp_dir) / ".benchmark.lock"
+            lock_file.write_text("starting\n", encoding="utf-8")
+            old_mtime = lock_file.stat().st_mtime
+            with (
+                patch("plugin.BENCHMARK_LOCK_FILE", lock_file),
+                patch("plugin.time.time", return_value=old_mtime + 10),
+            ):
+                self.assertTrue(Plugin._benchmark_lock_is_live())
+            self.assertEqual(lock_file.read_text(encoding="utf-8"), "starting\n")
+
+    def test_persistence_failure_releases_admission_when_pid_unlink_fails(self):
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            pid_file = root / "recache.pid"
+            log_file = root / "recache.log"
+            process = MagicMock(pid=4321)
+            with (
+                patch("plugin.PID_FILE", pid_file),
+                patch("plugin.LOG_FILE", log_file),
+                patch.object(Plugin, "_ensure_script"),
+                patch.object(Plugin, "_read_pid", return_value=None),
+                patch.object(Plugin, "_acquire_recache_admission", return_value=True),
+                patch.object(Plugin, "_claim_benchmark_lock", return_value=True),
+                patch.object(Plugin, "_stop_active_streams", return_value=0),
+                patch("plugin.subprocess.Popen", return_value=process),
+                patch.object(Plugin, "_write_benchmark_outcome", side_effect=RuntimeError("state persistence")),
+                patch.object(Plugin, "_terminate_recache_process") as terminate,
+                patch.object(Plugin, "_release_claimed_benchmark_lock") as release_lock,
+                patch.object(Plugin, "_release_recache_admission") as release_admission,
+                patch("plugin.Path.unlink", side_effect=PermissionError("read-only")),
+                patch("plugin.logging.getLogger"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "state persistence"):
+                    Plugin()._start_recache_locked(None)
+
+            terminate.assert_called_once_with(process)
+            release_lock.assert_called_once_with()
+            release_admission.assert_called_once()
+
+    def test_monitor_start_failure_releases_admission_when_pid_unlink_fails(self):
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            pid_file = root / "recache.pid"
+            log_file = root / "recache.log"
+            process = MagicMock(pid=4321)
+            monitor = MagicMock()
+            monitor.start.side_effect = RuntimeError("thread start")
+            with (
+                patch("plugin.PID_FILE", pid_file),
+                patch("plugin.LOG_FILE", log_file),
+                patch.object(Plugin, "_ensure_script"),
+                patch.object(Plugin, "_read_pid", return_value=None),
+                patch.object(Plugin, "_acquire_recache_admission", return_value=True),
+                patch.object(Plugin, "_claim_benchmark_lock", return_value=True),
+                patch.object(Plugin, "_stop_active_streams", return_value=0),
+                patch("plugin.subprocess.Popen", return_value=process),
+                patch.object(Plugin, "_write_benchmark_outcome", side_effect=[None, None]),
+                patch.object(Plugin, "_sync_cache_notification"),
+                patch("plugin.threading.Thread", return_value=monitor),
+                patch.object(Plugin, "_terminate_recache_process") as terminate,
+                patch.object(Plugin, "_release_claimed_benchmark_lock") as release_lock,
+                patch.object(Plugin, "_release_recache_admission") as release_admission,
+                patch("plugin.Path.unlink", side_effect=PermissionError("read-only")),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "thread start"):
+                    Plugin()._start_recache_locked(None)
+
+            terminate.assert_called_once_with(process)
+            release_lock.assert_called_once_with()
+            release_admission.assert_called_once()
 
     def test_process_identity_parses_comm_after_final_parenthesis_and_rejects_zombie(self):
         tail = ["S"] + ["x"] * 18 + ["5678"]
