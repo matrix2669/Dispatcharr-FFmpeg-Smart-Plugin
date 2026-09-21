@@ -257,26 +257,45 @@ ffsmart_cache_reuse_device() {
 }
 
 ffsmart_cache_write() {
-    local target="$FFSMART_CACHE_FILE.tmp.$$" node signature accel codec low_power d10 e10 capacity speed
+    local target="" node signature accel codec low_power d10 e10 capacity speed
     umask 077
-    {
-        printf 'FFMPEG_SMART_CACHE_V2\n'
-        printf 'value\tschema\t%s\n' "$FFSMART_CACHE_SCHEMA"
-        printf 'value\tfingerprint\t%s\n' "$FFSMART_CACHE_FINGERPRINT"
-        printf 'value\tbest_accel\t%s\n' "$FFSMART_CACHE_BEST_ACCEL"
-        printf 'value\tbest_codec\t%s\n' "$FFSMART_CACHE_BEST_CODEC"
-        printf 'value\tbest_low_power\t%s\n' "$FFSMART_CACHE_BEST_LOW_POWER"
-        printf 'value\tbest_10bit_decode\t%s\n' "$FFSMART_CACHE_BEST_10BIT_DECODE"
-        printf 'value\tbest_10bit_encode\t%s\n' "$FFSMART_CACHE_BEST_10BIT_ENCODE"
-        printf 'value\tprimary_device\t%s\n' "$FFSMART_CACHE_PRIMARY_DEVICE"
-        printf 'value\tsecondary_device\t%s\n' "$FFSMART_CACHE_SECONDARY_DEVICE"
-        for node in "${FFSMART_RENDER_NODES[@]}"; do
-            capacity="$(ffsmart_device_get capacity "$node" || true)"; [[ -n "$capacity" ]] || continue
-            signature="$(ffsmart_device_get signature "$node")"; accel="$(ffsmart_device_get accel "$node")"; codec="$(ffsmart_device_get codec "$node")"
-            low_power="$(ffsmart_device_get low_power "$node")"; d10="$(ffsmart_device_get decode10 "$node")"; e10="$(ffsmart_device_get encode10 "$node")"; speed="$(ffsmart_device_get speed "$node")"
-            printf 'device\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$signature" "$node" "$accel" "$codec" "$low_power" "$d10" "$e10" "$capacity" "$speed"
-        done
-    } > "$target" || { rm -f -- "$target"; ffsmart_fail 73 cache-write "Cannot write capability cache: $FFSMART_CACHE_FILE"; return 73; }
+    if [[ -e "$FFSMART_CACHE_FILE" && ( ! -f "$FFSMART_CACHE_FILE" || -L "$FFSMART_CACHE_FILE" ) ]]; then
+        ffsmart_fail 73 cache-write "Capability cache destination is not a regular file: $FFSMART_CACHE_FILE"
+        return 73
+    fi
+    target="$(mktemp "$FFSMART_CACHE_FILE.tmp.XXXXXX")" || {
+        ffsmart_fail 73 cache-write "Cannot create capability cache temporary file: $FFSMART_CACHE_FILE"
+        return 73
+    }
+    if ! printf 'FFMPEG_SMART_CACHE_V2\n' > "$target" ||
+       ! printf 'value\tschema\t%s\n' "$FFSMART_CACHE_SCHEMA" >> "$target" ||
+       ! printf 'value\tfingerprint\t%s\n' "$FFSMART_CACHE_FINGERPRINT" >> "$target" ||
+       ! printf 'value\tbest_accel\t%s\n' "$FFSMART_CACHE_BEST_ACCEL" >> "$target" ||
+       ! printf 'value\tbest_codec\t%s\n' "$FFSMART_CACHE_BEST_CODEC" >> "$target" ||
+       ! printf 'value\tbest_low_power\t%s\n' "$FFSMART_CACHE_BEST_LOW_POWER" >> "$target" ||
+       ! printf 'value\tbest_10bit_decode\t%s\n' "$FFSMART_CACHE_BEST_10BIT_DECODE" >> "$target" ||
+       ! printf 'value\tbest_10bit_encode\t%s\n' "$FFSMART_CACHE_BEST_10BIT_ENCODE" >> "$target" ||
+       ! printf 'value\tprimary_device\t%s\n' "$FFSMART_CACHE_PRIMARY_DEVICE" >> "$target" ||
+       ! printf 'value\tsecondary_device\t%s\n' "$FFSMART_CACHE_SECONDARY_DEVICE" >> "$target"; then
+        rm -f -- "$target"
+        ffsmart_fail 73 cache-write "Cannot write capability cache: $FFSMART_CACHE_FILE"
+        return 73
+    fi
+    for node in "${FFSMART_RENDER_NODES[@]}"; do
+        capacity="$(ffsmart_device_get capacity "$node" || true)"; [[ -n "$capacity" ]] || continue
+        signature="$(ffsmart_device_get signature "$node")"; accel="$(ffsmart_device_get accel "$node")"; codec="$(ffsmart_device_get codec "$node")"
+        low_power="$(ffsmart_device_get low_power "$node")"; d10="$(ffsmart_device_get decode10 "$node")"; e10="$(ffsmart_device_get encode10 "$node")"; speed="$(ffsmart_device_get speed "$node")"
+        if ! printf 'device\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$signature" "$node" "$accel" "$codec" "$low_power" "$d10" "$e10" "$capacity" "$speed" >> "$target"; then
+            rm -f -- "$target"
+            ffsmart_fail 73 cache-write "Cannot write capability cache: $FFSMART_CACHE_FILE"
+            return 73
+        fi
+    done
+    [[ ! -d "$FFSMART_CACHE_FILE" && ! -L "$FFSMART_CACHE_FILE" ]] || {
+        rm -f -- "$target"
+        ffsmart_fail 73 cache-write "Capability cache destination is not replaceable: $FFSMART_CACHE_FILE"
+        return 73
+    }
     mv -f -- "$target" "$FFSMART_CACHE_FILE" || { rm -f -- "$target"; ffsmart_fail 73 cache-write "Cannot replace capability cache: $FFSMART_CACHE_FILE"; return 73; }
 }
 

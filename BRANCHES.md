@@ -169,14 +169,16 @@ This ledger records why every current branch exists and preserves the context ne
 - Scope: plugin benchmark outcome persistence and admission, status and
   notification semantics, version agreement, source-sync ref/commit contract,
   tests, CI shell gates, and owned records.
-- Pending handoff: the wrapper worker supplies the next immutable runtime and
-  final pin/checksums; the parent then owns exact source synchronization,
-  Astra review, the beta.5 dev tag and development-registry publication, and
-  the zero-viewer managed update/benchmark gate. No tag, registry update, live
-  install, live benchmark, merge, or publication has occurred on this branch.
+- Canonical source pin: the complete seven-file bundle is synchronized to
+  immutable work-branch commit
+  `51c4e3b6e9f1aed6e1d820e8f324071059701e80`, the wrapper beta.4 candidate
+  before its future tag is published. The parent owns final Astra review, the
+  beta.5 dev tag and development-registry publication, and the zero-viewer
+  managed update/benchmark gate. No tag, registry update, live install, live
+  benchmark, merge, or publication has occurred on this branch.
 - Excluded: stable/main promotion, GitHub Release or manual stable ZIP,
   unrelated project work, and branch deletion.
-- Validation so far: 60 plugin unit tests, Python compilation, JSON checks,
+- Validation so far: 65 plugin unit tests, Python compilation, JSON checks,
   shell syntax, and offline source verification pass locally. Live Dispatcharr
   validation and final archive review remain parent gates.
 - Last reviewed: `2026-09-21`.

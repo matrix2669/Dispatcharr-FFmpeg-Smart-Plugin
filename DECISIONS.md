@@ -1297,11 +1297,16 @@ making an unqualified synchronization capable of downgrading the bundle.
 ## Consequences
 
 Cache validity remains owned by the canonical wrapper, while benchmark outcome
-truth remains owned by this plugin orchestration layer. Status and notification
-tests must cover nonzero exit with a valid old cache, success, process
-disappearance, restart races, competing workers, and truthful messaging. The
-next wrapper beta's immutable source pin remains a separate worker-owned change
-and must be synchronized and reviewed before publication.
+truth remains owned by this plugin orchestration layer. The status display
+consumer accepts the wrapper's `FFMPEG_SMART_CACHE_V2` tab-separated value and
+device records, while retaining the legacy display format; malformed or
+truncated records are ignored for display and never determine cache validity.
+Status and notification tests must cover nonzero exit with a valid old cache,
+success, process disappearance, restart races, competing workers, truthful
+messaging, V2 multi-device/software-only summaries, malformed records, and
+robust PID identity parsing. Canonical runtime changes remain owned by
+`ffmpeg-adaptive`; the complete immutable bundle must be synchronized and
+reviewed before plugin publication.
 
 ## Provenance
 

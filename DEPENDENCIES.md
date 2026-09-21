@@ -3,8 +3,9 @@
 ## Canonical FFmpeg Adaptive runtime
 
 - Repository: `matrix2669/ffmpeg-adaptive`
-- Current recorded source: tag `v0.1.0-beta.3`, immutable commit
-  `4319656239b48c3cc19e9d0b6d5bfe92c9eacffe`.
+- Current recorded source: immutable work-branch commit
+  `51c4e3b6e9f1aed6e1d820e8f324071059701e80`, the wrapper beta.4 candidate
+  before its future tag is published.
 - Contract: the seven bundled runtime files are byte- and mode-pinned in
   `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json`; the MIT notice is shipped
   in `FFMPEG_ADAPTIVE_LICENSE`. Wrapper behavior remains owned by the canonical
@@ -13,10 +14,10 @@
   the recorded tracking ref would otherwise resolve to a different commit,
   updates the selected ref and commit together only after all files verify, and
   must be followed by the complete source check.
-- Planned update: the wrapper worker is preparing the next immutable
-  `ffmpeg-adaptive` beta. Its final commit and checksums are intentionally not
-  invented or pinned by this plugin repair; the parent review must synchronize
-  the complete bundle after that source is available.
+- The complete seven-file bundle is now synchronized to that exact commit and
+  passes the online source verification and repeated unqualified-sync
+  idempotence checks. Final Astra review, future wrapper/plugin tag, dev
+  registry publication, and live beta.5 validation remain pending.
 
 ## Dispatcharr
 

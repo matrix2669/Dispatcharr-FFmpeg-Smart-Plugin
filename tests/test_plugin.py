@@ -477,6 +477,110 @@ class CapabilityStatusTests(unittest.TestCase):
         self.assertEqual(summary["secondary"]["capacity"], 15)
         self.assertIn("VAAPI/HEVC", summary["summary"])
 
+    def test_summarizes_canonical_v2_cache_with_two_devices(self):
+        cache = "\n".join(
+            [
+                "FFMPEG_SMART_CACHE_V2",
+                "value\tschema\t2",
+                "value\tfingerprint\tdeadbeef",
+                "value\tbest_accel\tvaapi",
+                "value\tbest_codec\thevc",
+                "value\tbest_low_power\t0",
+                "value\tbest_10bit_decode\ttrue",
+                "value\tbest_10bit_encode\tfalse",
+                "value\tprimary_device\t/dev/dri/renderD129",
+                "value\tsecondary_device\t/dev/dri/renderD128",
+                "device\tsig-a\t/dev/dri/renderD129\tvaapi\thevc\t0\ttrue\tfalse\t18\t14",
+                "device\tsig-b\t/dev/dri/renderD128\tvaapi\thevc\t0\tfalse\tfalse\t15\t9.62",
+            ]
+        )
+        with TemporaryDirectory() as temp_dir:
+            cache_path = Path(temp_dir) / ".capabilities.cache"
+            cache_path.write_text(cache, encoding="utf-8")
+            with patch("plugin.CACHE_FILE", cache_path):
+                summary = Plugin._capability_summary()
+
+        self.assertEqual(summary["acceleration"], "vaapi")
+        self.assertEqual(
+            summary["primary"],
+            {"device": "/dev/dri/renderD129", "capacity": 18, "speed": "14"},
+        )
+        self.assertEqual(summary["secondary"]["capacity"], 15)
+        self.assertTrue(summary["supports_10bit_decode"])
+        self.assertIn("primary /dev/dri/renderD129 capacity=18 speed=14x", summary["summary"])
+
+    def test_summarizes_canonical_v2_software_only_cache(self):
+        cache = "\n".join(
+            [
+                "FFMPEG_SMART_CACHE_V2",
+                "value\tschema\t2",
+                "value\tfingerprint\tdeadbeef",
+                "value\tbest_accel\tsoftware",
+                "value\tbest_codec\th264",
+                "value\tbest_low_power\t0",
+                "value\tbest_10bit_decode\tfalse",
+                "value\tbest_10bit_encode\tfalse",
+                "value\tprimary_device\t-",
+                "value\tsecondary_device\t-",
+            ]
+        )
+        with TemporaryDirectory() as temp_dir:
+            cache_path = Path(temp_dir) / ".capabilities.cache"
+            cache_path.write_text(cache, encoding="utf-8")
+            with patch("plugin.CACHE_FILE", cache_path):
+                summary = Plugin._capability_summary()
+
+        self.assertEqual(summary["acceleration"], "software")
+        self.assertIsNone(summary["primary"])
+        self.assertIn("SOFTWARE/H264", summary["summary"])
+
+    def test_malformed_canonical_v2_cache_is_safe_for_display(self):
+        cases = (
+            "FFMPEG_SMART_CACHE_V2\nvalue\tschema\t2\n",
+            "FFMPEG_SMART_CACHE_V2\nvalue\tschema\t2\nvalue\tfingerprint\tx\nvalue\tbest_accel\t$(touch /tmp/pwned)\n",
+            "FFMPEG_SMART_CACHE_V2\nvalue\tschema\t2\nvalue\tfingerprint\tx\nvalue\tbest_accel\tvaapi\nvalue\tbest_codec\thevc\nvalue\tbest_low_power\t0\nvalue\tbest_10bit_decode\tfalse\nvalue\tbest_10bit_encode\tfalse\nvalue\tprimary_device\t/dev/dri/renderD129\nvalue\tsecondary_device\t-\ndevice\tsig\t/dev/dri/renderD129\tvaapi\thevc\t0\tfalse\tfalse\tbad\t1\n",
+            "FFMPEG_SMART_CACHE_V2\nvalue\tschema\t2\nvalue\tfingerprint\tx\nvalue\tbest_accel\tvaapi\nvalue\tbest_codec\thevc\nvalue\tbest_low_power\t0\nvalue\tbest_10bit_decode\tfalse\nvalue\tbest_10bit_encode\tfalse\nvalue\tprimary_device\t/dev/dri/renderD129\nvalue\tsecondary_device\t-\ndevice\tsig\t/dev/dri/renderD129\tvaapi\thevc\t0\tfalse\tfalse\t1" + "0" * 5000 + "\t1\n",
+        )
+        with TemporaryDirectory() as temp_dir:
+            cache_path = Path(temp_dir) / ".capabilities.cache"
+            with patch("plugin.CACHE_FILE", cache_path):
+                for cache in cases:
+                    cache_path.write_text(cache, encoding="utf-8")
+                    self.assertIsNone(Plugin._capability_summary())
+
+    def test_status_includes_summary_from_canonical_v2_cache(self):
+        cache = "\n".join(
+            [
+                "FFMPEG_SMART_CACHE_V2",
+                "value\tschema\t2",
+                "value\tfingerprint\tdeadbeef",
+                "value\tbest_accel\tvaapi",
+                "value\tbest_codec\thevc",
+                "value\tbest_low_power\t0",
+                "value\tbest_10bit_decode\ttrue",
+                "value\tbest_10bit_encode\ttrue",
+                "value\tprimary_device\t/dev/dri/renderD129",
+                "value\tsecondary_device\t-",
+                "device\tsig-a\t/dev/dri/renderD129\tvaapi\thevc\t0\ttrue\ttrue\t18\t14",
+            ]
+        )
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            cache_file = temp_path / ".capabilities.cache"
+            cache_file.write_text(cache, encoding="utf-8")
+            with (
+                patch("plugin.CACHE_FILE", cache_file),
+                patch.object(Plugin, "_read_pid", return_value=None),
+                patch.object(Plugin, "_cache_status", return_value=("valid", "valid")),
+                patch.object(Plugin, "_sync_cache_notification"),
+                patch("plugin.LOG_FILE", temp_path / "missing.log"),
+            ):
+                result = Plugin()._benchmark_status()
+
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["capabilities"]["primary"]["capacity"], 18)
+        self.assertIn("VAAPI/HEVC", result["message"])
+
     def test_missing_cache_returns_none(self):
         with patch("plugin.CACHE_FILE", Path("/definitely/missing/cache")):
             self.assertIsNone(Plugin._capability_summary())
@@ -827,6 +931,11 @@ class CapabilityStatusTests(unittest.TestCase):
             self.assertTrue(Plugin._process_identity_is_live(1234, "5678"))
         with patch("plugin.os.kill"), patch("plugin.Path.read_text", return_value=zombie_line):
             self.assertFalse(Plugin._process_identity_is_live(1234, "5678"))
+
+    def test_pid_status_reuses_robust_process_identity_zombie_check(self):
+        with patch.object(Plugin, "_process_identity_is_live", return_value=False) as identity:
+            self.assertFalse(Plugin._pid_is_running(1234))
+        identity.assert_called_once_with(1234)
 
     def test_terminate_recache_kills_remaining_child_process_group(self):
         class ParentProcess:
@@ -1318,10 +1427,13 @@ class ReleaseMetadataTests(unittest.TestCase):
         }
 
         self.assertEqual(metadata["repository"], "matrix2669/ffmpeg-adaptive")
-        self.assertEqual(metadata["tracking_ref"], "v0.1.0-beta.3")
+        self.assertEqual(
+            metadata["tracking_ref"],
+            "51c4e3b6e9f1aed6e1d820e8f324071059701e80",
+        )
         self.assertEqual(
             metadata["commit"],
-            "4319656239b48c3cc19e9d0b6d5bfe92c9eacffe",
+            "51c4e3b6e9f1aed6e1d820e8f324071059701e80",
         )
         self.assertRegex(metadata["commit"], r"^[0-9a-f]{40}$")
         self.assertEqual({entry["path"] for entry in metadata["files"]}, expected_paths)

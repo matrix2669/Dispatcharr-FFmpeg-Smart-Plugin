@@ -1766,12 +1766,15 @@ class Plugin:
     @staticmethod
     def _capability_summary():
         try:
+            lines = CACHE_FILE.read_text(encoding="utf-8").splitlines()
+            if lines and lines[0] == "FFMPEG_SMART_CACHE_V2":
+                return Plugin._capability_summary_v2(lines[1:])
             values = {}
-            for line in CACHE_FILE.read_text(encoding="utf-8").splitlines():
+            for line in lines:
                 match = re.fullmatch(r"([A-Z0-9_]+)='(.*)'", line.strip())
                 if match:
                     values[match.group(1)] = match.group(2)
-        except OSError:
+        except (OSError, UnicodeError):
             return None
 
         accel = values.get("BEST_ACCEL", "unknown")
@@ -1781,8 +1784,102 @@ class Plugin:
         if not primary and accel == "unknown" and codec == "unknown":
             return None
 
-        decode_10bit = values.get("SUPPORTS_10BIT_DECODE", "false") == "true"
-        encode_10bit = values.get("SUPPORTS_10BIT_ENCODE", "false") == "true"
+        return Plugin._format_capability_summary(
+            accel,
+            codec,
+            values.get("SUPPORTS_10BIT_DECODE", "false") == "true",
+            values.get("SUPPORTS_10BIT_ENCODE", "false") == "true",
+            primary,
+            secondary,
+        )
+
+    @staticmethod
+    def _capability_summary_v2(lines):
+        value_keys = {
+            "schema",
+            "fingerprint",
+            "best_accel",
+            "best_codec",
+            "best_low_power",
+            "best_10bit_decode",
+            "best_10bit_encode",
+            "primary_device",
+            "secondary_device",
+        }
+        values = {}
+        devices = {}
+        printable = re.compile(r"^[ -~]+$")
+        for line in lines:
+            if not line:
+                return None
+            fields = line.split("\t")
+            record_type = fields[0] if fields else ""
+            if record_type == "value":
+                if len(fields) != 3:
+                    return None
+                key, value = fields[1:]
+                if key not in value_keys or key in values or not value or not printable.fullmatch(value):
+                    return None
+                values[key] = value
+            elif record_type == "device":
+                if len(fields) != 10:
+                    return None
+                signature, node, accel, codec, low_power, decode10, encode10, capacity, speed = fields[1:]
+                if (
+                    not signature
+                    or not printable.fullmatch(signature)
+                    or not re.fullmatch(r"/dev/dri/renderD[0-9]+", node)
+                    or not re.fullmatch(r"[A-Za-z0-9_.+-]+", accel)
+                    or not re.fullmatch(r"[A-Za-z0-9_.+-]+", codec)
+                    or low_power not in {"0", "1"}
+                    or decode10 not in {"true", "false"}
+                    or encode10 not in {"true", "false"}
+                    or not re.fullmatch(r"[1-9][0-9]*", capacity)
+                    or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", speed)
+                    or node in devices
+                ):
+                    return None
+                capacity_value = Plugin._parse_capacity(capacity)
+                if capacity_value is None:
+                    return None
+                devices[node] = {
+                    "device": node,
+                    "capacity": capacity_value,
+                    "speed": speed,
+                }
+            else:
+                return None
+
+        required = value_keys - {"fingerprint", "primary_device", "secondary_device"}
+        if not required.issubset(values) or "fingerprint" not in values:
+            return None
+        if values["schema"] != "2":
+            return None
+        if not re.fullmatch(r"[A-Za-z0-9_.+-]+", values["best_accel"]):
+            return None
+        if not re.fullmatch(r"[A-Za-z0-9_.+-]+", values["best_codec"]):
+            return None
+        if values["best_low_power"] not in {"0", "1"}:
+            return None
+        if values["best_10bit_decode"] not in {"true", "false"}:
+            return None
+        if values["best_10bit_encode"] not in {"true", "false"}:
+            return None
+        for key in ("primary_device", "secondary_device"):
+            if key in values and values[key] != "-" and values[key] not in devices:
+                return None
+
+        return Plugin._format_capability_summary(
+            values["best_accel"],
+            values["best_codec"],
+            values["best_10bit_decode"] == "true",
+            values["best_10bit_encode"] == "true",
+            devices.get(values.get("primary_device")),
+            devices.get(values.get("secondary_device")),
+        )
+
+    @staticmethod
+    def _format_capability_summary(accel, codec, decode_10bit, encode_10bit, primary, secondary):
         parts = [
             f"Capabilities: {accel.upper()}/{codec.upper()}",
             f"10-bit decode={'yes' if decode_10bit else 'no'}",
@@ -1811,9 +1908,24 @@ class Plugin:
         device = values.get(f"{prefix}_DEVICE", "")
         capacity = values.get(f"{prefix}_CAPACITY", "0")
         speed = values.get(f"{prefix}_SPEED", "0")
-        if not device or capacity in ("", "0"):
+        if (
+            not device
+            or not re.fullmatch(r"/dev/dri/renderD[0-9]+", device)
+            or not re.fullmatch(r"[1-9][0-9]*", capacity)
+            or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", speed)
+        ):
             return None
-        return {"device": device, "capacity": int(capacity), "speed": speed}
+        capacity_value = Plugin._parse_capacity(capacity)
+        if capacity_value is None:
+            return None
+        return {"device": device, "capacity": capacity_value, "speed": speed}
+
+    @staticmethod
+    def _parse_capacity(value):
+        try:
+            return int(value)
+        except (ValueError, OverflowError):
+            return None
 
     @staticmethod
     def _read_pid():
@@ -1826,8 +1938,7 @@ class Plugin:
     @staticmethod
     def _pid_is_running(pid):
         try:
-            stat_fields = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").split()
-            if len(stat_fields) > 2 and stat_fields[2] == "Z":
+            if not Plugin._process_identity_is_live(pid):
                 return False
             cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ")
             commands = (str(SCRIPT_PATH).encode(), str(LAUNCHER_PATH).encode())

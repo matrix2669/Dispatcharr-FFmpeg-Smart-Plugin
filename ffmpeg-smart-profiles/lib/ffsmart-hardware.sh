@@ -11,13 +11,111 @@ ffsmart_decoder_available() {
 FFSMART_HW_DECODE_ARGS=()
 FFSMART_BENCHMARK_LOG_FAILURE=false
 FFSMART_BENCHMARK_RUN_DIR=""
+FFSMART_BENCHMARK_LOG_SEQUENCE=0
+FFSMART_BENCHMARK_LOG_PATH=""
+FFSMART_BENCHMARK_SPEED=0
+FFSMART_CAPACITY_RESULT=0
+
+ffsmart_benchmark_path_safe() {
+    local path="$1" state_real parent_real resolved
+    state_real="$(cd -- "$FFSMART_STATE_DIR" 2>/dev/null && pwd -P)" || return 1
+    [[ ! -L "$path" ]] || return 1
+    if [[ -e "$path" ]]; then
+        resolved="$(ffsmart_realpath "$path" 2>/dev/null)" || return 1
+    else
+        parent_real="$(cd -- "$(dirname -- "$path")" 2>/dev/null && pwd -P)" || return 1
+        resolved="$parent_real/$(basename -- "$path")"
+    fi
+    case "$resolved" in
+        "$state_real"|"$state_real"/*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+ffsmart_benchmark_run_dir_safe() {
+    [[ -n "$FFSMART_BENCHMARK_RUN_DIR" && -d "$FFSMART_BENCHMARK_RUN_DIR" ]] || return 1
+    [[ "$FFSMART_BENCHMARK_RUN_DIR" != "$FFSMART_STATE_DIR" ]] || return 1
+    ffsmart_benchmark_path_safe "$FFSMART_BENCHMARK_RUN_DIR"
+}
+
+ffsmart_create_benchmark_run_dir() {
+    local run_dir
+    run_dir="$(mktemp -d "$FFSMART_STATE_DIR/.benchmark-run.XXXXXX")" || {
+        FFSMART_BENCHMARK_LOG_FAILURE=true
+        ffsmart_fail 73 benchmark-log-write "Cannot create benchmark diagnostics directory"
+        return 73
+    }
+    [[ -d "$run_dir" ]] || {
+        FFSMART_BENCHMARK_LOG_FAILURE=true
+        ffsmart_fail 73 benchmark-log-write "Benchmark diagnostics directory was not created"
+        return 73
+    }
+    FFSMART_BENCHMARK_RUN_DIR="$run_dir"
+    FFSMART_BENCHMARK_LOG_SEQUENCE=0
+}
+
+ffsmart_remove_benchmark_run_dir() {
+    local run_dir="$1" state_real run_parent
+    [[ -d "$run_dir" ]] || return 0
+    ffsmart_benchmark_path_safe "$run_dir" || {
+        ffsmart_fail 73 benchmark-log-cleanup "Refusing to remove benchmark directory outside state: $run_dir"
+        return 73
+    }
+    state_real="$(cd -- "$FFSMART_STATE_DIR" 2>/dev/null && pwd -P)" || return 73
+    run_parent="$(cd -- "$(dirname -- "$run_dir")" 2>/dev/null && pwd -P)" || return 73
+    [[ "$run_parent" == "$state_real" && "$(basename -- "$run_dir")" == .benchmark-run.* ]] || {
+        ffsmart_fail 73 benchmark-log-cleanup "Refusing to remove non-private benchmark directory: $run_dir"
+        return 73
+    }
+    rm -rf -- "$run_dir" || {
+        ffsmart_fail 73 benchmark-log-cleanup "Cannot remove benchmark diagnostics directory: $run_dir"
+        return 73
+    }
+}
 
 ffsmart_benchmark_log_path() {
-    printf '%s/%s' "${FFSMART_BENCHMARK_RUN_DIR:-$FFSMART_STATE_DIR}" "$1"
+    local root="${FFSMART_BENCHMARK_RUN_DIR:-${FFSMART_STATE_DIR:-${TMPDIR:-/tmp}}}" name="$1" stem
+    FFSMART_BENCHMARK_LOG_SEQUENCE=$((FFSMART_BENCHMARK_LOG_SEQUENCE + 1))
+    stem="${name%.log}"
+    FFSMART_BENCHMARK_LOG_PATH="$root/$stem-$FFSMART_BENCHMARK_LOG_SEQUENCE.log"
+    printf '%s' "$FFSMART_BENCHMARK_LOG_PATH"
+}
+
+ffsmart_resolve_benchmark_log_path() {
+    local name="$1" path_root="${FFSMART_BENCHMARK_RUN_DIR:-${FFSMART_STATE_DIR:-${TMPDIR:-/tmp}}}"
+    local capture="$path_root/.benchmark-path.$$.$RANDOM" output status
+    if ! : > "$capture"; then
+        FFSMART_BENCHMARK_LOG_FAILURE=true
+        ffsmart_fail 73 benchmark-log-write "Cannot capture benchmark diagnostic path: $capture"
+        return 73
+    fi
+    if ffsmart_benchmark_log_path "$name" > "$capture"; then :; else
+        status=$?
+        rm -f -- "$capture" || true
+        FFSMART_BENCHMARK_LOG_FAILURE=true
+        return "$status"
+    fi
+    if output="$(tr -d '\r\n' < "$capture")" && [[ -n "$output" ]]; then :; else
+        rm -f -- "$capture" || true
+        FFSMART_BENCHMARK_LOG_FAILURE=true
+        ffsmart_fail 73 benchmark-log-write "Cannot read benchmark diagnostic path: $capture"
+        return 73
+    fi
+    if ! rm -f -- "$capture"; then
+        FFSMART_BENCHMARK_LOG_FAILURE=true
+        ffsmart_fail 73 benchmark-log-write "Cannot remove benchmark path capture: $capture"
+        return 73
+    fi
+    FFSMART_BENCHMARK_LOG_PATH="$output"
 }
 
 ffsmart_prepare_benchmark_log() {
     local log_file="$1"
+    ffsmart_benchmark_path_safe "$log_file" || {
+        FFSMART_BENCHMARK_LOG_FAILURE=true
+        ffsmart_fail 73 benchmark-log-write "Benchmark diagnostic path is outside state: $log_file"
+        return 73
+    }
     if ! : > "$log_file"; then
         FFSMART_BENCHMARK_LOG_FAILURE=true
         ffsmart_fail 73 benchmark-log-write "Cannot write benchmark diagnostic: $log_file"
@@ -25,20 +123,58 @@ ffsmart_prepare_benchmark_log() {
     fi
 }
 
+ffsmart_write_benchmark_summary() {
+    local temporary="$1" log
+    if ! printf 'FFmpeg Smart benchmark diagnostics\n' > "$temporary"; then return 73; fi
+    if ! printf 'completed_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$temporary"; then return 73; fi
+    shopt -s nullglob
+    for log in "$FFSMART_BENCHMARK_RUN_DIR"/*.log; do
+        [[ -f "$log" ]] || { shopt -u nullglob; return 73; }
+        if ! printf '\n===== %s =====\n' "${log##*/}" >> "$temporary"; then
+            shopt -u nullglob
+            return 73
+        fi
+        if ! cat -- "$log" >> "$temporary"; then
+            shopt -u nullglob
+            return 73
+        fi
+    done
+    shopt -u nullglob
+}
+
 ffsmart_publish_benchmark_log() {
-    local target="$FFSMART_STATE_DIR/benchmark-latest.log" temporary="$target.tmp.$$" log
-    {
-        printf 'FFmpeg Smart benchmark diagnostics\n'
-        printf 'completed_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-        for log in "$FFSMART_BENCHMARK_RUN_DIR"/*.log; do
-            [[ -e "$log" ]] || continue
-            printf '\n===== %s =====\n' "${log##*/}"
-            cat -- "$log"
-        done
-    } > "$temporary" || return 1
-    rm -f -- "$FFSMART_STATE_DIR"/candidate-*.log "$FFSMART_STATE_DIR"/capacity-*.log "$FFSMART_STATE_DIR"/10bit-*.log
-    mv -f -- "$temporary" "$target" || return 1
-    rm -rf -- "$FFSMART_BENCHMARK_RUN_DIR"
+    local target="$FFSMART_STATE_DIR/benchmark-latest.log" temporary="" log run_dir failed=0
+    ffsmart_benchmark_run_dir_safe || return 73
+    ffsmart_benchmark_path_safe "$target" || return 73
+    [[ ! -e "$target" || -f "$target" ]] || return 73
+    [[ ! -L "$target" ]] || return 73
+    temporary="$(mktemp "$FFSMART_STATE_DIR/.benchmark-latest.XXXXXX")" || return 73
+    if ! ffsmart_write_benchmark_summary "$temporary"; then
+        rm -f -- "$temporary"
+        return 73
+    fi
+    mv -f -- "$temporary" "$target" || {
+        rm -f -- "$temporary"
+        return 73
+    }
+
+    shopt -s nullglob
+    for log in "$FFSMART_STATE_DIR"/candidate-*.log "$FFSMART_STATE_DIR"/capacity-*.log "$FFSMART_STATE_DIR"/10bit-*.log; do
+        [[ -f "$log" ]] || { failed=73; continue; }
+        rm -f -- "$log" || failed=73
+    done
+    for run_dir in "$FFSMART_STATE_DIR"/.benchmark-run.*; do
+        [[ -d "$run_dir" ]] || continue
+        [[ "$run_dir" == "$FFSMART_BENCHMARK_RUN_DIR" ]] && continue
+        ffsmart_remove_benchmark_run_dir "$run_dir" || failed=73
+    done
+    shopt -u nullglob
+    if (( failed != 0 )); then
+        return 73
+    fi
+    ffsmart_remove_benchmark_run_dir "$FFSMART_BENCHMARK_RUN_DIR" || return 73
+    FFSMART_BENCHMARK_RUN_DIR=""
+    return 0
 }
 ffsmart_build_hardware_decode_args() {
     local accel="$1" node="$2"
@@ -127,53 +263,174 @@ ffsmart_build_benchmark_command() {
 }
 
 ffsmart_extract_speed() {
-    local log_file="$1" speed
-    speed="$(tr '\r' '\n' < "$log_file" | sed -n 's/.*speed=[[:space:]]*\([0-9.]*\)x.*/\1/p' | tail -n 1)"
+    local log_file="$1" speed content
+    if content="$(tr '\r' '\n' < "$log_file")"; then :; else
+        FFSMART_BENCHMARK_LOG_FAILURE=true
+        ffsmart_fail 73 benchmark-log-read "Cannot read benchmark diagnostic: $log_file"
+        return 73
+    fi
+    speed="$(printf '%s\n' "$content" | sed -n 's/.*speed=[[:space:]]*\([0-9.]*\)x.*/\1/p' | tail -n 1)"
     [[ -n "$speed" ]] || speed=0
     printf '%s' "$speed"
+}
+
+ffsmart_run_benchmark_command_worker() {
+    local log_file="$1" fifo="${FFSMART_BENCHMARK_RUN_DIR:-${FFSMART_STATE_DIR:-${TMPDIR:-/tmp}}}/.benchmark-stderr.$$.$RANDOM"
+    local writer_pid ffmpeg_pid writer_status ffmpeg_status
+    if [[ -n "${FFSMART_STATE_DIR:-}" ]]; then
+        ffsmart_benchmark_path_safe "$log_file" || return 73
+        ffsmart_benchmark_path_safe "$(dirname -- "$fifo")" || return 73
+    fi
+    [[ ! -L "$log_file" && ( ! -e "$log_file" || -f "$log_file" ) ]] || {
+        FFSMART_BENCHMARK_LOG_FAILURE=true
+        ffsmart_fail 73 benchmark-log-write "Benchmark diagnostic destination is not a regular file: $log_file"
+        return 73
+    }
+    if ! mkfifo -- "$fifo"; then
+        FFSMART_BENCHMARK_LOG_FAILURE=true
+        ffsmart_fail 73 benchmark-log-write "Cannot create benchmark diagnostic pipe: $fifo"
+        return 73
+    fi
+    cat -- "$fifo" >> "$log_file" &
+    writer_pid="$!"
+    "${FFSMART_BENCH_CMD[@]}" > /dev/null 2> "$fifo" &
+    ffmpeg_pid="$!"
+    trap 'ffsmart_benchmark_command_signal_cleanup "$ffmpeg_pid" "$writer_pid"' TERM INT
+    if wait "$writer_pid"; then writer_status=0; else writer_status=$?; fi
+    if (( writer_status != 0 )); then
+        kill -TERM "$ffmpeg_pid" 2>/dev/null || true
+        sleep 1
+        kill -KILL "$ffmpeg_pid" 2>/dev/null || true
+        wait "$ffmpeg_pid" 2>/dev/null || true
+        rm -f -- "$fifo" || true
+        trap - TERM INT
+        FFSMART_BENCHMARK_LOG_FAILURE=true
+        ffsmart_fail 73 benchmark-log-write "Cannot persist benchmark diagnostic: $log_file"
+        return 73
+    fi
+    if wait "$ffmpeg_pid"; then ffmpeg_status=0; else ffmpeg_status=$?; fi
+    rm -f -- "$fifo" || true
+    trap - TERM INT
+    return "$ffmpeg_status"
+}
+
+ffsmart_benchmark_command_signal_cleanup() {
+    local ffmpeg_pid="$1" writer_pid="$2"
+    trap - TERM INT
+    kill -TERM "$ffmpeg_pid" "$writer_pid" 2>/dev/null || true
+    sleep 2
+    kill -KILL "$ffmpeg_pid" "$writer_pid" 2>/dev/null || true
+    wait "$ffmpeg_pid" 2>/dev/null || true
+    wait "$writer_pid" 2>/dev/null || true
+    exit 143
+}
+
+ffsmart_run_benchmark_command() {
+    local status
+    if ( ffsmart_run_benchmark_command_worker "$@" ); then
+        return 0
+    else
+        status=$?
+    fi
+    [[ "$status" -eq 73 ]] && FFSMART_BENCHMARK_LOG_FAILURE=true
+    return "$status"
 }
 
 ffsmart_benchmark_candidate() {
     local node="$1" accel="$2" codec="$3" low_power="$4" duration="${5:-5}"
     local log_file speed
-    log_file="$(ffsmart_benchmark_log_path "candidate-${node##*/}-${accel}-${codec}-${low_power}.log")"
-    ffsmart_prepare_benchmark_log "$log_file" || return
+    FFSMART_BENCHMARK_SPEED=0
+    ffsmart_resolve_benchmark_log_path "candidate-${node##*/}-${accel}-${codec}-${low_power}.log" || return 73
+    log_file="$FFSMART_BENCHMARK_LOG_PATH"
+    if ffsmart_prepare_benchmark_log "$log_file"; then :; else return 73; fi
     ffsmart_build_benchmark_command "$node" "$accel" "$codec" "$low_power" "$duration" || return 1
-    if "${FFSMART_BENCH_CMD[@]}" > /dev/null 2>> "$log_file"; then
-        speed="$(ffsmart_extract_speed "$log_file")"
+    if ffsmart_run_benchmark_command "$log_file"; then
+        if speed="$(ffsmart_extract_speed "$log_file")"; then :; else
+            local status=$?
+            [[ "$status" -eq 73 ]] && return 73
+            return 1
+        fi
         awk -v s="$speed" 'BEGIN { exit !(s > 0) }' || return 1
+        FFSMART_BENCHMARK_SPEED="$speed"
         printf '%s' "$speed"
         return 0
+    else
+        local status=$?
+        [[ "$status" -eq 73 ]] && return 73
     fi
     return 1
 }
 
+ffsmart_run_benchmark_candidate() {
+    local result_root="${FFSMART_BENCHMARK_RUN_DIR:-${FFSMART_STATE_DIR:-${TMPDIR:-/tmp}}}"
+    local result_file="$result_root/.benchmark-result.$$.$RANDOM" status speed
+    if [[ -n "${FFSMART_STATE_DIR:-}" ]]; then
+        if ffsmart_benchmark_path_safe "$(dirname -- "$result_file")"; then :; else
+            FFSMART_BENCHMARK_LOG_FAILURE=true
+            ffsmart_fail 73 benchmark-log-write "Benchmark result capture is outside state: $result_file"
+            return 73
+        fi
+    fi
+    if ! : > "$result_file"; then
+        FFSMART_BENCHMARK_LOG_FAILURE=true
+        ffsmart_fail 73 benchmark-log-write "Cannot write benchmark result capture: $result_file"
+        return 73
+    fi
+    if ffsmart_benchmark_candidate "$@" > "$result_file"; then
+        if speed="$(tr -d '\r\n' < "$result_file")" && [[ -n "$speed" ]]; then
+            FFSMART_BENCHMARK_SPEED="$speed"
+        else
+            FFSMART_BENCHMARK_LOG_FAILURE=true
+            rm -f -- "$result_file" || true
+            ffsmart_fail 73 benchmark-log-write "Cannot read benchmark result capture: $result_file"
+            return 73
+        fi
+        rm -f -- "$result_file" || return 73
+        return 0
+    else
+        status=$?
+    fi
+    rm -f -- "$result_file" || true
+    return "$status"
+}
+
 ffsmart_probe_10bit() {
     local node="$1" accel="$2" direction="$3" log_file
-    log_file="$(ffsmart_benchmark_log_path "10bit-${node##*/}-${accel}-${direction}.log")"
-    ffsmart_prepare_benchmark_log "$log_file" || return
+    ffsmart_resolve_benchmark_log_path "10bit-${node##*/}-${accel}-${direction}.log" || return 73
+    log_file="$FFSMART_BENCHMARK_LOG_PATH"
+    if ffsmart_prepare_benchmark_log "$log_file"; then :; else return 73; fi
     [[ -s "$FFSMART_HEVC10_SAMPLE" ]] || return 1
     case "$accel:$direction" in
         qsv:decode)
-            ffmpeg -hide_banner -loglevel error -nostdin \
+            FFSMART_BENCH_CMD=(ffmpeg -hide_banner -loglevel error -nostdin \
                 -init_hw_device "qsv=ffsmart:hw,child_device=$node" -filter_hw_device ffsmart \
                 -hwaccel qsv -hwaccel_output_format qsv -c:v hevc_qsv \
-                -i "$FFSMART_HEVC10_SAMPLE" -map 0:v:0 -frames:v 30 -f null - > /dev/null 2> "$log_file" ;;
+                -i "$FFSMART_HEVC10_SAMPLE" -map 0:v:0 -frames:v 30 -f null -) ;;
         qsv:encode)
-            ffmpeg -hide_banner -loglevel error -nostdin \
+            FFSMART_BENCH_CMD=(ffmpeg -hide_banner -loglevel error -nostdin \
                 -init_hw_device "qsv=ffsmart:hw,child_device=$node" -filter_hw_device ffsmart \
                 -i "$FFSMART_HEVC10_SAMPLE" -map 0:v:0 -frames:v 30 \
-                -vf 'format=p010le,hwupload=extra_hw_frames=64' -c:v hevc_qsv -profile:v main10 -f null - > /dev/null 2> "$log_file" ;;
+                -vf 'format=p010le,hwupload=extra_hw_frames=64' -c:v hevc_qsv -profile:v main10 -f null -) ;;
         vaapi:decode)
-            ffmpeg -hide_banner -loglevel error -nostdin -vaapi_device "$node" \
+            FFSMART_BENCH_CMD=(ffmpeg -hide_banner -loglevel error -nostdin -vaapi_device "$node" \
                 -hwaccel vaapi -hwaccel_device "$node" -hwaccel_output_format vaapi \
-                -i "$FFSMART_HEVC10_SAMPLE" -map 0:v:0 -frames:v 30 -f null - > /dev/null 2> "$log_file" ;;
+                -i "$FFSMART_HEVC10_SAMPLE" -map 0:v:0 -frames:v 30 -f null -) ;;
         vaapi:encode)
-            ffmpeg -hide_banner -loglevel error -nostdin -vaapi_device "$node" \
+            FFSMART_BENCH_CMD=(ffmpeg -hide_banner -loglevel error -nostdin -vaapi_device "$node" \
                 -i "$FFSMART_HEVC10_SAMPLE" -map 0:v:0 -frames:v 30 \
-                -vf 'format=p010le,hwupload' -c:v hevc_vaapi -profile:v main10 -f null - > /dev/null 2> "$log_file" ;;
+                -vf 'format=p010le,hwupload' -c:v hevc_vaapi -profile:v main10 -f null -) ;;
         *) return 1 ;;
     esac
+    ffsmart_run_benchmark_command "$log_file"
+}
+
+ffsmart_stop_benchmark_workers() {
+    local pid
+    (($#)) || return 0
+    for pid in "$@"; do kill -TERM "$pid" 2>/dev/null || true; done
+    sleep 3
+    for pid in "$@"; do kill -KILL "$pid" 2>/dev/null || true; done
+    for pid in "$@"; do wait "$pid" 2>/dev/null || true; done
 }
 
 ffsmart_capacity_level_stable() {
@@ -184,33 +441,52 @@ ffsmart_capacity_level_stable() {
     timeout_marker="$FFSMART_STATE_DIR/.capacity-timeout.$$"
     rm -f -- "$timeout_marker"
     for ((index=1; index<=level; index++)); do
-        log="$(ffsmart_benchmark_log_path "capacity-${node##*/}-${level}-${index}.log")"
-        ffsmart_prepare_benchmark_log "$log" || return
-        ffsmart_build_benchmark_command "$node" "$accel" "$codec" "$low_power" "$duration" || return 1
-        "${FFSMART_BENCH_CMD[@]}" > /dev/null 2>> "$log" &
+        ffsmart_resolve_benchmark_log_path "capacity-${node##*/}-${level}-${index}.log" || {
+            status=$?
+            ffsmart_stop_benchmark_workers "${pids[@]}"
+            return "$status"
+        }
+        log="$FFSMART_BENCHMARK_LOG_PATH"
+        if ffsmart_prepare_benchmark_log "$log"; then :; else
+            status=$?
+            ffsmart_stop_benchmark_workers "${pids[@]}"
+            return "$status"
+        fi
+        if ffsmart_build_benchmark_command "$node" "$accel" "$codec" "$low_power" "$duration"; then :; else
+            status=$?
+            ffsmart_stop_benchmark_workers "${pids[@]}"
+            return "$status"
+        fi
+        ffsmart_run_benchmark_command_worker "$log" &
         pids+=("$!")
         logs+=("$log")
     done
     (
         watchdog_sleep=""
-        trap '[[ -z "$watchdog_sleep" ]] || kill "$watchdog_sleep" 2>/dev/null || true; exit 0' TERM INT
+        trap 'if [[ -n "$watchdog_sleep" ]]; then kill "$watchdog_sleep" 2>/dev/null || true; wait "$watchdog_sleep" 2>/dev/null || true; fi; exit 0' TERM INT
         sleep "$wall_timeout" &
         watchdog_sleep="$!"
         wait "$watchdog_sleep" || exit 0
-        trap - TERM INT
         printf 'timeout\n' > "$timeout_marker"
         ffsmart_log "Capacity probe deadline node=$node level=$level wall=${wall_timeout}s"
         for index in "${pids[@]}"; do kill -TERM "$index" 2>/dev/null || true; done
-        sleep 2
+        sleep 3 &
+        watchdog_sleep="$!"
+        wait "$watchdog_sleep" || exit 0
         for index in "${pids[@]}"; do kill -KILL "$index" 2>/dev/null || true; done
     ) &
     watchdog_pid="$!"
     for index in "${!pids[@]}"; do
-        if ! wait "${pids[$index]}"; then
-            status=1
+        if wait "${pids[$index]}"; then :; else
+            local worker_status=$?
+            if [[ "$worker_status" -eq 73 ]]; then status=73; elif [[ "$status" -ne 73 ]]; then status=1; fi
         fi
-        speed="$(ffsmart_extract_speed "${logs[$index]}")"
-        if ! awk -v s="$speed" -v m="$min_speed" 'BEGIN { exit !(s >= m) }'; then
+        if speed="$(ffsmart_extract_speed "${logs[$index]}")"; then :; else
+            local extract_status=$?
+            if [[ "$extract_status" -eq 73 ]]; then status=73; elif [[ "$status" -ne 73 ]]; then status=1; fi
+            continue
+        fi
+        if ! awk -v s="$speed" -v m="$min_speed" 'BEGIN { exit !(s >= m) }' && [[ "$status" -ne 73 ]]; then
             status=1
         fi
     done
@@ -219,7 +495,7 @@ ffsmart_capacity_level_stable() {
     fi
     wait "$watchdog_pid" 2>/dev/null || true
     if [[ -e "$timeout_marker" ]]; then
-        status=1
+        [[ "$status" -eq 73 ]] || status=1
         rm -f -- "$timeout_marker"
     fi
     return "$status"
@@ -240,12 +516,16 @@ ffsmart_benchmark_device_path() {
     FFSMART_PATH_LOW_POWER=0
     ffsmart_encoder_available "${codec}_${accel}" || return 1
     for low_power in 1 0; do
-        if speed="$(ffsmart_benchmark_candidate "$node" "$accel" "$codec" "$low_power" 5)"; then
+        if ffsmart_run_benchmark_candidate "$node" "$accel" "$codec" "$low_power" 5; then
+            speed="$FFSMART_BENCHMARK_SPEED"
             ffsmart_log "Common-path candidate node=$node accel=$accel codec=$codec low_power=$low_power speed=${speed}x"
             if awk -v a="$speed" -v b="$FFSMART_PATH_SPEED" 'BEGIN { exit !(a>b) }'; then
                 FFSMART_PATH_SPEED="$speed"
                 FFSMART_PATH_LOW_POWER="$low_power"
             fi
+        else
+            local status=$?
+            [[ "$status" -eq 73 ]] && return 73
         fi
     done
     awk -v s="$FFSMART_PATH_SPEED" 'BEGIN { exit !(s>0) }'
@@ -255,6 +535,7 @@ ffsmart_measure_capacity() {
     local node="$1" accel="$2" codec="$3" low_power="$4" speed="$5"
     local short="${CONCURRENCY_SHORT_DURATION:-10}" confirm="${CONCURRENCY_CONFIRM_DURATION:-30}" max="${CONCURRENCY_MAX_STREAMS:-48}"
     local guess highest=0 unstable=0 level midpoint
+    FFSMART_CAPACITY_RESULT=0
     guess="$(awk -v s="$speed" 'BEGIN { n=int(s); if(n<1)n=1; print n }')"
     (( guess > max )) && guess="$max"
     level="$guess"
@@ -263,6 +544,9 @@ ffsmart_measure_capacity() {
         if ffsmart_capacity_level_stable "$node" "$accel" "$codec" "$low_power" "$level" "$short"; then
             highest="$level"
             break
+        else
+            local status=$?
+            [[ "$status" -eq 73 ]] && return 73
         fi
         unstable="$level"
         level=$((level / 2))
@@ -277,6 +561,8 @@ ffsmart_measure_capacity() {
                 (( highest == max )) && break
                 level="$(ffsmart_next_capacity_upper_level "$highest" "$max")"
             else
+                local status=$?
+                [[ "$status" -eq 73 ]] && return 73
                 unstable="$level"
                 break
             fi
@@ -291,6 +577,8 @@ ffsmart_measure_capacity() {
         if ffsmart_capacity_level_stable "$node" "$accel" "$codec" "$low_power" "$midpoint" "$short"; then
             highest="$midpoint"
         else
+            local status=$?
+            [[ "$status" -eq 73 ]] && return 73
             unstable="$midpoint"
         fi
     done
@@ -298,21 +586,35 @@ ffsmart_measure_capacity() {
         ffsmart_log "Capacity floor node=$node level=1 duration=${short}s"
         if ffsmart_capacity_level_stable "$node" "$accel" "$codec" "$low_power" "$level" "$short"; then
             highest=1
+        else
+            local status=$?
+            [[ "$status" -eq 73 ]] && return 73
         fi
     fi
     ffsmart_log "Capacity confirmation node=$node stable=$highest duration=${confirm}s"
-    ffsmart_capacity_level_stable "$node" "$accel" "$codec" "$low_power" "$highest" "$confirm" || {
+    if ffsmart_capacity_level_stable "$node" "$accel" "$codec" "$low_power" "$highest" "$confirm"; then :; else
+        local status=$?
+        [[ "$status" -eq 73 ]] && return 73
         while (( highest > 1 )); do
             highest=$((highest - 1))
-            ffsmart_capacity_level_stable "$node" "$accel" "$codec" "$low_power" "$highest" "$confirm" && break
+            if ffsmart_capacity_level_stable "$node" "$accel" "$codec" "$low_power" "$highest" "$confirm"; then
+                break
+            else
+                status=$?
+                [[ "$status" -eq 73 ]] && return 73
+            fi
         done
-    }
+    fi
     if (( highest < max )); then
         ffsmart_log "Capacity rejection confirmation node=$node level=$((highest + 1)) duration=${confirm}s"
         if ffsmart_capacity_level_stable "$node" "$accel" "$codec" "$low_power" "$((highest + 1))" "$confirm"; then
             highest=$((highest + 1))
+        else
+            local status=$?
+            [[ "$status" -eq 73 ]] && return 73
         fi
     fi
+    FFSMART_CAPACITY_RESULT="$highest"
     printf '%s' "$highest"
 }
 
@@ -320,8 +622,8 @@ ffsmart_rebuild_cache() {
     local force_rebenchmark="${1:-true}"
     ffsmart_lock_acquire || return
     FFSMART_BENCHMARK_LOG_FAILURE=false
-    FFSMART_BENCHMARK_RUN_DIR="$FFSMART_STATE_DIR/.benchmark-run.$$"
-    mkdir -p -- "$FFSMART_BENCHMARK_RUN_DIR" || { ffsmart_fail 73 benchmark-log-write "Cannot create benchmark diagnostics directory"; return 73; }
+    FFSMART_BENCHMARK_RUN_DIR=""
+    ffsmart_create_benchmark_run_dir || return 73
     ffsmart_ensure_benchmark_samples || return
     if [[ "$force_rebenchmark" == true ]]; then
         FFSMART_REUSE_SIGNATURES=()
@@ -349,11 +651,15 @@ ffsmart_rebuild_cache() {
             for codec in hevc h264; do
                 ffsmart_encoder_available "${codec}_${accel}" || continue
                 for low_power in 1 0; do
-                    if speed="$(ffsmart_benchmark_candidate "$node" "$accel" "$codec" "$low_power" 5)"; then
+                    if ffsmart_run_benchmark_candidate "$node" "$accel" "$codec" "$low_power" 5; then
+                        speed="$FFSMART_BENCHMARK_SPEED"
                         ffsmart_log "Candidate node=$node accel=$accel codec=$codec low_power=$low_power speed=${speed}x"
                         if awk -v a="$speed" -v b="$node_best_speed" 'BEGIN { exit !(a>b) }'; then
                             node_best_speed="$speed"; node_best_accel="$accel"; node_best_codec="$codec"; node_best_low="$low_power"
                         fi
+                    else
+                        local status=$?
+                        [[ "$status" -eq 73 ]] && return 73
                     fi
                 done
             done
@@ -385,6 +691,8 @@ ffsmart_rebuild_cache() {
                     ffsmart_device_set capacity "$node" ""
                     ffsmart_log "Aligned device node=$node accel=$best_accel codec=$best_codec low_power=$FFSMART_PATH_LOW_POWER speed=${FFSMART_PATH_SPEED}x"
                 else
+                    local alignment_status=$?
+                    [[ "$alignment_status" -eq 73 ]] && return 73
                     ffsmart_log "Device node=$node has no working common path accel=$best_accel codec=$best_codec; retaining its independent best path"
                 fi
             fi
@@ -403,8 +711,16 @@ ffsmart_rebuild_cache() {
 
     for node in "${FFSMART_RENDER_NODES[@]}"; do
         accel="$(ffsmart_device_get accel "$node" || true)"; [[ -n "$accel" ]] || continue
-        if ffsmart_probe_10bit "$node" "$accel" decode; then d10=true; else d10=false; fi
-        if ffsmart_probe_10bit "$node" "$accel" encode; then e10=true; else e10=false; fi
+        if ffsmart_probe_10bit "$node" "$accel" decode; then d10=true; else
+            local status=$?
+            [[ "$status" -eq 73 ]] && return 73
+            d10=false
+        fi
+        if ffsmart_probe_10bit "$node" "$accel" encode; then e10=true; else
+            local status=$?
+            [[ "$status" -eq 73 ]] && return 73
+            e10=false
+        fi
         ffsmart_device_set decode10 "$node" "$d10"
         ffsmart_device_set encode10 "$node" "$e10"
         [[ "$FFSMART_BENCHMARK_LOG_FAILURE" == false ]] || return 73
@@ -414,7 +730,13 @@ ffsmart_rebuild_cache() {
         for node in "${FFSMART_RENDER_NODES[@]}"; do
             accel="$(ffsmart_device_get accel "$node" || true)"; [[ -n "$accel" ]] || continue
             [[ -n "$(ffsmart_device_get capacity "$node" || true)" ]] && continue
-            capacity="$(ffsmart_measure_capacity "$node" "$accel" "$(ffsmart_device_get codec "$node")" "$(ffsmart_device_get low_power "$node")" "$(ffsmart_device_get speed "$node")")"
+            if ffsmart_measure_capacity "$node" "$accel" "$(ffsmart_device_get codec "$node")" "$(ffsmart_device_get low_power "$node")" "$(ffsmart_device_get speed "$node")"; then
+                capacity="$FFSMART_CAPACITY_RESULT"
+            else
+                local status=$?
+                [[ "$status" -eq 73 ]] && return 73
+                return "$status"
+            fi
             ffsmart_device_set capacity "$node" "$capacity"
             [[ "$FFSMART_BENCHMARK_LOG_FAILURE" == false ]] || return 73
         done
@@ -457,8 +779,15 @@ ffsmart_rebuild_cache() {
         FFSMART_CACHE_BEST_10BIT_ENCODE=false
     fi
     FFSMART_CACHE_FINGERPRINT="$(ffsmart_current_fingerprint)"
-    ffsmart_cache_write
-    ffsmart_publish_benchmark_log || { ffsmart_fail 73 benchmark-log-write "Cannot consolidate successful benchmark diagnostics"; return 73; }
+    if ffsmart_cache_write; then :; else
+        local status=$?
+        ffsmart_fail 73 cache-write "Cannot publish capability cache; benchmark diagnostics remain preserved"
+        return "$status"
+    fi
+    if ffsmart_publish_benchmark_log; then :; else
+        ffsmart_fail 73 benchmark-log-write "Cannot consolidate successful benchmark diagnostics"
+        return 73
+    fi
     ffsmart_log "Capability cache rebuilt: accel=$best_accel codec=$best_codec primary=$FFSMART_CACHE_PRIMARY_DEVICE secondary=$FFSMART_CACHE_SECONDARY_DEVICE"
 }
 

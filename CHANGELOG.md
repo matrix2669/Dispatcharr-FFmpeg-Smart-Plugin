@@ -20,14 +20,21 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
   beta.3; its source test also exposed a stale hard-coded runtime pin.
 - Make source synchronization update `tracking_ref` and `commit` atomically
   and refuse an implicit ref change when it would replace the recorded commit.
+- Restore GPU/device capacity summaries from the canonical V2 cache format
+  without using display parsing to decide cache validity.
+- Synchronize the complete seven-file wrapper bundle to immutable work-branch
+  commit `51c4e3b6e9f1aed6e1d820e8f324071059701e80`, the beta.4 candidate before
+  its future tag is published.
 
 ### Validation
 
 - Added regressions for failed rebuilds with valid old caches, successful
   completion, process disappearance, restart races, worker admission, truthful
-  notifications, and source-ref synchronization.
-- Beta.4's existing version and source-pin failures are recorded as negative
-  evidence; live Dispatcharr update and benchmark validation remain pending.
+  notifications, source-ref synchronization, canonical V2 cache display
+  summaries, malformed cache records, and robust PID zombie handling.
+- Beta.4's existing version and source-pin failures remain recorded as negative
+  evidence; final Astra review, future dev/tag/registry publication, and live
+  Dispatcharr update and benchmark validation remain pending.
 
 ## [0.2.1-beta.4] - 2026-09-07
 

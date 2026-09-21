@@ -44,7 +44,7 @@ Data flow:
 3. Stream Profiles pass `{streamUrl}` and `{userAgent}` to the launcher. Output Profiles pass Dispatcharr's non-seekable MPEG-TS input as `pipe:0`.
 4. The launcher sets persistent state and required-cache policy, then the wrapper resolves stream policy, capabilities, and GPU scheduling and returns MPEG-TS on standard output.
 5. **Rebuild Hardware Cache** creates the shared benchmark lock, stops active Dispatcharr transcodes, and launches `ffmpeg-smart-plugin.sh --recache-only` in the background.
-6. **Benchmark Status** reads the background PID, run outcome, log, and capability cache from `/data/ffmpeg_smart_profiles` without starting new work. It reports process disappearance as stale and never lets a valid existing cache hide the latest failed rebuild.
+6. **Benchmark Status** reads the background PID, run outcome, log, and capability cache from `/data/ffmpeg_smart_profiles` without starting new work. It parses canonical V2 capability records (and legacy display records) only for optional summaries; wrapper `--cache-status` remains the cache-validity authority. It reports process disappearance as stale and never lets a valid existing cache hide the latest failed rebuild.
 
 ## Ownership boundaries
 
