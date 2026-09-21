@@ -4,7 +4,17 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNTIME_DIR="$REPO_ROOT/ffmpeg-smart-profiles"
 SOURCE_METADATA="$RUNTIME_DIR/FFMPEG_SMART_SOURCE.json"
-SOURCE_REF="${1:-$(jq -r '.tracking_ref // "main"' "$SOURCE_METADATA")}"
+SOURCE_REF_EXPLICIT=false
+if [[ $# -gt 1 ]]; then
+    echo "Usage: $0 [branch|tag|40-character-commit]" >&2
+    exit 2
+fi
+if [[ $# -eq 1 ]]; then
+    SOURCE_REF="$1"
+    SOURCE_REF_EXPLICIT=true
+else
+    SOURCE_REF="$(jq -r '.tracking_ref // "main"' "$SOURCE_METADATA")"
+fi
 
 sha256_file() {
     if command -v sha256sum >/dev/null 2>&1; then
@@ -31,6 +41,7 @@ done
 
 source_repo="$(jq -r '.repository' "$SOURCE_METADATA")"
 recorded_commit="$(jq -r '.commit' "$SOURCE_METADATA")"
+recorded_ref="$(jq -r '.tracking_ref // ""' "$SOURCE_METADATA")"
 source_git_url="https://github.com/$source_repo.git"
 
 if [[ "$SOURCE_REF" =~ ^[0-9a-f]{40}$ ]]; then
@@ -47,6 +58,14 @@ fi
 
 if [[ ! "$source_commit" =~ ^[0-9a-f]{40}$ ]]; then
     echo "Unable to resolve $source_repo ref '$SOURCE_REF' to a commit" >&2
+    exit 1
+fi
+
+# A stale tracking_ref must never silently replace a newer immutable commit when
+# the script is run without an explicit ref. Operators can still intentionally
+# select a different branch, tag, or commit by passing it as the argument.
+if [[ "$SOURCE_REF_EXPLICIT" == false && "$recorded_commit" =~ ^[0-9a-f]{40}$ && "$source_commit" != "$recorded_commit" && ( "$SOURCE_REF" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ || "$SOURCE_REF" =~ ^[0-9a-f]{40}$ ) ]]; then
+    echo "Ref '$SOURCE_REF' resolves to $source_commit but metadata already pins $recorded_commit; pass the intended ref explicitly" >&2
     exit 1
 fi
 
@@ -88,6 +107,9 @@ done < <(jq -c '.files[]' "$SOURCE_METADATA")
 if [[ "$recorded_commit" != "$source_commit" ]]; then
     changed=true
 fi
+if [[ "$recorded_ref" != "$SOURCE_REF" ]]; then
+    changed=true
+fi
 
 if [[ "$changed" == false ]]; then
     echo "Bundled FFmpeg Adaptive runtime is already current at $source_commit"
@@ -102,7 +124,8 @@ while IFS= read -r entry; do
 done < <(jq -c '.files[]' "$SOURCE_METADATA")
 
 next_metadata="$temp_dir/metadata-final.json"
-jq --arg commit "$source_commit" '.commit = $commit' \
+jq --arg commit "$source_commit" --arg tracking_ref "$SOURCE_REF" \
+    '.commit = $commit | .tracking_ref = $tracking_ref' \
     "$metadata_copy" >"$next_metadata"
 mv "$next_metadata" "$SOURCE_METADATA"
 

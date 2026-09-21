@@ -11,7 +11,7 @@ import types
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ffmpeg-smart-profiles"))
 
@@ -540,6 +540,314 @@ class CapabilityStatusTests(unittest.TestCase):
         self.assertIn("Run Rebuild Hardware Cache", result["message"])
         self.assertIn("Previous cached capabilities (not usable)", result["message"])
 
+    def test_failed_rebuild_remains_error_when_previous_cache_is_valid(self):
+        with TemporaryDirectory() as temp_dir:
+            outcome_file = Path(temp_dir) / "benchmark-outcome.json"
+            outcome_file.write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "state": "error",
+                        "pid": 1234,
+                        "run_id": "failed-run",
+                        "returncode": 73,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                patch("plugin.BENCHMARK_OUTCOME_FILE", outcome_file),
+                patch.object(Plugin, "_read_pid", return_value=None),
+                patch.object(
+                    Plugin,
+                    "_cache_status",
+                    return_value=("valid", "Hardware capability cache is valid."),
+                ),
+                patch.object(
+                    Plugin,
+                    "_capability_summary",
+                    return_value={"summary": "Capabilities: VAAPI/HEVC."},
+                ),
+            ):
+                result = Plugin()._benchmark_status()
+
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["cache_status"], "valid")
+        self.assertEqual(result["benchmark_outcome"], "error")
+        self.assertIn("benchmark failed", result["message"])
+        self.assertIn("existing hardware capability cache is valid", result["message"])
+
+    def test_successful_rebuild_is_complete_after_monitor_records_zero(self):
+        class FakeProcess:
+            pid = 1234
+
+            def wait(self):
+                return 0
+
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            outcome_file = temp_path / "benchmark-outcome.json"
+            pid_file = temp_path / "recache.pid"
+            outcome_file.write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "state": "running",
+                        "pid": 1234,
+                        "run_id": "successful-run",
+                        "started_at": "2026-09-21T00:00:00+00:00",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            pid_file.write_text("1234", encoding="utf-8")
+            with (
+                patch("plugin.BENCHMARK_OUTCOME_FILE", outcome_file),
+                patch("plugin.PID_FILE", pid_file),
+                patch("plugin.RUNTIME_DIR", temp_path),
+                patch.object(Plugin, "_sync_cache_notification"),
+                patch.object(Plugin, "_pid_is_running", return_value=False),
+                patch.object(Plugin, "_cache_status", return_value=("valid", "valid")),
+                patch.object(Plugin, "_capability_summary", return_value=None),
+            ):
+                Plugin._monitor_recache_completion(FakeProcess(), "successful-run")
+                result = Plugin()._benchmark_status()
+
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["benchmark_outcome"], "complete")
+        self.assertFalse(pid_file.exists())
+
+    def test_process_disappearance_marks_running_outcome_stale(self):
+        with TemporaryDirectory() as temp_dir:
+            outcome_file = Path(temp_dir) / "benchmark-outcome.json"
+            outcome_file.write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "state": "running",
+                        "pid": 1234,
+                        "run_id": "disappeared-run",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                patch("plugin.BENCHMARK_OUTCOME_FILE", outcome_file),
+                patch.object(Plugin, "_read_pid", return_value=None),
+                patch.object(Plugin, "_cache_status", return_value=("valid", "valid")),
+                patch.object(Plugin, "_capability_summary", return_value=None),
+            ):
+                result = Plugin()._benchmark_status()
+
+        self.assertEqual(result["status"], "stale")
+        self.assertEqual(result["benchmark_outcome"], "stale")
+        self.assertIn("no longer running", result["message"])
+
+    def test_invalid_outcome_with_historical_pid_is_not_reported_complete(self):
+        with TemporaryDirectory() as temp_dir:
+            outcome_file = Path(temp_dir) / "benchmark-outcome.json"
+            pid_file = Path(temp_dir) / "recache.pid"
+            outcome_file.write_text('{"schema": 1, "state": "complete"}\n', encoding="utf-8")
+            pid_file.write_text("1234\n", encoding="utf-8")
+            with (
+                patch("plugin.BENCHMARK_OUTCOME_FILE", outcome_file),
+                patch("plugin.PID_FILE", pid_file),
+                patch.object(Plugin, "_read_pid", return_value=1234),
+                patch.object(Plugin, "_pid_is_running", return_value=False),
+                patch.object(Plugin, "_cache_status", return_value=("valid", "valid")),
+                patch.object(Plugin, "_capability_summary", return_value=None),
+            ):
+                result = Plugin()._benchmark_status()
+
+        self.assertEqual(result["status"], "stale")
+        self.assertNotEqual(result["benchmark_outcome"], "complete")
+
+    def test_invalid_outcome_without_attempt_evidence_is_not_reported_complete(self):
+        with TemporaryDirectory() as temp_dir:
+            outcome_file = Path(temp_dir) / "benchmark-outcome.json"
+            outcome_file.write_text('{"schema": 1, "state": "complete"}\n', encoding="utf-8")
+            with (
+                patch("plugin.BENCHMARK_OUTCOME_FILE", outcome_file),
+                patch.object(Plugin, "_read_pid", return_value=None),
+                patch.object(Plugin, "_cache_status", return_value=("valid", "valid")),
+                patch.object(Plugin, "_capability_summary", return_value=None),
+            ):
+                result = Plugin()._benchmark_status()
+
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["benchmark_outcome"], "unknown")
+        self.assertIn("cannot prove", result["message"])
+
+    def test_late_monitor_cannot_overwrite_newer_restart(self):
+        class OldProcess:
+            pid = 1234
+
+            def wait(self):
+                return 1
+
+        with TemporaryDirectory() as temp_dir:
+            outcome_file = Path(temp_dir) / "benchmark-outcome.json"
+            outcome_file.write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "state": "running",
+                        "pid": 5678,
+                        "run_id": "new-run",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                patch("plugin.BENCHMARK_OUTCOME_FILE", outcome_file),
+                patch.object(Plugin, "_sync_cache_notification"),
+            ):
+                Plugin._monitor_recache_completion(OldProcess(), "old-run")
+
+            outcome = json.loads(outcome_file.read_text(encoding="utf-8"))
+
+        self.assertEqual(outcome["state"], "running")
+        self.assertEqual(outcome["run_id"], "new-run")
+
+    def test_monitor_releases_admission_when_outcome_is_missing(self):
+        class GoneProcess:
+            pid = 1234
+
+            def wait(self):
+                return 1
+
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            admission_file = temp_path / "recache-admission.lock"
+            outcome_file = temp_path / "benchmark-outcome.json"
+            with (
+                patch("plugin.BENCHMARK_ADMISSION_FILE", admission_file),
+                patch("plugin.BENCHMARK_OUTCOME_FILE", outcome_file),
+                patch("plugin.RUNTIME_DIR", temp_path),
+                patch.object(Plugin, "_sync_cache_notification"),
+            ):
+                self.assertTrue(Plugin._acquire_recache_admission("lost-run"))
+                Plugin._monitor_recache_completion(GoneProcess(), "lost-run")
+                self.assertTrue(Plugin._acquire_recache_admission("recovery-run"))
+                Plugin._release_recache_admission("recovery-run")
+
+    def test_monitor_releases_admission_when_wait_raises(self):
+        class BrokenProcess:
+            pid = 1234
+
+            def wait(self):
+                raise RuntimeError("wait failed")
+
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            with (
+                patch("plugin.BENCHMARK_ADMISSION_FILE", temp_path / "admission.lock"),
+                patch("plugin.BENCHMARK_OUTCOME_FILE", temp_path / "outcome.json"),
+                patch("plugin.RUNTIME_DIR", temp_path),
+                patch.object(Plugin, "_sync_cache_notification"),
+            ):
+                self.assertTrue(Plugin._acquire_recache_admission("broken-run"))
+                with self.assertRaisesRegex(RuntimeError, "wait failed"):
+                    Plugin._monitor_recache_completion(BrokenProcess(), "broken-run")
+                self.assertTrue(Plugin._acquire_recache_admission("recovery-run"))
+                Plugin._release_recache_admission("recovery-run")
+
+    def test_process_shared_admission_guard_rejects_competing_worker(self):
+        with TemporaryDirectory() as temp_dir:
+            admission_file = Path(temp_dir) / "recache-admission.lock"
+            runtime_dir = Path(temp_dir)
+            with (
+                patch("plugin.BENCHMARK_ADMISSION_FILE", admission_file),
+                patch("plugin.RUNTIME_DIR", runtime_dir),
+                patch.object(Plugin, "_read_pid", return_value=4321),
+                patch.object(Plugin, "_pid_is_running", return_value=True),
+            ):
+                self.assertTrue(Plugin._acquire_recache_admission("first-run"))
+                self.assertFalse(Plugin._acquire_recache_admission("second-run"))
+                Plugin._release_recache_admission("first-run")
+
+            self.assertEqual(admission_file.read_text(encoding="utf-8").strip().split(":")[-1], "first-run")
+
+    def test_process_shared_admission_guard_covers_pidless_launch_window(self):
+        with TemporaryDirectory() as temp_dir:
+            admission_file = Path(temp_dir) / "recache-admission.lock"
+            with (
+                patch("plugin.BENCHMARK_ADMISSION_FILE", admission_file),
+                patch("plugin.RUNTIME_DIR", Path(temp_dir)),
+                patch.object(Plugin, "_read_pid", return_value=None),
+            ):
+                self.assertTrue(Plugin._acquire_recache_admission("first-run"))
+                self.assertFalse(Plugin._acquire_recache_admission("second-run"))
+                Plugin._release_recache_admission("first-run")
+
+            self.assertTrue(admission_file.exists())
+
+    def test_admission_write_failure_releases_file_lock(self):
+        with TemporaryDirectory() as temp_dir:
+            admission_file = Path(temp_dir) / "recache-admission.lock"
+            with (
+                patch("plugin.BENCHMARK_ADMISSION_FILE", admission_file),
+                patch("plugin.RUNTIME_DIR", Path(temp_dir)),
+            ):
+                with patch("plugin.os.write", side_effect=OSError("write failed")):
+                    with self.assertRaisesRegex(OSError, "write failed"):
+                        Plugin._acquire_recache_admission("failed-write")
+                self.assertIsNone(Plugin._recache_admission_fd)
+                self.assertTrue(Plugin._acquire_recache_admission("recovery-run"))
+                Plugin._release_recache_admission("recovery-run")
+
+    def test_live_canonical_lock_is_not_overwritten(self):
+        with TemporaryDirectory() as temp_dir:
+            lock_file = Path(temp_dir) / ".benchmark.lock"
+            lock_file.write_text("1234\n", encoding="utf-8")
+            with (
+                patch("plugin.BENCHMARK_LOCK_FILE", lock_file),
+                patch.object(Plugin, "_process_identity_is_live", return_value=True),
+            ):
+                self.assertTrue(Plugin._benchmark_lock_is_live())
+                self.assertFalse(Plugin._claim_benchmark_lock())
+
+            self.assertEqual(lock_file.read_text(encoding="utf-8"), "1234\n")
+
+    def test_canonical_lock_identity_does_not_require_wrapper_commandline(self):
+        with TemporaryDirectory() as temp_dir:
+            lock_file = Path(temp_dir) / ".benchmark.lock"
+            lock_file.write_text("1234 5678\n", encoding="utf-8")
+            with (
+                patch("plugin.BENCHMARK_LOCK_FILE", lock_file),
+                patch.object(Plugin, "_process_identity_is_live", return_value=True),
+            ):
+                self.assertTrue(Plugin._benchmark_lock_is_live())
+
+    def test_process_identity_parses_comm_after_final_parenthesis_and_rejects_zombie(self):
+        tail = ["S"] + ["x"] * 18 + ["5678"]
+        stat_line = "1234 (worker with ) spaces) " + " ".join(tail)
+        zombie_line = "1234 (worker with ) spaces) Z " + " ".join(["x"] * 18 + ["5678"])
+        with patch("plugin.os.kill"), patch("plugin.Path.read_text", return_value=stat_line):
+            self.assertTrue(Plugin._process_identity_is_live(1234, "5678"))
+        with patch("plugin.os.kill"), patch("plugin.Path.read_text", return_value=zombie_line):
+            self.assertFalse(Plugin._process_identity_is_live(1234, "5678"))
+
+    def test_terminate_recache_kills_remaining_child_process_group(self):
+        class ParentProcess:
+            pid = 1234
+
+            def wait(self, timeout=None):
+                return 0
+
+        with (
+            patch("plugin.os.killpg") as killpg,
+            patch.object(Plugin, "_process_group_exists", side_effect=[True, True, True]),
+            patch("plugin.time.monotonic", side_effect=[0, 6]),
+            patch("plugin.time.sleep"),
+        ):
+            Plugin._terminate_recache_process(ParentProcess())
+
+        self.assertEqual(
+            [call.args[1] for call in killpg.call_args_list],
+            [plugin.signal.SIGTERM, plugin.signal.SIGKILL],
+        )
+
     def test_valid_cache_is_complete_without_a_plugin_rebuild_log(self):
         with TemporaryDirectory() as temp_dir:
             log_file = Path(temp_dir) / "missing-recache.log"
@@ -630,6 +938,37 @@ class CacheNotificationTests(unittest.TestCase):
             ),
         ):
             self.assertIsNone(Plugin._cache_notification_state())
+
+    def test_failed_rebuild_notification_does_not_claim_valid_old_cache_is_bypassed(self):
+        with TemporaryDirectory() as temp_dir:
+            outcome_file = Path(temp_dir) / "benchmark-outcome.json"
+            outcome_file.write_text(
+                json.dumps(
+                    {
+                        "schema": 1,
+                        "state": "error",
+                        "pid": 1234,
+                        "run_id": "failed-run",
+                        "returncode": 73,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                patch("plugin.BENCHMARK_OUTCOME_FILE", outcome_file),
+                patch.object(Plugin, "_read_pid", return_value=None),
+                patch.object(
+                    Plugin,
+                    "_cache_status",
+                    return_value=("valid", "Hardware capability cache is valid."),
+                ),
+            ):
+                state = Plugin._cache_notification_state()
+
+        self.assertEqual(state["state"], "error")
+        self.assertEqual(state["cache_status"], "valid")
+        self.assertIn("existing hardware capability cache is valid", state["message"])
+        self.assertNotIn("using basic FFmpeg stream copy", state["message"])
 
     def test_persistent_notification_is_created_and_cleared(self):
         class FakeDismissals:
@@ -979,10 +1318,10 @@ class ReleaseMetadataTests(unittest.TestCase):
         }
 
         self.assertEqual(metadata["repository"], "matrix2669/ffmpeg-adaptive")
-        self.assertEqual(metadata["tracking_ref"], "v0.1.0-beta.2")
+        self.assertEqual(metadata["tracking_ref"], "v0.1.0-beta.3")
         self.assertEqual(
             metadata["commit"],
-            "4df6c12e395187fc0080f858685a3c6ebd7a8c42",
+            "4319656239b48c3cc19e9d0b6d5bfe92c9eacffe",
         )
         self.assertRegex(metadata["commit"], r"^[0-9a-f]{40}$")
         self.assertEqual({entry["path"] for entry in metadata["files"]}, expected_paths)
@@ -996,6 +1335,103 @@ class ReleaseMetadataTests(unittest.TestCase):
                 runtime_path.stat().st_mode & 0o777,
                 int(entry["mode"], 8),
             )
+
+    def test_source_sync_updates_selected_ref_and_rejects_implicit_downgrade(self):
+        sync_script = (REPO_ROOT / "scripts" / "sync-ffmpeg-smart.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("SOURCE_REF_EXPLICIT=false", sync_script)
+        self.assertIn("SOURCE_REF_EXPLICIT=true", sync_script)
+        self.assertIn("pass the intended ref explicitly", sync_script)
+        self.assertIn(
+            "'.commit = $commit | .tracking_ref = $tracking_ref'",
+            sync_script,
+        )
+        self.assertIn('recorded_ref" != "$SOURCE_REF"', sync_script)
+
+    def test_source_sync_updates_ref_atomically_and_is_idempotent_offline(self):
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            runtime = root / "ffmpeg-smart-profiles"
+            fake_bin = root / "bin"
+            runtime.mkdir()
+            fake_bin.mkdir()
+            script = root / "scripts" / "sync-ffmpeg-smart.sh"
+            script.parent.mkdir()
+            shutil.copy(REPO_ROOT / "scripts" / "sync-ffmpeg-smart.sh", script)
+            script.chmod(0o755)
+            old_content = "#!/usr/bin/env bash\nprintf old\n"
+            new_content = "#!/usr/bin/env bash\nprintf new\n"
+            runtime_file = runtime / "ffmpeg-smart.sh"
+            runtime_file.write_text(old_content, encoding="utf-8")
+            runtime_file.chmod(0o755)
+            old_sha = hashlib.sha256(old_content.encode()).hexdigest()
+            (runtime / "FFMPEG_SMART_SOURCE.json").write_text(
+                json.dumps(
+                    {
+                        "repository": "example/runtime",
+                        "tracking_ref": "v1.0.0",
+                        "commit": "0" * 40,
+                        "files": [{"path": "ffmpeg-smart.sh", "mode": "0755", "sha256": old_sha}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            new_commit = "1" * 40
+            (fake_bin / "git").write_text(
+                "#!/usr/bin/env bash\nprintf '%s\\t%s\\n' '" + new_commit + "' \"$3\"\n",
+                encoding="utf-8",
+            )
+            (fake_bin / "curl").write_text(
+                "#!/usr/bin/env bash\nwhile (($#)); do [[ $1 == --output ]] && { out=$2; shift 2; continue; }; shift; done\nprintf '%s' "
+                + repr(new_content)
+                + " >\"$out\"\n",
+                encoding="utf-8",
+            )
+            (fake_bin / "git").chmod(0o755)
+            (fake_bin / "curl").chmod(0o755)
+            environment = {**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"}
+
+            first = subprocess.run(
+                [str(script), "new-tag"],
+                cwd=root,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(first.returncode, 0, first.stderr)
+            metadata = json.loads((runtime / "FFMPEG_SMART_SOURCE.json").read_text())
+            self.assertEqual(metadata["tracking_ref"], "new-tag")
+            self.assertEqual(metadata["commit"], new_commit)
+            content_after_first = runtime_file.read_text()
+
+            second = subprocess.run(
+                [str(script), "new-tag"],
+                cwd=root,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertEqual(runtime_file.read_text(), content_after_first)
+
+            (runtime / "FFMPEG_SMART_SOURCE.json").write_text(
+                json.dumps({**metadata, "tracking_ref": "v1.0.0", "commit": "0" * 40}),
+                encoding="utf-8",
+            )
+            refused = subprocess.run(
+                [str(script)],
+                cwd=root,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertIn("pass the intended ref explicitly", refused.stderr)
+            self.assertEqual(runtime_file.read_text(), content_after_first)
 
     def test_bundled_wrapper_copies_mapped_auxiliary_streams(self):
         policy_module = (

@@ -20,6 +20,7 @@ This ledger records why every current branch exists and preserves the context ne
 | `docs/ffmpeg-smart-beta2-live-validation` | documentation | integrated | `dev` at `3c7b07c` | `dev` | Record development publication and managed live-validation evidence. |
 | `fix/ffmpeg-adaptive-beta2-fidelity` | fix | published | `dev` at `bcf767c` | `dev` | Pin the corrected wrapper beta, invalidate the superseded capacity policy, and prepare `v0.2.1-beta.3`. |
 | `docs/ffmpeg-smart-beta3-live-validation` | documentation | integrated | `dev` at `dd54d4c` | `dev` | Record beta.3 publication and managed installed validation without moving its tag. |
+| `fix/benchmark-outcome-beta5` | fix | active | `dev` at `38f7d17` | `dev` | Repair benchmark outcome persistence, truthful status/notifications, version agreement, and source-sync ref tracking, then complete the reviewed beta.5 wrapper pin, dev tag/registry, and zero-viewer live update/benchmark gates. Stable/main promotion, GitHub Release, unrelated work, and branch deletion remain excluded. |
 
 ## Branch records
 
@@ -36,13 +37,14 @@ This ledger records why every current branch exists and preserves the context ne
 
 - Purpose: integrate plugin and canonical-wrapper changes before stable promotion.
 - Base and target: `main`.
-- Current state: `v0.2.1-beta.3` is tagged at
-  `dd54d4cc82a454135c4eb3b75eeeb5eb48713fe6`, published through `origin/dev`,
-  advertised by the development registry, and validated in managed Dispatcharr.
-- Publication state: corrective beta source, development-registry publication,
-  installed update, cache rebuild, actual Stream/Output Profile checks, and
-  overlapping multi-GPU scheduling pass; `origin/main` remains the immutable
-  `v0.2.0` stable source.
+- Current state: remote `dev` is at beta.4 preparation commit
+  `38f7d17ca1698343cd5ca4dc82e29edb237400d2`; it is not review-ready because
+  the plugin version remained beta.3 and its source-pin test exposed a stale
+  tracking ref/commit contract. The beta.3 tag and its prior publication remain
+  immutable historical evidence.
+- Publication state: no beta.4/beta.5 publication, registry update, installed
+  update, or live validation is claimed for this repair; `origin/main` remains
+  the immutable `v0.2.0` stable source.
 - Last verified at: `2026-08-30`.
 
 ### `feature/adaptive-input-probing`
@@ -156,6 +158,28 @@ This ledger records why every current branch exists and preserves the context ne
   `659098e74aeaddb1bca57a776e55b8da8b0b58a5`; the remote documentation
   branch is retained and no branch deletion is authorized.
 - Last reviewed: `2026-08-30`.
+
+### `fix/benchmark-outcome-beta5`
+
+- Purpose: correct the beta.4 benchmark lifecycle and release metadata before
+  the next immutable development beta.
+- Base and target: remote `dev` at
+  `38f7d17ca1698343cd5ca4dc82e29edb237400d2`; target `dev` after parent
+  review and wrapper synchronization.
+- Scope: plugin benchmark outcome persistence and admission, status and
+  notification semantics, version agreement, source-sync ref/commit contract,
+  tests, CI shell gates, and owned records.
+- Pending handoff: the wrapper worker supplies the next immutable runtime and
+  final pin/checksums; the parent then owns exact source synchronization,
+  Astra review, the beta.5 dev tag and development-registry publication, and
+  the zero-viewer managed update/benchmark gate. No tag, registry update, live
+  install, live benchmark, merge, or publication has occurred on this branch.
+- Excluded: stable/main promotion, GitHub Release or manual stable ZIP,
+  unrelated project work, and branch deletion.
+- Validation so far: 60 plugin unit tests, Python compilation, JSON checks,
+  shell syntax, and offline source verification pass locally. Live Dispatcharr
+  validation and final archive review remain parent gates.
+- Last reviewed: `2026-09-21`.
 
 ## Completed branch cleanup
 

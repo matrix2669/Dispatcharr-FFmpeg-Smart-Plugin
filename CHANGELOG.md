@@ -4,6 +4,31 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ## [Unreleased]
 
+## [0.2.1-beta.5] - 2026-09-21
+
+### Fixed
+
+- Persist the benchmark run outcome independently from cache validity. A
+  nonzero rebuild, an abandoned process, or a stale run now remains visible as
+  an error requiring a new rebuild even when an existing cache is still valid.
+- Record the child exit status, remove only the matching PID/admission state,
+  and protect newer benchmark runs from late completion callbacks.
+- Serialize benchmark admission across plugin workers and keep notifications
+  accurate when an existing valid cache remains after a failed rebuild.
+- Synchronize `VERSION`, `Plugin.version`, and `plugin.json` at beta.5. The
+  beta.4 archive had an update-loop defect because `Plugin.version` remained at
+  beta.3; its source test also exposed a stale hard-coded runtime pin.
+- Make source synchronization update `tracking_ref` and `commit` atomically
+  and refuse an implicit ref change when it would replace the recorded commit.
+
+### Validation
+
+- Added regressions for failed rebuilds with valid old caches, successful
+  completion, process disappearance, restart races, worker admission, truthful
+  notifications, and source-ref synchronization.
+- Beta.4's existing version and source-pin failures are recorded as negative
+  evidence; live Dispatcharr update and benchmark validation remain pending.
+
 ## [0.2.1-beta.4] - 2026-09-07
 
 ### Fixed
@@ -328,7 +353,9 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 - Recorded final live capacity evidence at the canonical wrapper's 1.2x threshold: Arc A310 18 and UHD 770 15. These values are environment-specific and are not plugin defaults.
 - Verified the `v0.1.0` tagged tree installs from the stable plugin directory.
 
-[Unreleased]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.1-beta.3...HEAD
+[Unreleased]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.1-beta.5...HEAD
+[0.2.1-beta.5]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.1-beta.4...v0.2.1-beta.5
+[0.2.1-beta.4]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.1-beta.3...v0.2.1-beta.4
 [0.2.1-beta.3]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.1-beta.2...v0.2.1-beta.3
 [0.2.1-beta.2]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.1-beta.1...v0.2.1-beta.2
 [0.2.1-beta.1]: https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/compare/v0.2.0...v0.2.1-beta.1

@@ -1,5 +1,8 @@
 import copy
+import datetime
+import fcntl
 import glob
+import json
 import logging
 import os
 import re
@@ -8,6 +11,7 @@ import signal
 import subprocess
 import threading
 import time
+import uuid
 from pathlib import Path
 
 
@@ -18,7 +22,9 @@ STATE_DIR = Path(os.environ.get("FFMPEG_SMART_STATE_DIR", "/data/ffmpeg_smart_pr
 RUNTIME_DIR = STATE_DIR / "runtime"
 PID_FILE = RUNTIME_DIR / "recache.pid"
 LOG_FILE = RUNTIME_DIR / "recache.log"
+BENCHMARK_OUTCOME_FILE = RUNTIME_DIR / "benchmark-outcome.json"
 BENCHMARK_LOCK_FILE = STATE_DIR / ".benchmark.lock"
+BENCHMARK_ADMISSION_FILE = RUNTIME_DIR / "recache-admission.lock"
 CACHE_FILE = STATE_DIR / ".capabilities.cache"
 FALLBACK_MARKER_FILE = RUNTIME_DIR / "fallback-invocation"
 RUNTIME_MODULE_PATHS = tuple(
@@ -190,7 +196,7 @@ def advanced_ffmpeg_fields(prefix, label):
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.2.1-beta.3"
+    version = "0.2.1-beta.5"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
@@ -198,6 +204,9 @@ class Plugin:
     author = "matrix2669"
     help_url = "https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin"
     _notification_watcher_lock = threading.Lock()
+    _recache_start_lock = threading.Lock()
+    _recache_admission_fd = None
+    _recache_admission_run_id = None
     _notification_watcher_thread = None
     _notification_watcher_stop_event = None
 
@@ -957,13 +966,35 @@ class Plugin:
             removed.append(profile.name)
 
     def _start_recache(self, logger):
+        # Serialize the PID check and child launch so concurrent Dispatcharr
+        # action requests cannot start two hardware scans.
+        with self._recache_start_lock:
+            return self._start_recache_locked(logger)
+
+    def _start_recache_locked(self, logger):
         self._ensure_script()
         pid = self._read_pid()
         if pid and self._pid_is_running(pid):
             return {"status": "running", "message": f"Benchmark is already running (PID {pid})."}
 
+        run_id = uuid.uuid4().hex
+        if not self._acquire_recache_admission(run_id):
+            pid = self._read_pid()
+            if pid and self._pid_is_running(pid):
+                return {"status": "running", "message": f"Benchmark is already running (PID {pid})."}
+            raise RuntimeError("Another worker is starting the hardware benchmark")
         try:
-            BENCHMARK_LOCK_FILE.write_text("starting\n", encoding="utf-8")
+            claimed_lock = self._claim_benchmark_lock()
+        except Exception:
+            self._release_recache_admission(run_id)
+            raise
+        if not claimed_lock:
+            self._release_recache_admission(run_id)
+            return {
+                "status": "running",
+                "message": "A hardware benchmark is already in progress.",
+            }
+        try:
             stopped = self._stop_active_streams(logger)
             log_handle = LOG_FILE.open("w", encoding="utf-8")
             try:
@@ -978,16 +1009,69 @@ class Plugin:
             finally:
                 log_handle.close()
         except Exception:
-            BENCHMARK_LOCK_FILE.unlink(missing_ok=True)
+            self._release_claimed_benchmark_lock()
+            self._release_recache_admission(run_id)
+            try:
+                self._write_benchmark_outcome(
+                    "error",
+                    run_id=run_id,
+                    returncode=None,
+                    error="Could not start the hardware benchmark",
+                )
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "Could not persist failed benchmark startup state"
+                )
             raise
-        PID_FILE.write_text(str(process.pid), encoding="utf-8")
+        try:
+            PID_FILE.write_text(str(process.pid), encoding="utf-8")
+            self._write_benchmark_outcome(
+                "running",
+                pid=process.pid,
+                run_id=run_id,
+            )
+        except Exception:
+            self._terminate_recache_process(process)
+            PID_FILE.unlink(missing_ok=True)
+            self._release_claimed_benchmark_lock()
+            self._release_recache_admission(run_id)
+            try:
+                self._write_benchmark_outcome(
+                    "error",
+                    run_id=run_id,
+                    error="Could not persist the hardware benchmark state",
+                )
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "Could not persist failed benchmark startup state"
+                )
+            raise
         self._sync_cache_notification()
-        threading.Thread(
+        monitor = threading.Thread(
             target=self._monitor_recache_completion,
-            args=(process,),
+            args=(process, run_id),
             name="ffmpeg-smart-cache-notification",
             daemon=True,
-        ).start()
+        )
+        try:
+            monitor.start()
+        except Exception:
+            self._terminate_recache_process(process)
+            PID_FILE.unlink(missing_ok=True)
+            self._release_claimed_benchmark_lock()
+            self._release_recache_admission(run_id)
+            try:
+                self._write_benchmark_outcome(
+                    "error",
+                    pid=process.pid,
+                    run_id=run_id,
+                    error="Could not monitor the hardware benchmark",
+                )
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "Could not persist failed benchmark monitor state"
+                )
+            raise
         if logger:
             logger.info("Started FFmpeg Smart cache rebuild PID %s", process.pid)
         return {
@@ -1001,10 +1085,29 @@ class Plugin:
         }
 
     @classmethod
-    def _monitor_recache_completion(cls, process):
+    def _monitor_recache_completion(cls, process, run_id=None):
         try:
-            process.wait()
+            returncode = process.wait()
+            outcome = cls._read_benchmark_outcome()
+            if (
+                outcome
+                and outcome.get("state") == "running"
+                and outcome.get("pid") == process.pid
+                and (run_id is None or outcome.get("run_id") == run_id)
+            ):
+                cls._write_benchmark_outcome(
+                    "complete" if returncode == 0 else "error",
+                    pid=process.pid,
+                    run_id=outcome.get("run_id"),
+                    returncode=returncode,
+                )
+                try:
+                    if cls._read_pid() == process.pid:
+                        PID_FILE.unlink(missing_ok=True)
+                except OSError:
+                    pass
         finally:
+            cls._release_recache_admission(run_id)
             try:
                 from django.db import close_old_connections
 
@@ -1016,6 +1119,216 @@ class Plugin:
                     "Could not synchronize FFmpeg Smart cache notification after rebuild",
                     exc_info=True,
                 )
+
+    @staticmethod
+    def _terminate_recache_process(process):
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except Exception:
+            pass
+        try:
+            process.wait(timeout=5)
+        except Exception:
+            pass
+        deadline = time.monotonic() + 5
+        while Plugin._process_group_exists(process.pid) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        if not Plugin._process_group_exists(process.pid):
+            return
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=2)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _process_group_exists(pgid):
+        try:
+            os.killpg(pgid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+
+    @staticmethod
+    def _read_benchmark_outcome():
+        try:
+            outcome = json.loads(BENCHMARK_OUTCOME_FILE.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            return None
+        if not isinstance(outcome, dict) or outcome.get("schema") != 1 or outcome.get("state") not in {
+            "running",
+            "complete",
+            "error",
+            "stale",
+        }:
+            return None
+        if not outcome.get("run_id"):
+            return None
+        if outcome["state"] == "running" and not isinstance(outcome.get("pid"), int):
+            return None
+        if outcome["state"] == "complete" and outcome.get("returncode") != 0:
+            return None
+        if outcome["state"] == "error" and outcome.get("returncode") == 0:
+            return None
+        return outcome
+
+    @staticmethod
+    def _acquire_recache_admission(run_id):
+        RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+        fd = None
+        try:
+            fd = os.open(BENCHMARK_ADMISSION_FILE, os.O_RDWR | os.O_CREAT, 0o644)
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            os.ftruncate(fd, 0)
+            os.write(fd, f"{os.getpid()}:{run_id}\n".encode())
+        except BlockingIOError:
+            try:
+                if fd is not None:
+                    os.close(fd)
+            except OSError:
+                pass
+            return False
+        except Exception:
+            try:
+                if fd is not None:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                    os.close(fd)
+            except OSError:
+                pass
+            raise
+        Plugin._recache_admission_fd = fd
+        Plugin._recache_admission_run_id = run_id
+        return True
+
+    @staticmethod
+    def _release_recache_admission(run_id):
+        fd = Plugin._recache_admission_fd
+        if fd is None:
+            return
+        try:
+            owner = os.pread(fd, 256, 0).decode(errors="replace").strip()
+        except OSError:
+            owner = f"{os.getpid()}:{Plugin._recache_admission_run_id or ''}"
+        if run_id and not owner.endswith(f":{run_id}"):
+            return
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        except OSError:
+            pass
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        Plugin._recache_admission_fd = None
+        Plugin._recache_admission_run_id = None
+
+    @staticmethod
+    def _benchmark_lock_is_live():
+        try:
+            raw = BENCHMARK_LOCK_FILE.read_text(encoding="utf-8").split()
+        except OSError:
+            return False
+        owner = raw[0] if raw else ""
+        recorded_start = raw[1] if len(raw) > 1 else ""
+        if owner.isdigit() and Plugin._process_identity_is_live(int(owner), recorded_start):
+            return True
+        if not owner or owner == "starting":
+            try:
+                return time.time() - BENCHMARK_LOCK_FILE.stat().st_mtime < 60
+            except OSError:
+                return False
+        try:
+            BENCHMARK_LOCK_FILE.unlink()
+        except OSError:
+            pass
+        return False
+
+    @staticmethod
+    def _process_identity_is_live(pid, recorded_start=""):
+        if pid <= 0:
+            return False
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        try:
+            stat_line = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+            closing_comm = stat_line.rfind(")")
+            if closing_comm < 0:
+                return True
+            fields = stat_line[closing_comm + 2 :].split()
+            state = fields[0]
+            current_start = fields[19]
+        except (OSError, IndexError):
+            # A live PID with unreadable identity is safer to retain than to
+            # unlink and allow a second benchmark to overlap it.
+            return True
+        if state == "Z":
+            return False
+        return not recorded_start or current_start == recorded_start
+
+    @staticmethod
+    def _claim_benchmark_lock():
+        if Plugin._benchmark_lock_is_live():
+            return False
+        fd = None
+        try:
+            fd = os.open(BENCHMARK_LOCK_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            return False
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write("starting\n")
+        except Exception:
+            try:
+                BENCHMARK_LOCK_FILE.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise
+        return True
+
+    @staticmethod
+    def _release_claimed_benchmark_lock():
+        try:
+            if BENCHMARK_LOCK_FILE.read_text(encoding="utf-8").strip() == "starting":
+                BENCHMARK_LOCK_FILE.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    @staticmethod
+    def _write_benchmark_outcome(
+        state,
+        *,
+        pid=None,
+        run_id=None,
+        returncode=None,
+        error=None,
+    ):
+        RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+        previous = Plugin._read_benchmark_outcome() or {}
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        outcome = {
+            "schema": 1,
+            "state": state,
+            "pid": pid,
+            "run_id": run_id,
+            "started_at": previous.get("started_at") if state != "running" else now,
+            "completed_at": now if state != "running" else None,
+        }
+        if returncode is not None:
+            outcome["returncode"] = returncode
+        if error:
+            outcome["error"] = error
+        temporary = BENCHMARK_OUTCOME_FILE.with_name(
+            f"{BENCHMARK_OUTCOME_FILE.name}.{os.getpid()}.{threading.get_ident()}.{uuid.uuid4().hex}.tmp"
+        )
+        temporary.write_text(json.dumps(outcome, sort_keys=True) + "\n", encoding="utf-8")
+        os.replace(temporary, BENCHMARK_OUTCOME_FILE)
+        return outcome
 
     @staticmethod
     def _stop_active_streams(logger):
@@ -1078,6 +1391,25 @@ class Plugin:
     def _benchmark_status(self):
         pid = self._read_pid()
         running = bool(pid and self._pid_is_running(pid))
+        outcome = self._read_benchmark_outcome()
+        outcome_state = outcome.get("state") if outcome else None
+        outcome_file_present = BENCHMARK_OUTCOME_FILE.exists()
+        if not running and pid and outcome_state is None:
+            outcome = {
+                "state": "stale",
+                "error": "The benchmark process outcome is missing or invalid",
+            }
+            outcome_state = "stale"
+        elif not running and not outcome and outcome_file_present:
+            outcome_state = "unknown"
+        if outcome_state == "running" and not running:
+            # Status is read-only. The monitor may be between wait() and its
+            # completion write, so derive a stale view without overwriting the
+            # run's eventual exit code.
+            outcome = dict(outcome)
+            outcome["state"] = "stale"
+            outcome["error"] = "The benchmark process is no longer running"
+            outcome_state = "stale"
         lines = []
         if LOG_FILE.exists():
             lines = LOG_FILE.read_text(encoding="utf-8", errors="replace").splitlines()[-30:]
@@ -1097,6 +1429,38 @@ class Plugin:
                 )
             else:
                 message += f" Current cache status: {cache_status}."
+        elif outcome_state == "error":
+            status = "error"
+            returncode = outcome.get("returncode")
+            result = (
+                f"Hardware benchmark failed"
+                f"{f' with exit code {returncode}' if returncode is not None else ''}."
+            )
+            if cache_status == "valid":
+                message = (
+                    result
+                    + " An existing hardware capability cache is valid, but the latest rebuild did not complete successfully."
+                    " Run Rebuild Hardware Cache to try again."
+                )
+            else:
+                message = (
+                    result
+                    + " Hardware acceleration remains unavailable until a successful rebuild."
+                    " Run Rebuild Hardware Cache to try again."
+                )
+        elif outcome_state == "stale":
+            status = "stale"
+            message = (
+                "Hardware benchmark state is stale: its recorded process is no longer running."
+                " Run Rebuild Hardware Cache to start a fresh benchmark."
+            )
+        elif outcome_state == "unknown":
+            status = "error"
+            message = (
+                "The latest hardware benchmark outcome is missing or invalid."
+                " Cache health cannot prove that the latest rebuild succeeded."
+                " Run Rebuild Hardware Cache to record a fresh outcome."
+            )
         elif cache_status == "valid":
             status = "complete"
             message = "Hardware capability cache is valid for the current FFmpeg Smart version and hardware."
@@ -1117,6 +1481,7 @@ class Plugin:
             "message": message,
             "pid": pid,
             "cache_status": cache_status,
+            "benchmark_outcome": outcome_state,
             "capabilities": capabilities,
             "recent_log": lines,
         }
@@ -1137,11 +1502,82 @@ class Plugin:
                 ),
             }
 
+        outcome = cls._read_benchmark_outcome()
         cache_status, cache_detail = cls._cache_status()
+        if BENCHMARK_OUTCOME_FILE.exists() and not outcome and not pid:
+            return {
+                "state": "error",
+                "benchmark_status": "unknown",
+                "cache_status": cache_status,
+                "notification_type": "warning",
+                "priority": "high",
+                "title": "FFmpeg Smart hardware benchmark requires attention",
+                "message": (
+                    "The latest hardware benchmark outcome is missing or invalid."
+                    " Cache health cannot prove that the latest rebuild succeeded."
+                    " Run Rebuild Hardware Cache to record a fresh outcome."
+                ),
+            }
+        if pid and not outcome:
+            message = (
+                "The previous hardware benchmark has no valid recorded outcome."
+                " A fresh rebuild is required."
+            )
+            if cache_status != "valid":
+                message += (
+                    f" {cache_detail} Managed profiles are using basic FFmpeg stream copy"
+                    " and bypassing FFmpeg Smart policy and hardware acceleration."
+                )
+            return {
+                "state": "error",
+                "benchmark_status": "unknown",
+                "cache_status": cache_status,
+                "notification_type": "warning",
+                "priority": "high",
+                "title": "FFmpeg Smart hardware benchmark requires attention",
+                "message": message,
+            }
+        if outcome and outcome.get("state") == "running":
+            # A process that vanished across a Dispatcharr restart leaves a
+            # durable running record but no live PID. Treat that as stale for
+            # notification purposes without mutating the record from this
+            # read-only path.
+            outcome = dict(outcome)
+            outcome["state"] = "stale"
+        if outcome and outcome.get("state") in {"error", "stale"}:
+            if outcome["state"] == "error":
+                returncode = outcome.get("returncode")
+                failure = (
+                    "The last hardware benchmark failed"
+                    f"{f' with exit code {returncode}' if returncode is not None else ''}."
+                )
+            else:
+                failure = "The last hardware benchmark stopped before reporting completion."
+            if cache_status == "valid":
+                message = (
+                    f"{failure} An existing hardware capability cache is valid, but a fresh rebuild is required."
+                    " Run Rebuild Hardware Cache to try again."
+                )
+            else:
+                message = (
+                    f"{failure} {cache_detail} Managed profiles are using basic FFmpeg stream copy"
+                    " and bypassing FFmpeg Smart policy and hardware acceleration. Open FFmpeg Smart Profiles"
+                    " in Plugins and run Rebuild Hardware Cache."
+                )
+            return {
+                "state": "error",
+                "benchmark_status": outcome["state"],
+                "cache_status": cache_status,
+                "notification_type": "warning",
+                "priority": "high",
+                "title": "FFmpeg Smart hardware benchmark requires attention",
+                "message": message,
+            }
         if cache_status == "valid":
             return None
         return {
             "state": cache_status,
+            "cache_status": cache_status,
             "notification_type": "warning",
             "priority": "high",
             "title": "FFmpeg Smart hardware acceleration bypassed",
@@ -1174,14 +1610,20 @@ class Plugin:
                 return
 
             previous_action_data = (existing.action_data or {}) if existing else {}
-            previous_state = previous_action_data.get("cache_status")
+            previous_state = previous_action_data.get(
+                "notification_state",
+                previous_action_data.get("cache_status"),
+            )
             previous_fallback_token = previous_action_data.get("fallback_token")
             effective_fallback_token = fallback_token or previous_fallback_token
             action_data = {
                 "plugin_key": "ffmpeg_smart_profiles",
                 "plugin_action": "rebuild_cache",
-                "cache_status": state["state"],
+                "cache_status": state.get("cache_status", state["state"]),
+                "notification_state": state["state"],
             }
+            if state.get("benchmark_status"):
+                action_data["benchmark_status"] = state["benchmark_status"]
             if effective_fallback_token:
                 action_data["fallback_token"] = effective_fallback_token
             notification, created = SystemNotification.objects.update_or_create(

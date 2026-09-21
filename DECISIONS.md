@@ -874,7 +874,7 @@ Accepted
 
 Keep managed Stream and Output Profiles executing `ffmpeg-smart-plugin.sh` directly. On every enabled plugin load, idempotently restore the execute bits on both bundled shell scripts before Dispatcharr can use managed profiles. Repeat the repair before plugin-owned profile reconciliation and cache rebuild actions. Do not change generated profile commands to `/bin/bash` as a permanent workaround.
 
-Use canonical `ffmpeg-asr --cache-status` as the sole cache-validity authority. **Benchmark Status** reports `complete` only when that command returns `valid`; missing, invalid, stale, inconsistent, or unavailable validation reports `error` and instructs the operator to run **Rebuild Hardware Cache**. A running rebuild remains `running`. Parsed capabilities from a non-valid cache may be shown only as previous, unusable details.
+Use canonical `ffmpeg-asr --cache-status` as the sole cache-validity authority. **Benchmark Status** reports `complete` only when that command returns `valid`; missing, invalid, stale, inconsistent, or unavailable validation reports `error` and instructs the operator to run **Rebuild Hardware Cache**. A running rebuild remains `running`. Parsed capabilities from a non-valid cache may be shown only as previous, unusable details. Beta.5 additionally requires a valid persisted outcome for the latest recorded rebuild; a failed, stale, or unknown outcome overrides cache-valid completion. Legacy installations with no outcome and no PID may report cache health as complete only with explicit cache-health-only wording.
 
 Create one persistent, admin-only Dispatcharr `SystemNotification` with notification key `ffmpeg-smart-hardware-cache`:
 
@@ -1244,3 +1244,68 @@ viewer counts, and final process cleanup.
 - Managed repository 37 beta.2-to-beta.3 update, idempotent profiles, valid
   VAAPI/HEVC 18/14 cache with confirmed rejection at 19/15, decoded-frame live
   matrix, both-GPU scheduler pass, and final clean process audit on `2026-08-30`
+
+---
+
+# ADR-027: Persist benchmark outcomes separately from cache validity
+
+## Status
+
+Accepted for plugin beta.5; refines ADR-020 and ADR-021.
+
+## Date
+
+2026-09-21
+
+## Decision
+
+The plugin persists a run-tokened benchmark outcome under the existing runtime
+state directory with `running`, `complete`, `error`, and derived `stale`
+states. The monitor must use the child process's actual `wait()` return code;
+zero records completion and every other code records failure. A failure stays
+an action error even when the canonical cache validator still reports a
+valid cache. A vanished process is reported as stale without a read-only
+status check overwriting a monitor that is about to record the real exit code.
+
+Admission is protected by a process-shared nonblocking `flock` held for the
+entire launch-to-monitor lifecycle plus the existing in-process lock. The
+plugin also checks and claims the canonical benchmark lock without overwriting
+a live wrapper-owned lock. Completion removes only the matching PID and
+releases its admission handle, and a late monitor may not overwrite a newer
+run's outcome. The canonical-lock liveness check uses PID/start-time identity
+and does not reuse the stricter exact-wrapper command-line check used for the
+plugin's own PID status. Notifications distinguish a failed/stale rebuild from
+a cache-invalid bypass: when the cache validator reports a valid existing
+cache, the message asks for a fresh rebuild without claiming that managed
+profiles are already using degraded stream copy.
+
+Source synchronization treats the selected branch/tag/commit as one atomic
+metadata update. An omitted ref cannot silently replace a recorded immutable
+commit when its stale `tracking_ref` resolves elsewhere; an operator may pass
+the intended ref explicitly. The source metadata records the selected ref and
+resolved commit together only after all bundled files pass checksum, mode, and
+syntax checks.
+
+## Reason
+
+Beta.4 ignored the benchmark child's exit status and inferred completion from
+cache usability. A failed rebuild could therefore appear complete whenever the
+cache validator still reported a valid cache, and a stale monitor could report a newer run's
+result. Beta.4 also carried a beta.2 tracking ref beside a beta.3 commit,
+making an unqualified synchronization capable of downgrading the bundle.
+
+## Consequences
+
+Cache validity remains owned by the canonical wrapper, while benchmark outcome
+truth remains owned by this plugin orchestration layer. Status and notification
+tests must cover nonzero exit with a valid old cache, success, process
+disappearance, restart races, competing workers, and truthful messaging. The
+next wrapper beta's immutable source pin remains a separate worker-owned change
+and must be synchronized and reviewed before publication.
+
+## Provenance
+
+- Beta.4 negative-control archive and source/version test failures reviewed on
+  2026-09-21.
+- Plugin repair branch `fix/benchmark-outcome-beta5` from remote `dev` commit
+  `38f7d17ca1698343cd5ca4dc82e29edb237400d2`.

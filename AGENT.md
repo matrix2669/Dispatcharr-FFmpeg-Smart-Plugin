@@ -26,12 +26,12 @@ This repository owns the `FFmpeg Smart Profiles` plugin for Dispatcharr. The plu
 ## Architecture
 
 - `ffmpeg-smart-profiles/plugin.json` declares Dispatcharr settings and actions.
-- `ffmpeg-smart-profiles/plugin.py` is the Dispatcharr integration layer. It owns profile definitions, settings migration, safe database reconciliation, active-transcode coordination, benchmark lifecycle, and status reporting.
+- `ffmpeg-smart-profiles/plugin.py` is the Dispatcharr integration layer. It owns profile definitions, settings migration, safe database reconciliation, active-transcode coordination, benchmark lifecycle, and status reporting. Benchmark outcome state is persisted separately from canonical cache validity under `/data/ffmpeg_smart_profiles/runtime/benchmark-outcome.json`; a failed or abandoned rebuild remains an error even when an existing cache validates.
 - `ffmpeg-smart-profiles/ffmpeg-smart-plugin.sh` is the plugin-specific launcher. It selects persistent state under `/data/ffmpeg_smart_profiles`, requires an operator-built cache for normal streams, and executes the canonical wrapper.
 - `ffmpeg-smart-profiles/ffmpeg-smart.sh` and `ffmpeg-smart-profiles/lib/*.sh` are one vendored modular runtime dependency. Their canonical source is `matrix2669/ffmpeg-adaptive`; do not develop wrapper behavior independently in this repository.
 - `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json` pins every runtime file to one full source commit, SHA-256 checksum, and installed mode. `FFMPEG_ADAPTIVE_LICENSE` preserves the dependency's MIT notice.
 - `scripts/check-ffmpeg-smart-source.sh` verifies the complete local bundle and, unless `--offline` is used, every exact remote source file.
-- `scripts/sync-ffmpeg-smart.sh` resolves a branch, tag, or full commit, replaces the complete vendored runtime, and updates its pins.
+- `scripts/sync-ffmpeg-smart.sh` resolves a branch, tag, or full commit, replaces the complete vendored runtime, and updates its selected ref and commit atomically. An omitted stale tracking ref cannot silently downgrade the recorded immutable commit.
 - `.github/workflows/ffmpeg-smart-sync.yml` checks the canonical source and opens a reviewable update pull request.
 - `.github/workflows/ffmpeg-smart-verify.yml` validates the source pin, plugin tests, JSON, Python, and shell syntax.
 - `tests/test_plugin.py` covers behavior that can be isolated from Dispatcharr.
@@ -44,7 +44,7 @@ Data flow:
 3. Stream Profiles pass `{streamUrl}` and `{userAgent}` to the launcher. Output Profiles pass Dispatcharr's non-seekable MPEG-TS input as `pipe:0`.
 4. The launcher sets persistent state and required-cache policy, then the wrapper resolves stream policy, capabilities, and GPU scheduling and returns MPEG-TS on standard output.
 5. **Rebuild Hardware Cache** creates the shared benchmark lock, stops active Dispatcharr transcodes, and launches `ffmpeg-smart-plugin.sh --recache-only` in the background.
-6. **Benchmark Status** reads the background PID, log, and capability cache from `/data/ffmpeg_smart_profiles` without starting new work.
+6. **Benchmark Status** reads the background PID, run outcome, log, and capability cache from `/data/ffmpeg_smart_profiles` without starting new work. It reports process disappearance as stale and never lets a valid existing cache hide the latest failed rebuild.
 
 ## Ownership boundaries
 

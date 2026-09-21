@@ -33,6 +33,7 @@ jobs:
           scripts/check-ffmpeg-smart-source.sh
           python3 -m unittest discover -s tests -v
           python3 -m json.tool ffmpeg-smart-profiles/plugin.json >/dev/null
+          bash -n ffmpeg-smart-profiles/ffmpeg-smart-plugin.sh
           bash -n ffmpeg-smart-profiles/ffmpeg-smart.sh
           for module in ffmpeg-smart-profiles/lib/*.sh; do bash -n "$module"; done
       - name: Open update pull request
