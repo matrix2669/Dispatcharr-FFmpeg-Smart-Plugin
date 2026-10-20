@@ -12,14 +12,21 @@ https://raw.githubusercontent.com/matrix2669/dispatcharr-plugins/main/manifest.j
 
 Install **FFmpeg Smart Profiles**, enable it, then run **Install or Update Profiles**.
 
-The immutable development release is plugin tag `v0.2.1-beta.5` at commit
-`a5c0777875056591e4e02c989993f43b3f43aa72`, bundling `ffmpeg-adaptive` beta.4
-at commit `913a958fd5f9edc231c49a70539a09f611fdcc5a`. The exact tag archive
-(`https://api.github.com/repos/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin/zipball/v0.2.1-beta.5`)
-passed native installer validation and has SHA-256
-`db31ce469ea52433af24cf4568463a782fced202124cdf3440c854fcf9754836`.
-The development registry root/detail manifests were published at commit
-`1e55f15ba3824f85209258b6b0dd3280c554924d`, which passed CI.
+The stable release is `v0.2.1`. The GitHub Release includes
+`dispatcharr-ffmpeg-smart-plugin-v0.2.1.zip` and its SHA-256 checksum. The registry
+uses the exact immutable tag archive. The plugin deliberately retains the tested
+MIT `ffmpeg-adaptive` source pin
+`913a958fd5f9edc231c49a70539a09f611fdcc5a`; publishing standalone adaptive 0.1.0
+does not replace these bundled bytes or by itself require a hardware recheck.
+
+Official Dispatcharr 0.32.0 source compatibility and isolated archive
+installation/update were reviewed for this release. See
+[compatibility evidence](docs/stable-compatibility-2026-10-20.md). Release
+publication does not update your running Dispatcharr installation.
+
+The preceding immutable development build `v0.2.1-beta.5` remains at
+`a5c0777875056591e4e02c989993f43b3f43aa72`. Its historical managed validation
+is summarized below.
 
 The official Dispatcharr v0.31.0 managed update installed beta.5 at the
 approved zero-viewer gate, offered no further update, preserved enabled state

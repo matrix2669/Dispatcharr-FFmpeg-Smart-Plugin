@@ -4,6 +4,28 @@ All notable user-visible changes to FFmpeg Smart Profiles are documented here.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-20
+
+### Stable release
+
+- Complete beta.5 as stable 0.2.1 with its benchmark-outcome, maintenance,
+  source-sync and media-output repairs. Only plugin version metadata changes;
+  the launcher and all seven bundled runtime files remain unchanged.
+- Retain immutable MIT ffmpeg-adaptive source
+  `913a958fd5f9edc231c49a70539a09f611fdcc5a`; standalone adaptive 0.1.0 is
+  independently published and does not require a downstream pin update.
+- Publish the normal GitHub Release with manual-install ZIP and SHA-256.
+- Refresh official Dispatcharr 0.32.0 source compatibility and validate clean
+  archive installation/update in isolation. No live update is claimed.
+
+### Validation
+
+- Full plugin/source/syntax checks and packaging gates apply to the final
+  stable tree. Historical exact-code hardware/pipe evidence remains in
+  `docs/beta5-validation-2026-09-21.md`; current compatibility is recorded in
+  `docs/stable-compatibility-2026-10-20.md`.
+
+
 ## [0.2.1-beta.5] - 2026-09-21
 
 ### Fixed

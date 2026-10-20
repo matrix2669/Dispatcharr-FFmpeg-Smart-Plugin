@@ -21,20 +21,22 @@ This ledger records why every current branch exists and preserves the context ne
 | `fix/ffmpeg-adaptive-beta2-fidelity` | fix | published | `dev` at `bcf767c` | `dev` | Pin the corrected wrapper beta, invalidate the superseded capacity policy, and prepare `v0.2.1-beta.3`. |
 | `docs/ffmpeg-smart-beta3-live-validation` | documentation | integrated | `dev` at `dd54d4c` | `dev` | Record beta.3 publication and managed installed validation without moving its tag. |
 | `fix/benchmark-outcome-beta5` | fix | active | `dev` at `38f7d17` | `dev` | Reviewed beta.5 plugin, wrapper, development-registry, zero-viewer managed update, and completed bounded hardware validation. Stable/main promotion, GitHub Release, unrelated work, and branch deletion remain excluded. |
+| `feature/stable-v0.2.1-2026-10-20` | feature | stable release preparation | `dev@35ecaefd` | `dev`, then `main` | Release 0.2.1 while retaining the tested immutable runtime. |
 
 ## Branch records
 
 ### `main`
 
-- Purpose: production-ready plugin source and stable tags.
-- Current stable tag: `v0.2.0` at `6eb5c8c8f437dcca6802967ceb193e37f984a7c1`.
-- Current `main` branch continuity: `6654a202e286f4c8b80d7845040880f76862d1f2`; the stable branch remains unchanged. Older branch-record dates and bases below are historical context.
-- Main continuity was checked on `2026-09-21`; its older validation date below
-  remains historical evidence.
-- Canonical source: bundled wrapper pins `ffmpeg-asr v1.1.0` commit `448837f4f6267de1c6705cb670bcdb0c6991614f` with SHA-256 `56cb036d803237b32d17fa0bf33bf200b3a07a43a0ca5309a4849eb561801627`.
-- Distribution state: the stable tag is advertised through `dispatcharr-plugins:main` under the explicitly approved version-specific exception; no GitHub Release or distributable ZIP is authorized until inherited-wrapper licensing is resolved.
-- Validation: 39 plugin tests, Python/JSON/shell checks, exact canonical-source verification, immutable archive layout and executable-mode checks, installed fallback/notification behavior, completed 18/15 hardware capacity scan, and four-stream Map All validation pass.
-- Last verified at: `2026-08-26`.
+- Purpose: production-ready plugin source and approved stable releases.
+- Pre-promotion head: `6654a202e286f4c8b80d7845040880f76862d1f2`;
+  historical stable v0.2.0 remains immutable.
+- Approved stable target: v0.2.1 from the reviewed beta.5 behavior, with
+  version-only metadata changes and immutable ffmpeg-adaptive pin
+  `913a958fd5f9edc231c49a70539a09f611fdcc5a`.
+- Normal Release-backed publication replaces the historical v0.2.0 registry
+  exception. Historical artifacts are not repackaged or relicensed.
+- Validation and publication: see the stable release record and CI/release
+  metadata; no live installation or deployment is part of this release.
 
 ### `dev`
 
@@ -200,3 +202,17 @@ that existed at that time were deleted after their results were preserved in
 `CHANGELOG.md` and `DECISIONS.md` and their tips were verified as merged or
 tree-equivalent. Tags were retained. The later branches listed above belong to
 the `v0.2.1` beta cycle.
+
+### `feature/stable-v0.2.1-2026-10-20`
+
+- Base `dev@35ecaefd58bc640ce4d1c01bee5c1dfcbd8082b3`; target dev then main.
+- Authority: operator approval on 2026-10-20 to finish promotion and release.
+- Scope: 0.2.1 version sources, validator identity, current source-compatibility
+  evidence, stable changelog and manual-install ZIP/checksum.
+- Preserve the complete seven-file runtime, source manifest, dependency license
+  and launcher bytes from beta.5. Do not run the force-pushing sync workflow.
+- Required gates: all plugin tests, Python/JSON/shell/source checks, official
+  0.32.0 isolated clean install and overwrite update, package extraction,
+  independent review, dev/main/tag CI and downloaded-asset verification.
+- Excluded: live updates, settings/profile actions, streams, restarts,
+  deployments, force pushes and branch deletion.

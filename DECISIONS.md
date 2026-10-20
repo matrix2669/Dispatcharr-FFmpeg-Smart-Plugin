@@ -1371,3 +1371,39 @@ development publication.
   run `35633440274`; the earlier ShellCheck 0.9 runs were false positives.
 - Registry CI `35633913052`; exact archive SHA-256 is
   `db31ce469ea52433af24cf4568463a782fced202124cdf3440c854fcf9754836`.
+
+---
+
+# ADR-029: Publish stable 0.2.1 without rebundling the tested runtime
+
+## Status and date
+
+Accepted, 2026-10-20, following explicit operator approval to finish promotion
+and release after the branch-only status report.
+
+## Decision
+
+Finalize VERSION, Plugin.version, plugin.json and the installed validator at
+0.2.1. Promote reviewed code through dev to main, create immutable v0.2.1,
+publish a normal GitHub Release with the documented ZIP and checksum, and
+advertise it through focused main/dev registry changes. Old tags and Releases
+remain immutable. The historical v0.2.0 no-Release exception is retired for
+current publication; its historical record and rights remain unchanged.
+
+## Rationale and consequences
+
+All seven vendored runtime files, manifest, MIT notice and launcher remain at
+the tested beta.5 bytes, sourced from adaptive commit
+913a958fd5f9edc231c49a70539a09f611fdcc5a. Independently publishing adaptive
+0.1.0 does not require changing a downstream immutable pin. This avoids an
+unnecessary runtime-version/cache-fingerprint change in the plugin. Run full
+plugin validation and official 0.32.0 archive installation/update in isolated
+temporary storage, using historical exact-code hardware/pipe proof. No live
+update, profile action, stream, restart or deployment is authorized.
+
+## Closure
+
+The exact stable identity, pin independence, MIT distribution, normal Release
+path, focused registry scope and validation limits are explicit. This extends
+ADR-028's publication scope after new approval; runtime semantics and historical
+licensing decisions are unchanged. Revisit on a later runtime synchronization.

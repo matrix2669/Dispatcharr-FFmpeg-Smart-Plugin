@@ -74,3 +74,12 @@
   fixture proof.
 - Any minimum-version or live deployment change requires the compatibility
   refresh gate in `AGENT.md` before tagging or publication.
+
+## 2026-10-20 stable compatibility refresh
+
+Official Dispatcharr v0.32.0 at c52bf87acb7ff2d787d6dcfb9fe3d39999585912 was
+compared with the v0.31.0 baseline. Eleven selected live application source
+hashes matched official 0.32.0. No affected contract incompatibility was found;
+minimum v0.29.0 is unchanged. See docs/stable-compatibility-2026-10-20.md.
+The plugin's runtime source pin remains 913a958fd5f9edc231c49a70539a09f611fdcc5a,
+independent of the standalone adaptive 0.1.0 release.

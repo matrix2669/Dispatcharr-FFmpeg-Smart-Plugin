@@ -10,15 +10,6 @@ A contradiction blocks work. Ask focused follow-up questions to establish whethe
 
 Missing workspace standards or Git history is a hard block. Standards exceptions require explicit user authorization and must be stated in a dedicated section of this file with exact scope, rationale, authority, approval date, and review/removal trigger; `DECISIONS.md` cannot waive workspace standards.
 
-## Workspace Standards Exception: v0.2.0 stable registry without a Release
-
-- Exact scope: only plugin tag `v0.2.0` may be advertised through `matrix2669/dispatcharr-plugins:main` without a GitHub Release. The registry must reference the immutable tag archive and exact source commit. This does not authorize a GitHub Release, manual ZIP, checksum asset, license claim, any other plugin version, or any other registry entry.
-- Rationale: the complete beta.11 cycle passed automated, archive, installed, hardware, fallback, notification, and custom-option validation, and the operator explicitly wants that exact completed build in the stable Dispatcharr channel while continuing to withhold Release packaging until inherited-wrapper licensing is resolved.
-- Authority: explicit user direction in Codex on `2026-08-26`: promote both source branches and tags and update the stable manifest, but do not create a Release until the license is resolved.
-- Approval date: `2026-08-26`.
-- Review/removal trigger: reviewed on `2026-08-30` when the new MIT runtime resolved licensing for later versions. Retain this record while `v0.2.0` remains the stable-registry build; remove the active exception after the stable channel returns to a Release-backed version or FFmpeg Smart is withdrawn from `main`. It cannot be reused for a correction or later version.
-
-
 ## Purpose
 
 This repository owns the `FFmpeg Smart Profiles` plugin for Dispatcharr. The plugin installs and reconciles managed Stream and Output Profiles, coordinates disruptive hardware-cache rebuilds, reports benchmark status, and ships a self-contained copy of the canonical `matrix2669/ffmpeg-adaptive` runtime.
@@ -96,7 +87,7 @@ The checkpoint does not authorize merging into `dev` or `main`, synchronizing a 
 - `VERSION`, `Plugin.version`, `plugin.json`, the changelog version, and the Git tag must agree.
 - Dispatcharr updates are version-driven. Untagged branch movement does not replace a published test build.
 - `dispatcharr-plugins:dev` advertises the newest approved immutable plugin tag: a beta during testing, otherwise the latest completed stable tag.
-- `dispatcharr-plugins:main` normally advertises only a stable version with an explicitly approved GitHub Release; the dedicated `v0.2.0` exception above is the sole current waiver.
+- `dispatcharr-plugins:main` normally advertises only a stable version with an explicitly approved GitHub Release; the historical `v0.2.0` no-Release exception is retired for current publication.
 - A stable tag may exist in `dev` without a GitHub Release or `main` registry publication.
 - Never merge the registry's `dev` channel wholesale into its `main` channel; registry publication is a focused metadata change.
 - Follow `RELEASE.md` and inspect the exact tagged archive layout before publication.
