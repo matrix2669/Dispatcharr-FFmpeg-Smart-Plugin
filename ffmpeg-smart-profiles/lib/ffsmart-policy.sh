@@ -83,12 +83,16 @@ ffsmart_choose_output_dimensions() {
 ffsmart_resolve_video_policy() {
     FFSMART_VIDEO_TRANSCODE=false
     FFSMART_VIDEO_REASONS=()
-    FFSMART_TARGET_CODEC="${FFSMART_TARGET_CODEC:-${FFSMART_CACHE_BEST_CODEC:-h264}}"
+    local source_codec requested_codec="$FFSMART_TARGET_CODEC"
+    source_codec="$(ffsmart_lower "$FFSMART_VIDEO_CODEC")"
+    FFSMART_TARGET_CODEC="${requested_codec:-${FFSMART_CACHE_BEST_CODEC:-h264}}"
     FFSMART_SELECTED_ACCEL="${FFSMART_ACCEL}"
     [[ "$FFSMART_SELECTED_ACCEL" != auto ]] || FFSMART_SELECTED_ACCEL="${FFSMART_CACHE_BEST_ACCEL:-software}"
     ffsmart_choose_output_dimensions
 
-    if [[ "$(ffsmart_lower "$FFSMART_VIDEO_CODEC")" != "$FFSMART_TARGET_CODEC" ]]; then
+    # A cached encoder preference is not a codec requirement for compatible input.
+    if { [[ -n "$requested_codec" ]] && [[ "$source_codec" != "$requested_codec" ]]; } ||
+       { [[ -z "$requested_codec" ]] && [[ "$source_codec" != h264 && "$source_codec" != hevc ]]; }; then
         FFSMART_VIDEO_TRANSCODE=true; FFSMART_VIDEO_REASONS+=("codec ${FFSMART_VIDEO_CODEC:-unknown} -> $FFSMART_TARGET_CODEC")
     fi
     if [[ -n "$FFSMART_MAX_HEIGHT" ]] && (( FFSMART_VIDEO_HEIGHT > FFSMART_MAX_HEIGHT )); then

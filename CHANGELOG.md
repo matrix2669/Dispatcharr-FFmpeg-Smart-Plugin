@@ -1,3 +1,9 @@
+## [0.2.2-beta.1] - Unreleased test build
+
+- Pin canonical video policy that copies supported video unless an explicit
+  codec request or active processing constraint requires conversion.
+- Test installation only; no registry or release publication.
+
 # Changelog
 
 All notable user-visible changes to FFmpeg Smart Profiles are documented here.

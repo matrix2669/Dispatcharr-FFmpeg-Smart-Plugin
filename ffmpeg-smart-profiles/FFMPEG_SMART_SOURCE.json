@@ -1,12 +1,12 @@
 {
   "repository": "matrix2669/ffmpeg-adaptive",
-  "tracking_ref": "913a958fd5f9edc231c49a70539a09f611fdcc5a",
-  "commit": "913a958fd5f9edc231c49a70539a09f611fdcc5a",
+  "tracking_ref": "81d811625e51e97c76f285267dc9c8d8ec885754",
+  "commit": "81d811625e51e97c76f285267dc9c8d8ec885754",
   "files": [
     {
       "path": "ffmpeg-smart.sh",
       "mode": "0755",
-      "sha256": "dbbf92c33cb2674cca99f103a537c2626170ad132f97eb00ff4c0ad5ea9dff16"
+      "sha256": "e6c3af369271e48112e30d3bab083753a87d34128607ee5a51edecfd9fa64b94"
     },
     {
       "path": "lib/ffsmart-cache.sh",
@@ -31,7 +31,7 @@
     {
       "path": "lib/ffsmart-policy.sh",
       "mode": "0644",
-      "sha256": "e25915c520dc7575feb046bb80b09cba499cf0c704c6ff7a87c6c1c740ed5660"
+      "sha256": "51604131cbb5c40a146cf95523ef804a226439607ea872bf62109adc86d39908"
     },
     {
       "path": "lib/ffsmart-probe.sh",

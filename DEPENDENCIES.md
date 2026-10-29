@@ -4,7 +4,8 @@
 
 - Repository: `matrix2669/ffmpeg-adaptive`
 - Current recorded source: immutable work-branch commit
-  `913a958fd5f9edc231c49a70539a09f611fdcc5a`, published as wrapper beta.4.
+  `81d811625e51e97c76f285267dc9c8d8ec885754`, conditional-video-transcode
+  test candidate (runtime 0.1.0).
 - Contract: the seven bundled runtime files are byte- and mode-pinned in
   `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json`; the MIT notice is shipped
   in `FFMPEG_ADAPTIVE_LICENSE`. Wrapper behavior remains owned by the canonical
@@ -13,11 +14,13 @@
   the recorded tracking ref would otherwise resolve to a different commit,
   updates the selected ref and commit together only after all files verify, and
   must be followed by the complete source check.
-- The complete seven-file bundle is now synchronized to that exact commit and
-  passes the online source verification and repeated unqualified-sync
-  idempotence checks. Astra final review passed. Plugin tag, wrapper tag, and
-  development-registry publication are immutable and passed their CI gates;
-  managed update and bounded hardware validation passed.
+- This 0.2.2-beta.1 test candidate passes online/offline source verification and
+  repeated explicit-SHA synchronization. Runtime 0.1.0 changes the fingerprint
+  from the installed beta.4 runtime: rebuild and validate the hardware cache;
+  do not copy or forge its fingerprint. Live validation remains pending.
+- Historical source `913a958fd5f9edc231c49a70539a09f611fdcc5a` underlies the
+  previously published beta.5/stable plugin. Its review, registry publication
+  and managed hardware results below do not validate this new candidate.
 
 ## Plugin distribution and live state
 

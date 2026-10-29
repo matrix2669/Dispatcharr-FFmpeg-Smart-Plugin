@@ -2,6 +2,12 @@
 
 Native Dispatcharr plugin that bundles `ffmpeg-smart.sh`, creates managed Stream/Output Profiles, and can rebuild the GPU capability and concurrent-capacity cache from the Plugins page.
 
+This branch prepares test build **0.2.2-beta.1**, pinned to canonical runtime
+`81d811625e51e97c76f285267dc9c8d8ec885754`. Compatible H.264/HEVC now copy
+unless a requested constraint requires conversion. Installing this candidate
+requires a fresh hardware-cache validation/rebuild because the bundled runtime
+version changes. It is not a registry release.
+
 ## Installation
 
 Add the matrix2669 plugin registry in **Plugins → Plugin Repositories**:

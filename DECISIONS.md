@@ -1407,3 +1407,15 @@ The exact stable identity, pin independence, MIT distribution, normal Release
 path, focused registry scope and validation limits are explicit. This extends
 ADR-028's publication scope after new approval; runtime semantics and historical
 licensing decisions are unchanged. Revisit on a later runtime synchronization.
+
+## Conditional-video test delivery — 2026-10-29
+
+Owner authorized canonical Smart repair, build, installation and TiVo458 retest.
+Bundle the exact reviewed source commit via existing pin workflow; no independent
+vendored edit. Version0.2.2-beta.1 distinguishes the local test installation from
+published0.2.1. Keep managed settings and profile46 unchanged. No registry, tag,
+release or source integration follows from installation authority. Runtime version
+change invalidates the previous cache: rebuild/validate rather than forge its
+fingerprint. Existing hardware scheduling and benchmarking policy is unchanged.
+
+The test candidate pins canonical commit `81d811625e51e97c76f285267dc9c8d8ec885754`; runtime 0.1.0 invalidates the installed beta.4 cache fingerprint and requires a proper rebuild.

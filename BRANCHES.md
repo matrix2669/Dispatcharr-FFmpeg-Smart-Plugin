@@ -216,3 +216,12 @@ the `v0.2.1` beta cycle.
   independent review, dev/main/tag CI and downloaded-asset verification.
 - Excluded: live updates, settings/profile actions, streams, restarts,
   deployments, force pushes and branch deletion.
+
+## fix/conditional-video-transcode — 2026-10-29
+
+- Base: dev@7f5b775; target: dev; isolated test delivery, no integration authorized.
+- Scope: pin reviewed canonical passthrough-first video policy; package distinct
+  0.2.2-beta.1 test build; preserve plugin settings/profile definitions.
+- User authorized build/install and channel458 TiVo retest. No registry/tag/release.
+- Validation: complete plugin gates, immutable source checks, independent review,
+  native installation and constrained live458 test.
