@@ -2,10 +2,10 @@
 
 Native Dispatcharr plugin that bundles `ffmpeg-smart.sh`, creates managed Stream/Output Profiles, and can rebuild the GPU capability and concurrent-capacity cache from the Plugins page.
 
-This branch prepares **0.2.2-beta.4** as an unpublished fix candidate after the
-beta.3 development publication. It recognizes supported HTTP MPEG-TS bodies
-without requiring a filename or query hint. Publication does not install the
-plugin, change profiles or choose Dispatcharr's global default.
+**0.2.2-beta.4** recognizes supported HTTP MPEG-TS bodies without requiring a
+filename or query hint. It is intended for the development updater channel.
+Publication does not install the plugin, change profiles or choose Dispatcharr's
+global default.
 
 ## Installation
 

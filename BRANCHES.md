@@ -311,3 +311,8 @@ owning branch; installed/live acceptance remains operator-owned.
   Plugin local validation passed all 80 unit tests, compile/JSON/syntax and
   offline/online pin checks; repeat sync made no changes. Exact CI and isolated
   live capture evidence remain parent-owned closeout gates.
+
+- Publication approved by the owner on 2026-10-30. This supersedes the earlier
+  no-tag/no-registry/no-integration restriction for beta.4 only. Advance dev to
+  the exact validated publication commit and create immutable v0.2.2-beta.4.
+  Direct installation, stable main/Release and branch removal remain excluded.

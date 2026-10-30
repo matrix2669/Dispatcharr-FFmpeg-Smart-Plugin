@@ -1789,3 +1789,13 @@ steps. Direct file installation remains excluded by the user's instruction.
 No unresolved product choice remains: content recognition replaces hints while
 unsupported acquisition retains FFmpeg compatibility; revisit for new transport
 contracts or supported packet formats.
+
+## Beta.4 publication authorization — 2026-10-30
+
+After reviewed candidate934c651 and isolated588 testing, the owner requested
+"Publish it." Publish beta.4 through the development registry and immutable tag,
+using exact-candidate CI and archive verification. This supersedes ADR-034's
+preparation-only publication boundary, not the no-direct-install instruction.
+Canonical pinbb834684 and all runtime/settings/default bytes remain unchanged.
+The updated source documentation records the approved distribution state.
+No stable main, GitHub Release, deployment or profile/default change.

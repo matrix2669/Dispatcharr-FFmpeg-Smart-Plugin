@@ -1,10 +1,13 @@
-## 0.2.2-beta.4 — unpublished candidate
+## 0.2.2-beta.4 — 2026-10-30
 
 - Recognize eligible HTTP MPEG-TS bodies without URL hints, keeping probing and
   playback on one connection with the opening media retained.
 - Preserve HLS compatibility through bounded pre-output fallback for opaque
   non-TS inputs; preserve proxy/custom-input bypass and fixed startup limits.
-- Packaging and live evidence remain separate from updater publication.
+- Isolated 588 captures used one upstream request each at 1.59/1.48 seconds;
+  an eight-second interior decode passed without video/audio errors.
+- Approved for development updater publication; live installation remains
+  operator-managed through Dispatcharr Update.
 
 ## [0.2.2-beta.3] - 2026-10-30
 
