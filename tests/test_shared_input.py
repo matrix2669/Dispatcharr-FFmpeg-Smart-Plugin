@@ -143,3 +143,53 @@ class SharedHelperPackagingTests(unittest.TestCase):
             result = subprocess.run([str(folder / 'scripts/check-ffmpeg-smart-source.sh'), '--offline'], capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('ffsmart-shared-input.py', result.stderr)
+
+
+class GenericCodecPolicySettingsTests(unittest.TestCase):
+    def test_defaults_remain_universal_and_output_has_no_new_controls(self):
+        instance = plugin.Plugin()
+        tokens = shlex.split(instance._stream_definitions({})[0]['parameters'])
+        self.assertEqual(tokens[tokens.index('--copy-codecs') + 1], 'h264,hevc')
+        self.assertNotIn('--fallback-codec', tokens)
+        fields = {field['id']: field for field in instance.fields}
+        for slot in (1, 2):
+            self.assertEqual(fields[f'stream_{slot}_copy_codecs']['default'], 'h264,hevc')
+            self.assertEqual(fields[f'stream_{slot}_fallback_codec']['default'], 'auto')
+        self.assertFalse(any(key.startswith('output_') and ('copy_codecs' in key or 'fallback_codec' in key) for key in fields))
+        self.assertNotIn('--copy-codecs', instance._output_definitions({})[0]['parameters'])
+
+    def test_custom_copy_set_fallback_and_explicit_codec_have_independent_tokens(self):
+        settings = {'stream_1_copy_codecs': 'h264,mpeg2video', 'stream_1_fallback_codec': 'h264', 'stream_1_options': '-vc hevc -deint'}
+        tokens = shlex.split(plugin.Plugin()._stream_definitions(settings)[0]['parameters'])
+        self.assertEqual(tokens[tokens.index('--copy-codecs') + 1], 'h264,mpeg2video')
+        self.assertEqual(tokens[tokens.index('--fallback-codec') + 1], 'h264')
+        self.assertEqual(tokens[tokens.index('-vc') + 1], 'hevc')
+        self.assertEqual(tokens.count('-vc'), 1)
+        self.assertIn('-deint', tokens)
+        outputs = plugin.Plugin()._output_definitions({'output_1_options': '--copy-codecs h264,mpeg2video --fallback-codec h264'})
+        self.assertIn('--copy-codecs h264,mpeg2video --fallback-codec h264', outputs[0]['parameters'])
+
+    def test_invalid_lists_and_targets_are_rejected_before_profile_mutation(self):
+        instance = plugin.Plugin()
+        for value in ('', 'h264,', 'h264,,hevc', 'h264, mpeg2video', 'h264;touch_bad'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                instance._stream_definitions({'stream_1_copy_codecs': value})
+        with self.assertRaises(ValueError): instance._stream_definitions({'stream_1_fallback_codec': 'mpeg2video'})
+        for option in ('--copy-codecs h264', '--fallback-codec h264'):
+            with self.assertRaisesRegex(ValueError, 'codec policy belongs'):
+                instance._stream_definitions({'stream_1_options': option})
+
+    def test_persistence_preserves_explicit_values_and_is_idempotent(self):
+        instance = plugin.Plugin()
+        settings = {'stream_1_copy_codecs': 'h264,mpeg2video', 'stream_1_fallback_codec': 'h264', 'stream_1_options': '-vc hevc', 'unrelated': True}
+        with patch.object(instance, '_install_profiles', return_value={'message': 'Unchanged'}), patch.object(instance, '_save_normalized_settings') as save:
+            instance.run('install_profiles', {}, {'settings': settings})
+            saved = save.call_args.args[0]
+            self.assertEqual(saved['stream_1_copy_codecs'], 'h264,mpeg2video')
+            self.assertEqual(saved['stream_1_fallback_codec'], 'h264')
+            self.assertEqual(saved['stream_1_options'], '-vc hevc')
+            self.assertEqual(saved['stream_2_copy_codecs'], 'h264,hevc')
+            self.assertEqual(saved['stream_2_fallback_codec'], 'auto')
+            save.reset_mock()
+            instance.run('install_profiles', {}, {'settings': saved})
+            save.assert_not_called()

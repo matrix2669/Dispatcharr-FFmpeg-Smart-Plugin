@@ -3,7 +3,7 @@
 Native Dispatcharr plugin that bundles `ffmpeg-smart.sh`, creates managed Stream/Output Profiles, and can rebuild the GPU capability and concurrent-capacity cache from the Plugins page.
 
 This branch prepares local test build **0.2.2-beta.2**, pinned to canonical
-runtime `6e0a84b900db65fd4867d22c17d6b93e22fd1470`, with shared startup-input
+runtime `0482acf6e695f95e5c1952777f2e044afd961f87`, with shared startup-input
 controls for Stream Profiles. Compatible H.264/HEVC continue to copy unless an
 active constraint requires conversion. Runtime version 0.1.0 is unchanged from beta.1:
 validate the existing cache and rebuild only if required. No registry release
@@ -98,6 +98,28 @@ The settings page includes a short flag reference for output codec, resolution, 
 Profile installation is idempotent. Locked profiles, duplicate names, and same-name profiles pointing to unrelated commands are reported as conflicts rather than overwritten. Adding a profile requires a full Dispatcharr restart before the new profile can be used; updating an existing managed profile applies without a restart. Removing profiles still requires a restart for the removal to fully take effect.
 
 The plugin cannot restart Dispatcharr by itself in a standard container deployment. It runs as the unprivileged Dispatcharr service user and is intentionally not given access to the Docker host control socket.
+
+## Video compatibility controls
+
+Each Stream Profile has a **Video codecs eligible for copy** list, defaulting to
+`h264,hevc`, and a **Codec when video conversion is needed** selector, defaulting
+to the cached encoder preference. These are universal defaults; configure them
+for the receiver and MPEG-TS codecs you actually support.
+
+The copy list is a nonempty comma-separated list of FFprobe codec names without
+spaces, such as `h264,mpeg2video`. Video copies only when every other active
+constraint is satisfied. The conversion selector can retain the cached preference
+or choose H.264/HEVC for unsupported input and required resolution, bitrate,
+deinterlace or SDR work. Selecting a fallback does not itself force conversion
+of an allowed codec. For example, `h264,mpeg2video` plus H.264 fallback preserves
+compliant H.264/MPEG-2 and converts HEVC or deinterlaced/resized MPEG-2 to H.264.
+
+Existing explicit `-vc h264|hevc` takes priority over both controls, even when
+it requests a codec outside the copy list. Audio, HDR and hardware behavior keep
+their existing controls. Save settings and run **Install or Update Profiles**
+to persist/apply choices; the plugin does not select a global default. Output
+Profiles keep their defaults and may opt in explicitly with
+`--copy-codecs LIST --fallback-codec h264|hevc` in Additional options.
 
 ## Shared startup input for Stream Profiles
 

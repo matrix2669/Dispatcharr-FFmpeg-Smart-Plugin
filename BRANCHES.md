@@ -230,7 +230,7 @@ the `v0.2.1` beta cycle.
 ### `feature/shared-input-reservoir`
 
 - Created: 2026-10-30; base `9ffe9d4`; target `dev` after separate acceptance.
-- Scope: synchronize canonical `6e0a84b900db65fd4867d22c17d6b93e22fd1470`,
+- Scope: synchronize canonical `0482acf6e695f95e5c1952777f2e044afd961f87`,
   package its Python helper, expose per-Stream Profile off/auto/strict controls
   and bounded settings, prepare local test candidate 0.2.2-beta.2 and private ZIP.
 - Excluded: tags, registry, release, source promotion, remote push, installation,
@@ -243,5 +243,16 @@ the `v0.2.1` beta cycle.
   default-profile result is claimed; those remain parent-owned follow-up work.
 - Decision closure and contradiction/chat-independence review completed against
   ADR-030. Per-stream controls and transport limits are explicit; no global or
-  channel profile assignments change. Further TiVo compatibility policy is a
-  separate subsequent implementation wave.
+  channel profile assignments change. Generic codec compatibility controls are recorded in ADR-031; no
+  receiver-specific mode is introduced.
+
+- Generic codec-policy follow-up (2026-10-30): synchronize canonical
+  `0482acf6e695f95e5c1952777f2e044afd961f87`; expose per-Stream copy-codec
+  allowlist and fallback selection. Universal defaults remain H.264/HEVC copy
+  plus cached conversion preference. No receiver-specific product mode or
+  Output default changes. All 82 unit tests, compile/JSON/Bash/ShellCheck and
+  online/offline eight-file source checks passed. Repeated final-SHA sync
+  preserved bytes and modes. ADR-031 closes defaults, precedence and persistence;
+  contradiction/chat-independence review completed. Private package is rebuilt
+  from the exact final committed tree and inspected at handoff. Canonical CI and
+  plugin CI/review/live acceptance remain separately recorded parent-owned gates.

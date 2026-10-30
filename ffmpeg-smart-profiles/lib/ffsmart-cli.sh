@@ -5,6 +5,8 @@ ffsmart_cli_defaults() {
     FFSMART_USER_AGENT=""
     FFSMART_ACCEL="auto"
     FFSMART_TARGET_CODEC=""
+    FFSMART_COPY_CODECS="h264,hevc"
+    FFSMART_FALLBACK_CODEC=""
     FFSMART_MAX_HEIGHT=""
     FFSMART_MAX_BITRATE=""
     FFSMART_MAX_CHANNELS=""
@@ -49,6 +51,12 @@ ffsmart_parse_cli() {
                 FFSMART_SHARED_INPUT=true; shift ;;
             --shared-input-auto)
                 FFSMART_SHARED_INPUT=auto; shift ;;
+            --copy-codecs)
+                ffsmart_need_value "$1" "$#" || return
+                FFSMART_COPY_CODECS="$(ffsmart_lower "$2")"; shift 2 ;;
+            --fallback-codec)
+                ffsmart_need_value "$1" "$#" || return
+                FFSMART_FALLBACK_CODEC="$(ffsmart_lower "$2")"; shift 2 ;;
             -i)
                 ffsmart_need_value "$1" "$#" || return
                 FFSMART_INPUT="$2"; shift 2 ;;
@@ -223,6 +231,11 @@ ffsmart_validate_maps() {
 
 ffsmart_validate_cli() {
     case "$FFSMART_ACCEL" in auto|qsv|vaapi|nvenc|videotoolbox|v4l2m2m|software) ;; *) ffsmart_configuration_error "Unsupported accelerator: $FFSMART_ACCEL"; return 64 ;; esac
+    if [[ ! "$FFSMART_COPY_CODECS" =~ ^[a-z0-9_]+(,[a-z0-9_]+)*$ ]]; then
+        ffsmart_configuration_error "--copy-codecs requires a comma-separated list of FFprobe codec names without spaces"
+        return 64
+    fi
+    case "$FFSMART_FALLBACK_CODEC" in ""|h264|hevc) ;; *) ffsmart_configuration_error "--fallback-codec must be h264 or hevc"; return 64 ;; esac
     if [[ -n "$FFSMART_TARGET_CODEC" && "$FFSMART_TARGET_CODEC" != h264 && "$FFSMART_TARGET_CODEC" != hevc ]]; then
         ffsmart_configuration_error "-vc must be h264 or hevc"
         return 64
@@ -264,6 +277,10 @@ capability state or --recache-only to rebuild it without an input.
                 playback. Python 3.9+ required; see README for limits.
 --shared-input-auto  Enable only for HTTP(S) TS URL hints with no custom input
                      options; use legacy input handling otherwise.
+--copy-codecs LIST  Eligible automatic video-copy codecs, using FFprobe names
+                    separated by commas. Default: h264,hevc. Explicit -vc wins.
+--fallback-codec h264|hevc  Codec for required automatic conversions; default is
+                            the cached preference. Explicit -vc wins.
 EOF
 }
 

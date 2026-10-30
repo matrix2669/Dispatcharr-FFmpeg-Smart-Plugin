@@ -1519,3 +1519,71 @@ transport headers/proxies, HLS or default enablement only with representative
 compatibility/startup evidence and explicit scope. Decision closure fixes the
 interface, units, defaults, persistence, scope, failure and packaging boundaries;
 no unresolved authority choice remains in this implementation.
+
+---
+
+# ADR-031: Expose universal video-copy and conversion-codec policy
+
+## Status, date and authority
+
+Accepted, 2026-10-30. The operator explicitly clarified that the plugin and
+script must remain universal. This extends ADR-030's candidate with generic
+controls and supersedes its source pin only. No receiver-specific product
+mode, preset or checkbox is introduced.
+
+## Decision
+
+Synchronize canonical `0482acf6e695f95e5c1952777f2e044afd961f87` through the
+existing exact-source workflow. Keep the same unpublished local 0.2.2-beta.2
+candidate identity; no immutable tag or published archive is replaced.
+The two Stream Profile slots gain persisted fields:
+
+- `stream_N_copy_codecs`: string default `h264,hevc`, a nonempty comma-separated
+  list of FFprobe codec names. Names use ASCII letters/digits/underscore,
+  generated lowercase, with no spaces or empty elements. These codecs are
+  eligible for automatic copy when every other active constraint is satisfied.
+- `stream_N_fallback_codec`: select `auto` (default), `h264` or `hevc`. Auto omits
+  the canonical fallback flag and preserves cached encoder preference; an
+  explicit value selects the target for unsupported input and required resize,
+  bitrate, deinterlace or SDR conversion. The fallback never forces conversion
+  of an otherwise allowed codec by itself.
+
+Generate `--copy-codecs LIST` and optional `--fallback-codec h264|hevc` without
+shell evaluation. Explicit existing `-vc` remains highest priority over both
+copy membership and fallback, including an explicit codec outside the copy set.
+Persist absent defaults during Install / Update without replacing explicit
+choices, additional `-vc` policy or unrelated settings. Reject malformed values
+before profile database reconciliation. These two flags belong in the dedicated
+Stream controls; Output Profiles receive no new fields/defaults but may opt in
+through explicit Additional options, following canonical ownership.
+
+For example, `h264,mpeg2video` plus H.264 fallback copies compliant H.264/MPEG-2,
+converts HEVC to H.264 and uses H.264 when MPEG-2 requires deinterlacing or resize.
+This is deployment configuration, not a universal default. The operator chooses
+a set supported by the receiver and MPEG-TS; the list is not a hardware or
+container capability detector. Audio, HDR, hardware capacity, cache semantics,
+shared-input transport and Output pipe handling retain their existing controls.
+
+## Rationale, validation and boundaries
+
+Receiver compatibility and measured encoder preference answer different
+questions. Generic independent fields meet deployment requirements while
+preserving the product's H.264/HEVC plus cached-fallback defaults. A named
+receiver preset would bind the universal product to one system; a forced codec
+would discard otherwise compatible source video. Explicit `-vc` precedence is
+an existing user requirement and remains deliberate even if the chosen codec
+conflicts with a receiver's allowed set.
+
+Canonical tests cover both cached preferences, independent list/fallback
+selection, H.264/MPEG-2 copy, HEVC conversion, MPEG-2 deinterlace/resize,
+bitrate/SDR constraints, syntax validation and explicit codec precedence. Plugin
+checks cover default/manifest agreement, persisted settings/idempotence,
+malformed values, exact argument boundaries and unchanged Output defaults.
+Live playback and any local profile/default changes remain parent-owned
+acceptance steps. This checkpoint adds no global profile assignment, receiver-
+specific setting, source promotion, release or deployment authority.
+
+Decision closure fixes names, defaults, units, syntax, precedence, ownership and
+scope. Review supported fallback encoders only when canonical encoder support
+changes; review any default compatibility-set change only on explicit product
+requirements and representative receiver/container evidence.

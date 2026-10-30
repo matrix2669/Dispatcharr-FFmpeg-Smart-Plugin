@@ -195,6 +195,30 @@ def advanced_ffmpeg_fields(prefix, label):
     ]
 
 
+def codec_policy_fields(prefix, label):
+    return [
+        {
+            "id": f"{prefix}_copy_codecs",
+            "label": f"{label}: video codecs eligible for copy",
+            "type": "string",
+            "default": "h264,hevc",
+            "help_text": "Nonempty comma-separated FFprobe codec names without spaces, for example h264,mpeg2video. Listed video copies only when other active limits are satisfied. Choose codecs supported by the receiver and MPEG-TS. Explicit -vc overrides this list.",
+        },
+        {
+            "id": f"{prefix}_fallback_codec",
+            "label": f"{label}: codec when video conversion is needed",
+            "type": "select",
+            "default": "auto",
+            "options": [
+                {"value": "auto", "label": "Use cached encoder preference"},
+                {"value": "h264", "label": "H.264"},
+                {"value": "hevc", "label": "HEVC"},
+            ],
+            "help_text": "Used for unsupported input or required resolution, bitrate, deinterlace or SDR conversion. Does not itself force conversion of a codec allowed for copy. Explicit -vc takes priority. Default keeps the cached codec preference.",
+        },
+    ]
+
+
 def shared_input_fields(prefix, label):
     return [
         {
@@ -253,6 +277,7 @@ class Plugin:
         {"id": "stream_1_enabled", "label": "Enable Stream Profile 1", "type": "boolean", "default": True},
         {"id": "stream_1_name", "label": "Stream Profile 1 name", "type": "string", "default": "FFmpeg Smart"},
         *policy_fields("stream_1", "Stream Profile 1"),
+        *codec_policy_fields("stream_1", "Stream Profile 1"),
         *shared_input_fields("stream_1", "Stream Profile 1"),
         {
             "id": "stream_1_options",
@@ -265,6 +290,7 @@ class Plugin:
         {"id": "stream_2_enabled", "label": "Enable Stream Profile 2", "type": "boolean", "default": False},
         {"id": "stream_2_name", "label": "Stream Profile 2 name", "type": "string", "default": ""},
         *policy_fields("stream_2", "Stream Profile 2"),
+        *codec_policy_fields("stream_2", "Stream Profile 2"),
         *shared_input_fields("stream_2", "Stream Profile 2"),
         {
             "id": "stream_2_options",
@@ -421,8 +447,9 @@ class Plugin:
                 self._normalize_adaptive_probe_settings(normalized_settings)
             )
             normalized_settings, shared_defaults_added = self._normalize_shared_input_settings(normalized_settings)
+            normalized_settings, codec_defaults_added = self._normalize_codec_policy_settings(normalized_settings)
             result = self._install_profiles(normalized_settings, logger)
-            if normalized_flags or removed_automatic_flags or normalized_probe_options or shared_defaults_added:
+            if normalized_flags or removed_automatic_flags or normalized_probe_options or shared_defaults_added or codec_defaults_added:
                 self._save_normalized_settings(normalized_settings)
             if normalized_flags:
                 result["normalized_policy_flags"] = normalized_flags
@@ -492,6 +519,7 @@ class Plugin:
                     "parameters": self._join_parameters(
                         '-i "{streamUrl}" -user_agent "{userAgent}"',
                         options,
+                        self._codec_policy_parameters(settings, f"stream_{slot}", options),
                         self._shared_input_parameters(settings, f"stream_{slot}"),
                         ffmpeg_options,
                     ),
@@ -846,6 +874,33 @@ class Plugin:
                     normalized[key] = default
                     changed = True
         return normalized, changed
+
+    @staticmethod
+    def _normalize_codec_policy_settings(settings):
+        normalized = dict(settings or {})
+        changed = False
+        for slot in (1, 2):
+            for suffix, default in (("copy_codecs", "h264,hevc"), ("fallback_codec", "auto")):
+                key = f"stream_{slot}_{suffix}"
+                if key not in normalized:
+                    normalized[key] = default
+                    changed = True
+        return normalized, changed
+
+    @staticmethod
+    def _codec_policy_parameters(settings, prefix, options):
+        if any(token in {"--copy-codecs", "--fallback-codec"} for token in shlex.split(options)):
+            raise ValueError(f"{prefix} codec policy belongs in its copy-codec and conversion-codec controls")
+        codecs = str(settings.get(f"{prefix}_copy_codecs", "h264,hevc")).lower()
+        if not re.fullmatch(r"[a-z0-9_]+(?:,[a-z0-9_]+)*", codecs):
+            raise ValueError(f"{prefix} copy codecs require a nonempty comma-separated list of FFprobe names without spaces")
+        fallback = str(settings.get(f"{prefix}_fallback_codec", "auto"))
+        if fallback not in {"auto", "h264", "hevc"}:
+            raise ValueError(f"{prefix} conversion codec must be auto, h264 or hevc")
+        parameters = ["--copy-codecs", codecs]
+        if fallback != "auto":
+            parameters.extend(("--fallback-codec", fallback))
+        return " ".join(shlex.quote(token) for token in parameters)
 
     @staticmethod
     def _shared_input_parameters(settings, prefix):

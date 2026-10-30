@@ -4,7 +4,7 @@
 
 - Repository: `matrix2669/ffmpeg-adaptive`.
 - Candidate source: immutable work-branch commit
-  `6e0a84b900db65fd4867d22c17d6b93e22fd1470`, runtime 0.1.0, for the local
+  `0482acf6e695f95e5c1952777f2e044afd961f87`, runtime 0.1.0, for the local
   plugin 0.2.2-beta.2 test candidate. No tag or registry publication is implied.
 - Contract: eight bundled files (entrypoint, six shell modules, Python shared
   input helper) are byte- and mode-pinned in
@@ -20,14 +20,22 @@
 - Synchronization validates shell and Python by file type, updates selected ref
   and commit only after download/syntax checks and must remain idempotent.
   Offline checks require every referenced shell/Python helper in the manifest.
-- Canonical exact-source CI run `41076177782` passed the complete suite at
+- The candidate also supplies generic `--copy-codecs LIST` and optional
+  `--fallback-codec h264|hevc`, with unchanged H.264/HEVC copy and cached-fallback
+  defaults. Explicit `-vc` overrides both. No receiver-specific mode exists.
+- Prior shared-input source CI run `41076177782` passed the complete suite at
   `6e0a84b900db65fd4867d22c17d6b93e22fd1470`. The same runtime bytes at
   `e1f70ff` passed all 12 shared-input methods under actual Dispatcharr's dispatch
   user with Python 3.13.17 and FFmpeg 8.1.2 in isolated temporary storage. This
   proves fixture compatibility, not live-provider performance or plugin install.
+- The generic policy candidate passed the full canonical local suite, including
+  both cached preferences, configurable MPEG-2 copy/conversion, independent list
+  and fallback values, malformed-value rejection and explicit `-vc` precedence.
+  Its exact CI and final plugin CI/review/live acceptance remain separate gates.
 - Runtime version is unchanged from the conditional-video beta.1 candidate.
-  The parent coordinator confirmed the existing managed cache still reports
-  valid with this source. Continue using canonical `--cache-status`; rebuild only
+  The parent coordinator confirmed the existing managed cache reports valid
+  with the prior `6e0a84b` source; generic codec controls do not change the
+  fingerprint computation. Continue using canonical `--cache-status`; rebuild only
   when required, never forge the fingerprint. Historical beta.4 installations
   still need a proper rebuild when upgrading to runtime 0.1.0.
 - Historical `913a958fd5f9edc231c49a70539a09f611fdcc5a` remains the published

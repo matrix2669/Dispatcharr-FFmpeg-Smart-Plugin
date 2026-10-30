@@ -2,12 +2,15 @@
 
 Local shared-input test candidate; no tag, Release or registry publication.
 
-- Pin canonical FFmpeg Adaptive `6e0a84b900db65fd4867d22c17d6b93e22fd1470`,
+- Pin canonical FFmpeg Adaptive `0482acf6e695f95e5c1952777f2e044afd961f87`,
   including the checksum-pinned Python RAM reader and shell modules.
 - Add persisted Off/Auto/Strict startup-input controls per Stream Profile,
   with RAM, startup and idle limits. Auto uses TS URL hints and preserves legacy
   handling for unhinted sources and custom input options; it does not detect
   response format. Strict requires HTTP MPEG-TS and rejects unsupported input.
+- Add generic per-Stream copy-codec allowlist and conversion-codec selection.
+  Defaults remain H.264/HEVC plus cached fallback; explicit `-vc` overrides both.
+  No receiver-specific preset or global policy change is introduced.
 - Preserve Output Profile pipe commands, explicit codecs, custom settings and
   global/channel profile assignments. Profile settings apply through Install /
   Update; package installation alone does not select a global default.
