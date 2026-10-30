@@ -47,6 +47,7 @@ jobs:
       - name: Validate plugin files
         run: |
           python3 -m py_compile ffmpeg-smart-profiles/plugin.py tests/validate_dispatcharr.py
+          python3 -m py_compile ffmpeg-smart-profiles/lib/ffsmart-shared-input.py
           python3 -m json.tool ffmpeg-smart-profiles/plugin.json >/dev/null
           python3 -m json.tool ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json >/dev/null
           bash -n ffmpeg-smart-profiles/ffmpeg-smart-plugin.sh

@@ -22,6 +22,7 @@ This ledger records why every current branch exists and preserves the context ne
 | `docs/ffmpeg-smart-beta3-live-validation` | documentation | integrated | `dev` at `dd54d4c` | `dev` | Record beta.3 publication and managed installed validation without moving its tag. |
 | `fix/benchmark-outcome-beta5` | fix | active | `dev` at `38f7d17` | `dev` | Reviewed beta.5 plugin, wrapper, development-registry, zero-viewer managed update, and completed bounded hardware validation. Stable/main promotion, GitHub Release, unrelated work, and branch deletion remain excluded. |
 | `feature/stable-v0.2.1-2026-10-20` | feature | stable release preparation | `dev@35ecaefd` | `dev`, then `main` | Release 0.2.1 while retaining the tested immutable runtime. |
+| `feature/shared-input-reservoir` | feature | locally tested; review pending | `9ffe9d4` | `dev` | Package the canonical shared-input reader and persisted per-Stream Profile controls for local 0.2.2-beta.2 testing. |
 
 ## Branch records
 
@@ -225,3 +226,22 @@ the `v0.2.1` beta cycle.
 - User authorized build/install and channel458 TiVo retest. No registry/tag/release.
 - Validation: complete plugin gates, immutable source checks, independent review,
   native installation and constrained live458 test.
+
+### `feature/shared-input-reservoir`
+
+- Created: 2026-10-30; base `9ffe9d4`; target `dev` after separate acceptance.
+- Scope: synchronize canonical `6e0a84b900db65fd4867d22c17d6b93e22fd1470`,
+  package its Python helper, expose per-Stream Profile off/auto/strict controls
+  and bounded settings, prepare local test candidate 0.2.2-beta.2 and private ZIP.
+- Excluded: tags, registry, release, source promotion, remote push, installation,
+  provider acquisition and global default-profile changes. Output pipe unchanged.
+- Validation: 78 unit tests, Python compile, JSON, Bash syntax, ShellCheck
+  0.11.0, offline and exact online eight-file source checks passed. Repeated
+  explicit-SHA sync preserved all bytes and modes. A private ZIP is built from
+  the committed tree and inspected for exact metadata, helper presence/mode and
+  archive layout at handoff. No plugin CI, live/provider, installation or
+  default-profile result is claimed; those remain parent-owned follow-up work.
+- Decision closure and contradiction/chat-independence review completed against
+  ADR-030. Per-stream controls and transport limits are explicit; no global or
+  channel profile assignments change. Further TiVo compatibility policy is a
+  separate subsequent implementation wave.

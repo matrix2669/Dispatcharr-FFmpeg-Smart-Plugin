@@ -19,7 +19,7 @@ spec.loader.exec_module(module)
 manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 plugin = module.Plugin()
 
-assert plugin.version == "0.2.2-beta.1"
+assert plugin.version == "0.2.2-beta.2"
 assert manifest["version"] == plugin.version
 assert (PLUGIN_DIR / "ffmpeg-smart.sh").is_file()
 assert (PLUGIN_DIR / "ffmpeg-smart-plugin.sh").is_file()
@@ -31,6 +31,7 @@ for module_name in (
     "ffsmart-hardware.sh",
     "ffsmart-policy.sh",
     "ffsmart-probe.sh",
+    "ffsmart-shared-input.py",
 ):
     assert (PLUGIN_DIR / "lib" / module_name).is_file()
 assert os.access(PLUGIN_DIR / "ffmpeg-smart.sh", os.X_OK)
@@ -46,6 +47,7 @@ assert streams[0]["name"] == "FFmpeg Smart"
 assert streams[0]["command"] == str(PLUGIN_DIR / "ffmpeg-smart-plugin.sh")
 assert "-10bit" not in streams[0]["parameters"]
 assert "-hdr" not in streams[0]["parameters"]
+assert "--plugin-shared-input-mode auto" in streams[0]["parameters"]
 
 assert len(outputs) == 1
 assert outputs[0]["name"] == "FFMpeg Smart - 720p Mobile"

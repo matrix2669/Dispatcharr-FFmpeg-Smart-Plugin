@@ -1,3 +1,18 @@
+## [0.2.2-beta.2] - 2026-10-30
+
+Local shared-input test candidate; no tag, Release or registry publication.
+
+- Pin canonical FFmpeg Adaptive `6e0a84b900db65fd4867d22c17d6b93e22fd1470`,
+  including the checksum-pinned Python RAM reader and shell modules.
+- Add persisted Off/Auto/Strict startup-input controls per Stream Profile,
+  with RAM, startup and idle limits. Auto uses TS URL hints and preserves legacy
+  handling for unhinted sources and custom input options; it does not detect
+  response format. Strict requires HTTP MPEG-TS and rejects unsupported input.
+- Preserve Output Profile pipe commands, explicit codecs, custom settings and
+  global/channel profile assignments. Profile settings apply through Install /
+  Update; package installation alone does not select a global default.
+- Extend source syntax/presence and packaging checks to the Python helper.
+
 ## [0.2.2-beta.1] - Unreleased test build
 
 - Pin canonical video policy that copies supported video unless an explicit

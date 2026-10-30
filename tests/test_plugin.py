@@ -1490,6 +1490,7 @@ class ReleaseMetadataTests(unittest.TestCase):
             "lib/ffsmart-hardware.sh",
             "lib/ffsmart-policy.sh",
             "lib/ffsmart-probe.sh",
+            "lib/ffsmart-shared-input.py",
         ):
             self.assertTrue((runtime_dir / filename).is_file(), filename)
 
@@ -1512,16 +1513,17 @@ class ReleaseMetadataTests(unittest.TestCase):
             "lib/ffsmart-hardware.sh",
             "lib/ffsmart-policy.sh",
             "lib/ffsmart-probe.sh",
+            "lib/ffsmart-shared-input.py",
         }
 
         self.assertEqual(metadata["repository"], "matrix2669/ffmpeg-adaptive")
         self.assertEqual(
             metadata["tracking_ref"],
-            "81d811625e51e97c76f285267dc9c8d8ec885754",
+            "6e0a84b900db65fd4867d22c17d6b93e22fd1470",
         )
         self.assertEqual(
             metadata["commit"],
-            "81d811625e51e97c76f285267dc9c8d8ec885754",
+            "6e0a84b900db65fd4867d22c17d6b93e22fd1470",
         )
         self.assertRegex(metadata["commit"], r"^[0-9a-f]{40}$")
         self.assertEqual({entry["path"] for entry in metadata["files"]}, expected_paths)

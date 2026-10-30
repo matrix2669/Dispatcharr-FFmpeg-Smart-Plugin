@@ -1419,3 +1419,103 @@ change invalidates the previous cache: rebuild/validate rather than forge its
 fingerprint. Existing hardware scheduling and benchmarking policy is unchanged.
 
 The test candidate pins canonical commit `81d811625e51e97c76f285267dc9c8d8ec885754`; runtime 0.1.0 invalidates the installed beta.4 cache fingerprint and requires a proper rebuild.
+
+---
+
+# ADR-030: Package canonical shared input with persisted Stream Profile controls
+
+## Status and date
+
+Accepted for the local 0.2.2-beta.2 test candidate, 2026-10-30. Supersedes the
+conditional-video test candidate's source pin and ADR-025's seven-file bundle
+count for this version. Production rollout and global default selection remain
+separate acceptance actions.
+
+## Decision and rationale
+
+Bundle canonical `matrix2669/ffmpeg-adaptive` commit
+`6e0a84b900db65fd4867d22c17d6b93e22fd1470` through the synchronization workflow.
+Its runtime bytes are identical to tested `e1f70ff`; the final commit adds the
+feature-branch CI trigger. Pin the entrypoint, six shell modules and
+`lib/ffsmart-shared-input.py` as one eight-file dependency with per-file modes
+and checksums. Keep the MIT notice. Source verification must parse shell and
+Python by file type and reject omission of a helper referenced by the entrypoint.
+No vendored implementation is developed independently in the plugin.
+
+Each of the two Stream Profile slots gains persisted controls:
+
+- `stream_N_shared_input_mode`: `off`, `auto` (default), or `strict`.
+- `stream_N_shared_input_mib`: default string `16`, integer range 1..1024 MiB;
+  convert to bytes by multiplying by 1048576.
+- `stream_N_shared_input_deadline`: default string `20`, integer range 1..300
+  seconds until first output media.
+- `stream_N_shared_input_idle`: default string `30`, integer range 1..300
+  seconds per blocking network operation.
+
+The existing supported string fields carry numeric values with explicit units
+and validation. Install / Update persists absent defaults once for both slots,
+while preserving explicit modes, custom settings and unrelated data. Mode Off
+ignores the unused numeric fields, permitting a disabled optimization without
+requiring edits to draft limits. Invalid enabled-slot settings block profile
+reconciliation before database mutation. Existing profile definitions change
+only through Install / Update; installing the package does not rewrite profiles.
+
+Auto passes canonical `FFMPEG_SMART_SHARED_INPUT=auto`: share only HTTP(S) URL
+paths ending `.ts` or query keys `format`/`output` with values `ts`/`mpegts`,
+case-insensitive for path/query matching, excluding `.m3u8`. Opaque URLs, other
+protocols, custom input-option tokens and unavailable Python retain legacy
+handling. These are hints, not body-format detection. A hinted source returning
+non-TS data fails without reacquisition. Strict passes `true`, requires Python
+3.9+ and continuous 188-byte MPEG-TS, and rejects custom input options. Off
+passes `false`. Dedicated user-agent and URL Basic authentication are supported;
+up to five redirects strip cross-origin Basic Authorization and reject HTTPS
+downgrades or redirect credentials. No body reconnect or fallback open occurs.
+
+The plugin-owned launcher consumes `--plugin-shared-input-mode`, `-bytes`,
+`-deadline` and `-idle` options (each with the complete `--plugin-shared-input-`
+prefix), validates values and exports only the corresponding canonical settings.
+Other argv elements retain exact boundaries; no `eval` or shell expression
+processing is introduced. The new selectors are reserved from Additional
+options so the persisted controls remain authoritative. Existing explicit
+`-vc`, custom FFmpeg phases, automatic video copy, independent audio, cache,
+hardware scheduling and degraded-copy policy remain intact.
+
+Output Profiles gain no shared-input fields or flags. Their existing `-i pipe:0`
+command is unchanged. Launcher invocations without a Stream selector explicitly
+disable shared input, including Output Profiles, cache status and maintenance,
+even if an ambient process environment enables it. The downstream playback
+reservoir is separate and unchanged.
+
+## Alternatives and consequences
+
+Unconditionally forcing TS acquisition would break HLS and opaque sources.
+The conservative Auto default permits useful optimization for explicit TS hints
+while retaining existing custom-input transport semantics. Keeping mode only
+in free-form flags would hide the behavior and make limits harder to review.
+Duplicating the reader in the plugin would violate canonical ownership.
+The RAM limit covers retained payload, not process RSS or media duration; full
+queues apply backpressure and small limits can starve a probe until its startup
+deadline. Telemetry remains canonical and credential-safe. No fixed prefill wait,
+media disk spool, dropped-byte policy or ongoing media-time reservoir is added.
+
+## Authority, evidence and review triggers
+
+The operator authorized packaging this canonical source, persisted per-Stream
+controls with Auto for unspecified settings, configurable bounds and a private
+test ZIP on 2026-10-30. The parent coordinator verified official Dispatcharr
+0.33.0 commit `2fa13a6707bdf0dae87e0c494bcd3ca282cdeb3e` relevant source hashes
+and installer/settings/default contracts, and ran all 12 canonical shared-input
+methods as the dispatch user with Python 3.13.17 and FFmpeg 8.1.2 in isolated
+storage. This evidence does not establish live provider startup performance or
+plugin installation/profile reconciliation. Minimum Dispatcharr 0.29.0 is
+unchanged. Local unit, syntax, JSON, source and private-package checks are the
+plugin candidate gate; native installation, actual streams and any global
+default-profile selection remain parent-owned follow-up work.
+
+Install / Update never changes Dispatcharr's global default or channel-specific
+profile assignments. Tags, Releases, registries, integration, publication and
+deployment are excluded from this local checkpoint. Revisit Auto hints, limits,
+transport headers/proxies, HLS or default enablement only with representative
+compatibility/startup evidence and explicit scope. Decision closure fixes the
+interface, units, defaults, persistence, scope, failure and packaging boundaries;
+no unresolved authority choice remains in this implementation.

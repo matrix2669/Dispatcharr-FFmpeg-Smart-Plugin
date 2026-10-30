@@ -46,6 +46,7 @@ ffsmart_input_is_http() {
 
 ffsmart_dynamic_input_args() {
     FFSMART_DYNAMIC_INPUT_ARGS=()
+    [[ -z "${FFSMART_SHARED_ENDPOINT:-}" ]] || return 0
     if [[ -n "$FFSMART_USER_AGENT" ]]; then
         FFSMART_DYNAMIC_INPUT_ARGS+=( -user_agent "$FFSMART_USER_AGENT" )
     fi
@@ -267,6 +268,7 @@ ffsmart_export_workload() {
 }
 
 ffsmart_final_input_name() {
+    if [[ -n "${FFSMART_SHARED_ENDPOINT:-}" ]]; then printf '%s/playback' "$FFSMART_SHARED_ENDPOINT"; return; fi
     if [[ "$FFSMART_IS_PIPE" == true ]]; then printf 'pipe:0'; else printf '%s' "$FFSMART_INPUT"; fi
 }
 
@@ -296,6 +298,7 @@ ffsmart_run_command() {
 
 ffsmart_run_degraded_proxy() {
     local reason="$1" input_name
+    ffsmart_maybe_start_shared_input
     ffsmart_warn degraded-proxy "$reason; running stream-copy proxy"
     ffsmart_write_fallback_marker
     ffsmart_dynamic_input_args

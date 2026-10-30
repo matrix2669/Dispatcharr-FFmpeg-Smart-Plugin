@@ -32,6 +32,7 @@ jobs:
         run: |
           scripts/check-ffmpeg-smart-source.sh
           python3 -m unittest discover -s tests -v
+          python3 -m py_compile ffmpeg-smart-profiles/lib/ffsmart-shared-input.py
           python3 -m json.tool ffmpeg-smart-profiles/plugin.json >/dev/null
           bash -n ffmpeg-smart-profiles/ffmpeg-smart-plugin.sh
           bash -n ffmpeg-smart-profiles/ffmpeg-smart.sh

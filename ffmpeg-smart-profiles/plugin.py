@@ -36,6 +36,7 @@ RUNTIME_MODULE_PATHS = tuple(
         "ffsmart-hardware.sh",
         "ffsmart-policy.sh",
         "ffsmart-probe.sh",
+        "ffsmart-shared-input.py",
     )
 )
 CACHE_NOTIFICATION_KEY = "ffmpeg-smart-hardware-cache"
@@ -194,9 +195,47 @@ def advanced_ffmpeg_fields(prefix, label):
     ]
 
 
+def shared_input_fields(prefix, label):
+    return [
+        {
+            "id": f"{prefix}_shared_input_mode",
+            "label": f"{label}: shared startup input",
+            "type": "select",
+            "default": "auto",
+            "options": [
+                {"value": "off", "label": "Off (legacy input handling)"},
+                {"value": "auto", "label": "Auto (MPEG-TS URL hints only)"},
+                {"value": "strict", "label": "Strict (known HTTP MPEG-TS source)"},
+            ],
+            "help_text": "Auto shares one reader for HTTP(S) .ts paths or format/output=ts|mpegts URL hints, except .m3u8, custom input options or unavailable Python. It does not detect the body format. Strict requires continuous 188-byte MPEG-TS and Python 3.9+; unsupported input or custom input options fail without reopening the source.",
+        },
+        {
+            "id": f"{prefix}_shared_input_mib",
+            "label": f"{label}: startup input RAM limit (MiB)",
+            "type": "string",
+            "default": "16",
+            "help_text": "1–1024 MiB of retained input payload. A full queue pauses the source; no media is dropped or written to disk. OS buffers and process overhead are additional. Used only when shared input is selected.",
+        },
+        {
+            "id": f"{prefix}_shared_input_deadline",
+            "label": f"{label}: startup deadline (seconds)",
+            "type": "string",
+            "default": "20",
+            "help_text": "1–300 seconds until first output media. Too small a RAM limit can starve probing and reach this deadline. Used only when shared input is selected.",
+        },
+        {
+            "id": f"{prefix}_shared_input_idle",
+            "label": f"{label}: input network timeout (seconds)",
+            "type": "string",
+            "default": "30",
+            "help_text": "1–300 seconds per blocking network operation. Shared input fails on timeout without starting another media connection.",
+        },
+    ]
+
+
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.2.2-beta.1"
+    version = "0.2.2-beta.2"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
@@ -214,6 +253,7 @@ class Plugin:
         {"id": "stream_1_enabled", "label": "Enable Stream Profile 1", "type": "boolean", "default": True},
         {"id": "stream_1_name", "label": "Stream Profile 1 name", "type": "string", "default": "FFmpeg Smart"},
         *policy_fields("stream_1", "Stream Profile 1"),
+        *shared_input_fields("stream_1", "Stream Profile 1"),
         {
             "id": "stream_1_options",
             "label": "Stream Profile 1 options",
@@ -225,6 +265,7 @@ class Plugin:
         {"id": "stream_2_enabled", "label": "Enable Stream Profile 2", "type": "boolean", "default": False},
         {"id": "stream_2_name", "label": "Stream Profile 2 name", "type": "string", "default": ""},
         *policy_fields("stream_2", "Stream Profile 2"),
+        *shared_input_fields("stream_2", "Stream Profile 2"),
         {
             "id": "stream_2_options",
             "label": "Stream Profile 2 options",
@@ -379,8 +420,9 @@ class Plugin:
             normalized_settings, normalized_probe_options = (
                 self._normalize_adaptive_probe_settings(normalized_settings)
             )
+            normalized_settings, shared_defaults_added = self._normalize_shared_input_settings(normalized_settings)
             result = self._install_profiles(normalized_settings, logger)
-            if normalized_flags or removed_automatic_flags or normalized_probe_options:
+            if normalized_flags or removed_automatic_flags or normalized_probe_options or shared_defaults_added:
                 self._save_normalized_settings(normalized_settings)
             if normalized_flags:
                 result["normalized_policy_flags"] = normalized_flags
@@ -450,6 +492,7 @@ class Plugin:
                     "parameters": self._join_parameters(
                         '-i "{streamUrl}" -user_agent "{userAgent}"',
                         options,
+                        self._shared_input_parameters(settings, f"stream_{slot}"),
                         ffmpeg_options,
                     ),
                     "is_active": True,
@@ -505,7 +548,7 @@ class Plugin:
             tokens = shlex.split(options)
         except ValueError as exc:
             raise ValueError(f"{label} contains invalid quoting: {exc}") from exc
-        forbidden = {"-i", "--cache-status", "--recache", "--recache-only"}
+        forbidden = {"-i", "--cache-status", "--recache", "--recache-only", "--shared-input", "--shared-input-auto", "--plugin-shared-input-mode", "--plugin-shared-input-bytes", "--plugin-shared-input-deadline", "--plugin-shared-input-idle"}
         invalid = next((token for token in tokens if token in forbidden), None)
         if invalid:
             raise ValueError(f"{label} cannot contain {invalid}")
@@ -791,6 +834,38 @@ class Plugin:
         config = PluginConfig.objects.get(key="ffmpeg_smart_profiles")
         config.settings = settings
         config.save(update_fields=["settings", "updated_at"])
+
+    @staticmethod
+    def _normalize_shared_input_settings(settings):
+        normalized = dict(settings or {})
+        changed = False
+        for slot in (1, 2):
+            for suffix, default in (("mode", "auto"), ("mib", "16"), ("deadline", "20"), ("idle", "30")):
+                key = f"stream_{slot}_shared_input_{suffix}"
+                if key not in normalized:
+                    normalized[key] = default
+                    changed = True
+        return normalized, changed
+
+    @staticmethod
+    def _shared_input_parameters(settings, prefix):
+        mode = str(settings.get(f"{prefix}_shared_input_mode", "auto"))
+        if mode not in {"off", "auto", "strict"}:
+            raise ValueError(f"{prefix} shared input mode must be off, auto or strict")
+        if mode == "strict" and str(settings.get(f"{prefix}_ffmpeg_input_options", "") or "").strip():
+            raise ValueError(f"{prefix} strict shared input does not support custom input options; choose Auto or Off")
+        parameters = ["--plugin-shared-input-mode", mode]
+        if mode != "off":
+            for suffix, flag, default, maximum, multiplier in (
+                ("mib", "bytes", "16", 1024, 1048576),
+                ("deadline", "deadline", "20", 300, 1),
+                ("idle", "idle", "30", 300, 1),
+            ):
+                value = str(settings.get(f"{prefix}_shared_input_{suffix}", default))
+                if not re.fullmatch(r"[1-9][0-9]{0,3}", value) or not 1 <= int(value) <= maximum:
+                    raise ValueError(f"{prefix} shared input {suffix} must be an integer from 1 to {maximum}")
+                parameters.extend((f"--plugin-shared-input-{flag}", str(int(value) * multiplier)))
+        return " ".join(shlex.quote(token) for token in parameters)
 
     @classmethod
     def _profile_options(cls, settings, prefix, additional_options, label):

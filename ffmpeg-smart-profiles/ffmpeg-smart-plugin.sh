@@ -8,4 +8,56 @@ export FFMPEG_SMART_REQUIRE_CACHE="${FFMPEG_SMART_REQUIRE_CACHE:-true}"
 export FFMPEG_SMART_CACHE_FALLBACK="${FFMPEG_SMART_CACHE_FALLBACK:-proxy}"
 export FFMPEG_SMART_FALLBACK_MARKER="${FFMPEG_SMART_FALLBACK_MARKER:-$FFMPEG_SMART_STATE_DIR/runtime/fallback-invocation}"
 
-exec "$SCRIPT_DIR/ffmpeg-smart.sh" "$@"
+# Shared-input policy is scoped to generated Stream Profile invocations.
+# Output Profiles and maintenance calls have no selector and retain legacy input.
+export FFMPEG_SMART_SHARED_INPUT=false
+shared_limit_error() {
+    printf '[ffmpeg-smart-plugin] Shared input limit is outside its supported range\n' >&2
+    exit 64
+}
+forward_args=()
+while (( $# )); do
+    case "$1" in
+        -ffmpeg-*-option|-ffmpeg-option|-ffmpeg-map)
+            # A user-owned argument may itself look like a launcher selector.
+            # Preserve the wrapper option and its value as an indivisible pair.
+            forward_args+=("$1")
+            shift
+            if (( $# )); then forward_args+=("$1"); shift; fi ;;
+        --plugin-shared-input-mode|--plugin-shared-input-bytes|--plugin-shared-input-deadline|--plugin-shared-input-idle)
+            option="$1"
+            if (( $# < 2 )); then
+                printf '[ffmpeg-smart-plugin] Shared input option requires a value\n' >&2
+                exit 64
+            fi
+            case "$option" in
+                --plugin-shared-input-mode)
+                    case "$2" in
+                        off) export FFMPEG_SMART_SHARED_INPUT=false ;;
+                        auto) export FFMPEG_SMART_SHARED_INPUT=auto ;;
+                        strict) export FFMPEG_SMART_SHARED_INPUT=true ;;
+                        *) printf '[ffmpeg-smart-plugin] Shared input mode must be off, auto or strict\n' >&2; exit 64 ;;
+                    esac ;;
+                *)
+                    if [[ ! "$2" =~ ^[1-9][0-9]{0,9}$ ]]; then
+                        printf '[ffmpeg-smart-plugin] Shared input limit must be a positive integer\n' >&2
+                        exit 64
+                    fi
+                    case "$option" in
+                        --plugin-shared-input-bytes)
+                            if (( $2 < 65536 || $2 > 1073741824 )); then shared_limit_error; fi
+                            export FFMPEG_SMART_SHARED_INPUT_BYTES="$2" ;;
+                        --plugin-shared-input-deadline)
+                            if (( $2 > 300 )); then shared_limit_error; fi
+                            export FFMPEG_SMART_SHARED_INPUT_DEADLINE="$2" ;;
+                        --plugin-shared-input-idle)
+                            if (( $2 > 300 )); then shared_limit_error; fi
+                            export FFMPEG_SMART_SHARED_INPUT_IDLE="$2" ;;
+                    esac ;;
+            esac
+            shift 2 ;;
+        *) forward_args+=("$1"); shift ;;
+    esac
+done
+
+exec "$SCRIPT_DIR/ffmpeg-smart.sh" "${forward_args[@]}"

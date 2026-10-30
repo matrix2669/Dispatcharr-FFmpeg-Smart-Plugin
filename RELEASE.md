@@ -20,7 +20,7 @@ Also verify, as applicable:
 - profile installation/update/removal conflict and restart behavior;
 - a real Output Profile through `pipe:0` when the wrapper changed;
 - recache maintenance coordination when plugin orchestration changed;
-- the exact tag archive contains `ffmpeg-smart-profiles/plugin.json`, `plugin.py`, executable `ffmpeg-smart.sh`, every pinned `lib/*.sh` module with its recorded mode, `FFMPEG_SMART_SOURCE.json`, and `FFMPEG_ADAPTIVE_LICENSE` beneath the stable plugin directory;
+- the exact tag archive contains `ffmpeg-smart-profiles/plugin.json`, `plugin.py`, executable `ffmpeg-smart.sh`, every pinned shell/Python module with its recorded mode, `FFMPEG_SMART_SOURCE.json`, and `FFMPEG_ADAPTIVE_LICENSE` beneath the stable plugin directory;
 - the registry metadata references the exact tag and full commit.
 
 If the supported, minimum, tested, or deployed Dispatcharr version changed, complete the official-repository compatibility refresh gate in `AGENT.md` before continuing.
@@ -71,7 +71,8 @@ New versions bundling the pinned MIT-licensed `ffmpeg-adaptive` runtime may proc
    │   ├── ffsmart-common.sh
    │   ├── ffsmart-hardware.sh
    │   ├── ffsmart-policy.sh
-   │   └── ffsmart-probe.sh
+   │   ├── ffsmart-probe.sh
+   │   └── ffsmart-shared-input.py
    ├── plugin.json
    └── plugin.py
    ```

@@ -2,25 +2,37 @@
 
 ## Canonical FFmpeg Adaptive runtime
 
-- Repository: `matrix2669/ffmpeg-adaptive`
-- Current recorded source: immutable work-branch commit
-  `81d811625e51e97c76f285267dc9c8d8ec885754`, conditional-video-transcode
-  test candidate (runtime 0.1.0).
-- Contract: the seven bundled runtime files are byte- and mode-pinned in
+- Repository: `matrix2669/ffmpeg-adaptive`.
+- Candidate source: immutable work-branch commit
+  `6e0a84b900db65fd4867d22c17d6b93e22fd1470`, runtime 0.1.0, for the local
+  plugin 0.2.2-beta.2 test candidate. No tag or registry publication is implied.
+- Contract: eight bundled files (entrypoint, six shell modules, Python shared
+  input helper) are byte- and mode-pinned in
   `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json`; the MIT notice is shipped
-  in `FFMPEG_ADAPTIVE_LICENSE`. Wrapper behavior remains owned by the canonical
-  repository and is not repaired in this plugin branch.
-- Synchronization: `scripts/sync-ffmpeg-smart.sh` requires an explicit ref when
-  the recorded tracking ref would otherwise resolve to a different commit,
-  updates the selected ref and commit together only after all files verify, and
-  must be followed by the complete source check.
-- This 0.2.2-beta.1 test candidate passes online/offline source verification and
-  repeated explicit-SHA synchronization. Runtime 0.1.0 changes the fingerprint
-  from the installed beta.4 runtime: rebuild and validate the hardware cache;
-  do not copy or forge its fingerprint. Live validation remains pending.
-- Historical source `913a958fd5f9edc231c49a70539a09f611fdcc5a` underlies the
-  previously published beta.5/stable plugin. Its review, registry publication
-  and managed hardware results below do not validate this new candidate.
+  in `FFMPEG_ADAPTIVE_LICENSE`. Runtime behavior remains canonical.
+- The helper requires Python 3.9+, POSIX process groups and private IPv4 loopback
+  access when selected. Auto uses URL hints and retains legacy handling if the
+  supported conditions are absent. Strict fails clearly for unavailable Python,
+  non-TS input or advanced input options. Python uses direct HTTP(S), system TLS
+  trust, dedicated user-agent and URL Basic authentication, with bounded safe
+  redirects. It does not inherit FFmpeg-specific headers, cookies or proxy
+  semantics. No media-body reconnect occurs.
+- Synchronization validates shell and Python by file type, updates selected ref
+  and commit only after download/syntax checks and must remain idempotent.
+  Offline checks require every referenced shell/Python helper in the manifest.
+- Canonical exact-source CI run `41076177782` passed the complete suite at
+  `6e0a84b900db65fd4867d22c17d6b93e22fd1470`. The same runtime bytes at
+  `e1f70ff` passed all 12 shared-input methods under actual Dispatcharr's dispatch
+  user with Python 3.13.17 and FFmpeg 8.1.2 in isolated temporary storage. This
+  proves fixture compatibility, not live-provider performance or plugin install.
+- Runtime version is unchanged from the conditional-video beta.1 candidate.
+  The parent coordinator confirmed the existing managed cache still reports
+  valid with this source. Continue using canonical `--cache-status`; rebuild only
+  when required, never forge the fingerprint. Historical beta.4 installations
+  still need a proper rebuild when upgrading to runtime 0.1.0.
+- Historical `913a958fd5f9edc231c49a70539a09f611fdcc5a` remains the published
+  beta.5/stable plugin dependency. Historical production evidence below does not
+  validate this new candidate's rollout.
 
 ## Plugin distribution and live state
 
@@ -86,3 +98,16 @@ hashes matched official 0.32.0. No affected contract incompatibility was found;
 minimum v0.29.0 is unchanged. See docs/stable-compatibility-2026-10-20.md.
 The plugin's runtime source pin remains 913a958fd5f9edc231c49a70539a09f611fdcc5a,
 independent of the standalone adaptive 0.1.0 release.
+
+## 2026-10-30 Dispatcharr 0.33.0 compatibility evidence
+
+The parent coordinator compared official `Dispatcharr/Dispatcharr` commit
+`2fa13a6707bdf0dae87e0c494bcd3ca282cdeb3e` (version 0.33.0) against deployed
+files: loader, plugin API views, serializers/models, core models, channel models
+and live-proxy Redis keys matched their exact SHA-256 values. It reviewed atomic
+installer swap/discovery and settings/action/default-profile contracts. The
+legacy `apps/proxy/ts_proxy/channel_manager.py` path was absent upstream and is
+not claimed as verified. Minimum Dispatcharr 0.29.0 remains unchanged.
+See `docs/shared-input-compatibility-2026-10-30.md` for the evidence boundary.
+Plugin candidate native installation, profile reconciliation and actual provider
+streams are pending parent-owned validation; no deployment is claimed here.

@@ -13,6 +13,7 @@ ffsmart_cli_defaults() {
     FFSMART_RECACHE=false
     FFSMART_RECACHE_ONLY=false
     FFSMART_CACHE_STATUS_ONLY=false
+    FFSMART_SHARED_INPUT="${FFMPEG_SMART_SHARED_INPUT:-false}"
 
     FFSMART_DRI_DEVICE="${DRI_DEVICE:-}"
     FFSMART_QSV_DEVICE="${QSV_DEVICE:-}"
@@ -44,6 +45,10 @@ ffsmart_need_value() {
 ffsmart_parse_cli() {
     while (( $# )); do
         case "$1" in
+            --shared-input)
+                FFSMART_SHARED_INPUT=true; shift ;;
+            --shared-input-auto)
+                FFSMART_SHARED_INPUT=auto; shift ;;
             -i)
                 ffsmart_need_value "$1" "$#" || return
                 FFSMART_INPUT="$2"; shift 2 ;;
@@ -236,6 +241,7 @@ ffsmart_validate_cli() {
     ffsmart_validate_mode mux "$FFSMART_MUX_MODE" false || return
     ffsmart_validate_advanced_args || return
     ffsmart_validate_maps || return
+    ffsmart_validate_shared_input || return
 
     if [[ "$FFSMART_CACHE_STATUS_ONLY" == true && "$FFSMART_RECACHE" == true ]]; then
         ffsmart_configuration_error "--cache-status cannot be combined with --recache or --recache-only"
@@ -253,5 +259,55 @@ Usage: ffmpeg-smart.sh -i INPUT [options]
 
 Normalizes one video program to MPEG-TS on stdout. Use --cache-status to inspect
 capability state or --recache-only to rebuild it without an input.
+
+--shared-input  Experimental single HTTP(S) MPEG-TS connection for probe and
+                playback. Python 3.9+ required; see README for limits.
+--shared-input-auto  Enable only for HTTP(S) TS URL hints with no custom input
+                     options; use legacy input handling otherwise.
 EOF
+}
+
+ffsmart_validate_shared_input() {
+    if [[ "$FFSMART_SHARED_INPUT" == auto ]]; then
+        FFSMART_SHARED_INPUT=false
+        if [[ "$FFSMART_INPUT" =~ ^https?:// && ${#FFSMART_USER_INPUT_ARGS[@]} -eq 0 ]] && command -v python3 >/dev/null 2>&1; then
+            if python3 -c 'import sys
+from urllib.parse import parse_qsl, urlsplit
+try:
+    u = urlsplit(sys.argv[1]); path = u.path.lower()
+    hint = path.endswith(".ts") or any(k.lower() in ("format", "output") and v.lower() in ("ts", "mpegts") for k, v in parse_qsl(u.query))
+    sys.exit(not (sys.version_info >= (3, 9) and u.hostname and not path.endswith(".m3u8") and hint))
+except ValueError:
+    sys.exit(1)' "$FFSMART_INPUT"; then
+                FFSMART_SHARED_INPUT=true
+            fi
+        fi
+    fi
+    case "$FFSMART_SHARED_INPUT" in true|false|1|0) ;; *) ffsmart_configuration_error "FFMPEG_SMART_SHARED_INPUT must be true, false or auto"; return 64 ;; esac
+    ffsmart_is_true "$FFSMART_SHARED_INPUT" || return 0
+    [[ "$FFSMART_CACHE_STATUS_ONLY" == true || "$FFSMART_RECACHE_ONLY" == true ]] && return 0
+    if [[ ! "$FFSMART_INPUT" =~ ^https?:// ]]; then
+        ffsmart_configuration_error "Shared input requires an HTTP(S) continuous MPEG-TS source"
+        return 64
+    fi
+    if (( ${#FFSMART_USER_INPUT_ARGS[@]} )); then
+        ffsmart_configuration_error "Shared input does not support advanced input options; remove them or disable shared input"
+        return 64
+    fi
+    if ! command -v python3 >/dev/null 2>&1 || ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))'; then
+        ffsmart_configuration_error "Shared input requires Python 3.9 or newer"
+        return 64
+    fi
+    export FFMPEG_SMART_SHARED_INPUT_BYTES="${FFMPEG_SMART_SHARED_INPUT_BYTES:-16777216}"
+    export FFMPEG_SMART_SHARED_INPUT_DEADLINE="${FFMPEG_SMART_SHARED_INPUT_DEADLINE:-20}"
+    export FFMPEG_SMART_SHARED_INPUT_IDLE="${FFMPEG_SMART_SHARED_INPUT_IDLE:-30}"
+    if ! python3 -c 'import os, sys
+try:
+    b, d, i = (int(os.environ[k]) for k in ("FFMPEG_SMART_SHARED_INPUT_BYTES", "FFMPEG_SMART_SHARED_INPUT_DEADLINE", "FFMPEG_SMART_SHARED_INPUT_IDLE"))
+    sys.exit(not (65536 <= b <= 1073741824 and 1 <= d <= 300 and 1 <= i <= 300))
+except ValueError:
+    sys.exit(1)'; then
+        ffsmart_configuration_error "Shared input requires bytes 65536..1073741824 and deadline/idle seconds 1..300"
+        return 64
+    fi
 }

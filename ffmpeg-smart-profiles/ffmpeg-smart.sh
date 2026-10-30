@@ -18,8 +18,16 @@ source "$FFSMART_ROOT/lib/ffsmart-probe.sh"
 # shellcheck source=lib/ffsmart-policy.sh
 source "$FFSMART_ROOT/lib/ffsmart-policy.sh"
 
+ffsmart_maybe_start_shared_input() {
+    if ffsmart_is_true "$FFSMART_SHARED_INPUT" && [[ -z "${FFSMART_SHARED_ENDPOINT:-}" ]]; then
+        export FFSMART_SHARED_SOURCE="$FFSMART_INPUT" FFSMART_SHARED_AGENT="$FFSMART_USER_AGENT"
+        exec python3 "$FFSMART_ROOT/lib/ffsmart-shared-input.py" "$FFSMART_ENTRYPOINT" "${FFSMART_ORIGINAL_ARGS[@]}"
+    fi
+}
+
 ffsmart_main() {
     local cache_state cache_status fallback_mode require_cache=false
+    FFSMART_ORIGINAL_ARGS=("$@")
     FFSMART_SHOW_HELP=false
     ffsmart_cli_defaults
     ffsmart_parse_cli "$@" || return
@@ -30,6 +38,10 @@ ffsmart_main() {
     fi
     ffsmart_validate_cli || return
     ffsmart_init_state || return
+
+    # The outer wrapper already completed an explicit rebuild before starting
+    # the supervisor. Do not repeat it inside the owned streaming process.
+    [[ -z "${FFSMART_SHARED_ENDPOINT:-}" ]] || FFSMART_RECACHE=false
 
     fallback_mode="${FFMPEG_SMART_CACHE_FALLBACK:-none}"
     case "$fallback_mode" in
@@ -80,6 +92,7 @@ ffsmart_main() {
         ffsmart_rebuild_cache false || return
     fi
 
+    ffsmart_maybe_start_shared_input
     ffsmart_prepare_probe_input || return
     trap ffsmart_exit_cleanup EXIT HUP INT TERM
     ffsmart_adaptive_probe || return

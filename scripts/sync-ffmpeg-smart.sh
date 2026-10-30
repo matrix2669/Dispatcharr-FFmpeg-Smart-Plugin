@@ -32,6 +32,14 @@ validate_relative_path() {
     fi
 }
 
+validate_runtime_syntax() {
+    case "$1" in
+        *.sh) bash -n "$1" ;;
+        *.py) python3 -c 'import ast, sys; ast.parse(open(sys.argv[1], encoding="utf-8").read(), filename=sys.argv[1])' "$1" ;;
+        *) echo "Unsupported bundled runtime file type" >&2; return 1 ;;
+    esac
+}
+
 for command_name in curl git jq; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
         echo "Required command not found: $command_name" >&2
@@ -89,7 +97,7 @@ while IFS= read -r entry; do
     mkdir -p "$(dirname "$source_copy")"
     source_url="https://raw.githubusercontent.com/$source_repo/$source_commit/$source_path"
     curl --fail --silent --show-error --location "$source_url" --output "$source_copy"
-    bash -n "$source_copy"
+    validate_runtime_syntax "$source_copy"
     source_sha="$(sha256_file "$source_copy")"
 
     if [[ "$recorded_sha" != "$source_sha" ]] || \

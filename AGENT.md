@@ -19,7 +19,7 @@ This repository owns the `FFmpeg Smart Profiles` plugin for Dispatcharr. The plu
 - `ffmpeg-smart-profiles/plugin.json` declares Dispatcharr settings and actions.
 - `ffmpeg-smart-profiles/plugin.py` is the Dispatcharr integration layer. It owns profile definitions, settings migration, safe database reconciliation, active-transcode coordination, benchmark lifecycle, and status reporting. Benchmark outcome state is persisted separately from canonical cache validity under `/data/ffmpeg_smart_profiles/runtime/benchmark-outcome.json`; a failed or abandoned rebuild remains an error even when an existing cache validates.
 - `ffmpeg-smart-profiles/ffmpeg-smart-plugin.sh` is the plugin-specific launcher. It selects persistent state under `/data/ffmpeg_smart_profiles`, requires an operator-built cache for normal streams, and executes the canonical wrapper.
-- `ffmpeg-smart-profiles/ffmpeg-smart.sh` and `ffmpeg-smart-profiles/lib/*.sh` are one vendored modular runtime dependency. Their canonical source is `matrix2669/ffmpeg-adaptive`; do not develop wrapper behavior independently in this repository.
+- `ffmpeg-smart-profiles/ffmpeg-smart.sh` and `ffmpeg-smart-profiles/lib/` shell/Python modules are one vendored modular runtime dependency. Their canonical source is `matrix2669/ffmpeg-adaptive`; do not develop wrapper behavior independently in this repository.
 - `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json` pins every runtime file to one full source commit, SHA-256 checksum, and installed mode. `FFMPEG_ADAPTIVE_LICENSE` preserves the dependency's MIT notice.
 - `scripts/check-ffmpeg-smart-source.sh` verifies the complete local bundle and, unless `--offline` is used, every exact remote source file.
 - `scripts/sync-ffmpeg-smart.sh` resolves a branch, tag, or full commit, replaces the complete vendored runtime, and updates its selected ref and commit atomically. An omitted stale tracking ref cannot silently downgrade the recorded immutable commit.
@@ -46,7 +46,7 @@ Data flow:
 
 ## Non-negotiable rules
 
-- Keep the plugin self-contained; the installed archive must include `ffmpeg-smart.sh`, every pinned `lib/*.sh` module, and the dependency's MIT notice, and must not depend on a Git submodule or a second repository checkout.
+- Keep the plugin self-contained; the installed archive must include `ffmpeg-smart.sh`, every pinned shell/Python module, and the dependency's MIT notice, and must not depend on a Git submodule or a second repository checkout.
 - Keep mutable runtime state outside the replaceable plugin directory. The launcher, plugin status, and recache orchestration must share `/data/ffmpeg_smart_profiles` unless an explicit test override is supplied.
 - Never edit the vendored runtime as an independent implementation. Change and validate `ffmpeg-adaptive` first, publish its canonical commit, then synchronize this repository through the pin workflow.
 - Never silently update an existing tag, Release, archive, or installed plugin version. Wrapper changes require a new plugin version before registry publication.
@@ -114,7 +114,7 @@ For every change, run:
 
 ```bash
 python3 -m unittest discover -s tests -v
-python3 -m py_compile ffmpeg-smart-profiles/plugin.py tests/validate_dispatcharr.py
+python3 -m py_compile ffmpeg-smart-profiles/plugin.py ffmpeg-smart-profiles/lib/ffsmart-shared-input.py tests/validate_dispatcharr.py
 python3 -m json.tool ffmpeg-smart-profiles/plugin.json >/dev/null
 python3 -m json.tool ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json >/dev/null
 bash -n ffmpeg-smart-profiles/ffmpeg-smart.sh

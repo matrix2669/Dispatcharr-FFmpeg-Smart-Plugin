@@ -2,11 +2,12 @@
 
 Native Dispatcharr plugin that bundles `ffmpeg-smart.sh`, creates managed Stream/Output Profiles, and can rebuild the GPU capability and concurrent-capacity cache from the Plugins page.
 
-This branch prepares test build **0.2.2-beta.1**, pinned to canonical runtime
-`81d811625e51e97c76f285267dc9c8d8ec885754`. Compatible H.264/HEVC now copy
-unless a requested constraint requires conversion. Installing this candidate
-requires a fresh hardware-cache validation/rebuild because the bundled runtime
-version changes. It is not a registry release.
+This branch prepares local test build **0.2.2-beta.2**, pinned to canonical
+runtime `6e0a84b900db65fd4867d22c17d6b93e22fd1470`, with shared startup-input
+controls for Stream Profiles. Compatible H.264/HEVC continue to copy unless an
+active constraint requires conversion. Runtime version 0.1.0 is unchanged from beta.1:
+validate the existing cache and rebuild only if required. No registry release
+or live deployment is claimed by this source checkpoint.
 
 ## Installation
 
@@ -90,13 +91,48 @@ The generated wrapper command intentionally repeats `-ffmpeg-input-option` once 
 
 Saved settings from development versions that placed policy flags in the additional-options field remain compatible. On **Install / Update**, the plugin removes those copies, enables their matching checkboxes in persisted settings, and generates each policy flag once. Refresh the settings page after normalization to see the checkbox changes; Dispatcharr does not invoke plugins directly from its settings Save button.
 
-The initial defaults enable Stream Profile 1 (`FFmpeg Smart`) with 10-bit and HDR allowed, and Output Profile 1 (`FFMpeg Smart - 720p Mobile`) with Force SDR, deinterlacing, `-maxres 720`, `-maxbr 2M`, and `-maxchan 2`. The remaining three slots start disabled with blank names and options.
+The initial defaults enable Stream Profile 1 (`FFmpeg Smart`) with automatic HDR/10-bit policy, and Output Profile 1 (`FFMpeg Smart - 720p Mobile`) with Force SDR, deinterlacing, `-maxres 720`, `-maxbr 2M`, and `-maxchan 2`. The remaining three slots start disabled with blank names and options.
 
 The settings page includes a short flag reference for output codec, resolution, bitrate, audio-channel limits, acceleration, and explicit device selection.
 
 Profile installation is idempotent. Locked profiles, duplicate names, and same-name profiles pointing to unrelated commands are reported as conflicts rather than overwritten. Adding a profile requires a full Dispatcharr restart before the new profile can be used; updating an existing managed profile applies without a restart. Removing profiles still requires a restart for the removal to fully take effect.
 
 The plugin cannot restart Dispatcharr by itself in a standard container deployment. It runs as the unprivileged Dispatcharr service user and is intentionally not given access to the Docker host control socket.
+
+## Shared startup input for Stream Profiles
+
+Each Stream Profile has a saved **Shared startup input** selector. **Auto** is
+used for new or unspecified settings; **Off** keeps legacy input handling;
+**Strict** uses one shared reader for a known continuous HTTP(S) MPEG-TS source.
+The reader retains startup bytes in RAM so probing and playback consume the
+same media connection. Full queues pause upstream reading without dropping
+media or writing it to disk. No fixed prefill wait is added.
+
+Auto checks URL hints only: HTTP(S) `.ts` paths or `format`/`output=ts|mpegts`
+query values, excluding `.m3u8` paths. It does not inspect a body to detect its
+format. Opaque URLs, other protocols, custom input-option tokens and missing
+Python keep legacy handling. A hinted URL that returns another format fails
+without reopening the source. Strict requires continuous 188-byte MPEG-TS and
+Python 3.9+; custom input options are rejected. Dedicated user-agent and URL
+Basic authentication work; redirects are bounded and strip cross-origin Basic
+Authorization. Python direct connections/system TLS trust are used, without
+FFmpeg-specific proxy, cookie or custom-header semantics.
+
+The adjacent limits default to **16 MiB** of retained payload, **20 seconds**
+until first output media and **30 seconds** per blocking network operation.
+Allowed ranges are 1–1024 MiB and 1–300 seconds. The cap excludes process and OS
+buffer overhead; it is not a media-duration target. Small caps can starve probing
+until the startup deadline. Source failures never start another shared media
+reader. Canonical stderr telemetry reports credential-safe startup/request and
+peak-retention measurements.
+
+Save settings and run **Install or Update Profiles** to apply them. Missing
+settings are persisted once without replacing explicit choices or custom policy
+options, including `-vc`. Existing profile updates keep the usual no-restart
+behavior. Output Profiles keep their existing `-i pipe:0` path and have no shared
+input controls. The plugin does not select Dispatcharr's global default or alter
+channel-specific assignments. Version **0.2.2-beta.2** is a local test candidate;
+provider performance and default-profile rollout require separate validation.
 
 ## Hardware cache
 
@@ -120,7 +156,7 @@ Because benchmark-time starts now take the degraded stream-copy path, Dispatchar
 
 ## Bundled runtime updates
 
-`matrix2669/ffmpeg-adaptive` is the source of truth for the modular `ffmpeg-smart.sh` runtime. The plugin records one exact source commit plus the path, SHA-256 checksum, and installed mode of the entrypoint and every `lib/*.sh` module in `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json`. CI verifies that the complete bundle is byte-for-byte identical to that immutable source.
+`matrix2669/ffmpeg-adaptive` is the source of truth for the modular `ffmpeg-smart.sh` runtime. The plugin records one exact source commit plus the path, SHA-256 checksum, and installed mode of the entrypoint and every shell/Python module in `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json`. CI verifies that the complete bundle is byte-for-byte identical to that immutable source.
 
 The daily **Sync FFmpeg Adaptive runtime** workflow, which can also be run manually, checks the metadata's tracked `ffmpeg-adaptive` ref. When any runtime file changes, it updates the complete bundle and source metadata, runs validation, and opens a pull request for review. Existing plugin releases remain pinned and never change silently. An omitted immutable tag or commit ref is rejected if it resolves to a different recorded commit; pass an explicit ref to make that change intentionally.
 

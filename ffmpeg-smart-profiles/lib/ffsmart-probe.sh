@@ -28,6 +28,10 @@ ffsmart_capture_pipe_sample() {
 }
 
 ffsmart_prepare_probe_input() {
+    if [[ -n "${FFSMART_SHARED_ENDPOINT:-}" ]]; then
+        FFSMART_PROBE_INPUT="$FFSMART_SHARED_ENDPOINT/fast"
+        return 0
+    fi
     case "$FFSMART_INPUT" in
         -|pipe:0)
             ffsmart_capture_pipe_sample ;;
@@ -140,6 +144,9 @@ ffsmart_probe_metadata_complete() {
 ffsmart_run_probe_tier() {
     local tier="$1" duration="$2" size="$3" output_file="$4"
     local command=(ffprobe -v error)
+    if [[ -n "${FFSMART_SHARED_ENDPOINT:-}" ]]; then
+        FFSMART_PROBE_INPUT="$FFSMART_SHARED_ENDPOINT/$tier"
+    fi
     if [[ -n "$duration" ]]; then
         command+=( -analyzeduration "$duration" -probesize "$size" )
     fi

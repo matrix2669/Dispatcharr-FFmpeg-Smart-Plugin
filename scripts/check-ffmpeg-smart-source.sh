@@ -35,6 +35,14 @@ metadata_contains_path() {
         '.files | any(.path == $path)' "$SOURCE_METADATA" >/dev/null
 }
 
+validate_runtime_syntax() {
+    case "$1" in
+        *.sh) bash -n "$1" ;;
+        *.py) python3 -c 'import ast, sys; ast.parse(open(sys.argv[1], encoding="utf-8").read(), filename=sys.argv[1])' "$1" ;;
+        *) echo "Unsupported bundled runtime file type" >&2; return 1 ;;
+    esac
+}
+
 verify_entrypoint_modules() {
     local entrypoint="$RUNTIME_DIR/ffmpeg-smart.sh"
     local required_path
@@ -44,7 +52,7 @@ verify_entrypoint_modules() {
             echo "Entrypoint module is not pinned in source metadata: $required_path" >&2
             exit 1
         fi
-    done < <(sed -n 's@^source "$FFSMART_ROOT/\([^"]*\.sh\)"@\1@p' "$entrypoint")
+    done < <(sed -nE 's@.*"\$FFSMART_ROOT/([^"]+\.(sh|py))".*@\1@p' "$entrypoint")
 }
 
 for command_name in jq; do
@@ -101,7 +109,7 @@ while IFS= read -r entry; do
         echo "Bundled runtime file mode does not match metadata: $source_path" >&2
         exit 1
     fi
-    bash -n "$bundled_path"
+    validate_runtime_syntax "$bundled_path"
 done < <(jq -c '.files[]' "$SOURCE_METADATA")
 
 verify_entrypoint_modules
