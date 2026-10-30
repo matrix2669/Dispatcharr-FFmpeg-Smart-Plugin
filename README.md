@@ -2,10 +2,10 @@
 
 Native Dispatcharr plugin that bundles `ffmpeg-smart.sh`, creates managed Stream/Output Profiles, and can rebuild the GPU capability and concurrent-capacity cache from the Plugins page.
 
-This branch prepares **0.2.2-beta.3** as an unpublished feature candidate after
-the beta.2 development publication. It simplifies copy-codec selection and uses
-conservative automatic shared input with fixed internal bounds. Publication does
-not install the plugin, change profiles or choose Dispatcharr's global default.
+This branch prepares **0.2.2-beta.4** as an unpublished fix candidate after the
+beta.3 development publication. It recognizes supported HTTP MPEG-TS bodies
+without requiring a filename or query hint. Publication does not install the
+plugin, change profiles or choose Dispatcharr's global default.
 
 ## Installation
 
@@ -117,12 +117,20 @@ Additional options remain available for advanced compatibility.
 
 ## Automatic shared startup input
 
-Shared startup input is automatic when the canonical reader can conservatively
-use it. Eligible HTTP(S) TS URL hints share one retained incoming body across
-metadata probing and playback. Ambient protocol/all proxy variables, custom
-input options, HLS or opaque URLs, unsupported protocols and unavailable Python
-retain legacy acquisition. No body is opened to detect format or choose a path.
-The private broker remains local and never sends its token through a proxy.
+Shared startup input is automatic for eligible direct HTTP(S) sources. The
+reader validates the opening body as 188-byte MPEG-TS, regardless of filename,
+query hints or Content-Type. Valid TS keeps its opening bytes and the same
+upstream connection for metadata probing and playback; no separate discovery
+request is made.
+
+Known `.m3u8` URLs, ambient protocol/all proxy variables, custom input options,
+unsupported protocols and unavailable Python retain legacy acquisition. An
+opaque URL returning non-TS data, including HLS, closes the classification
+response and falls back to the original URL before output, so relative playlist
+links retain their original context. That compatibility fallback can reopen a
+non-TS source; the one-media-connection guarantee applies to recognized TS.
+Network/status/unsafe-redirect errors do not trigger fallback retries. The
+private broker remains local and never sends its token through a proxy.
 
 The plugin fixes the payload queue at **64 MiB** and its first-output startup
 watchdog at **10 seconds**. A full queue pauses upstream reading without dropping

@@ -22,7 +22,7 @@ from urllib.parse import unquote, urljoin, urlsplit
 
 
 class Reservoir:
-    def __init__(self, source, agent, cap, idle):
+    def __init__(self, source, agent, cap, idle, auto=False):
         self.source, self.agent, self.cap, self.idle = source, agent, cap, idle
         self.cv = threading.Condition()
         self.chunks = deque()
@@ -37,12 +37,22 @@ class Reservoir:
         self.probe_start_ms = {}
         self.probes = 0
         self.reader_started = False
+        self.auto = auto
+        self.classified = threading.Event()
+        self.unsupported = None
 
     def fail(self, reason):
         with self.cv:
             if not self.error:
                 self.error = reason
             self.cv.notify_all()
+
+    def reject_format(self, reason):
+        if self.auto:
+            self.unsupported = reason
+        else:
+            self.fail(reason)
+        self.classified.set()
 
     def read(self):
         try:
@@ -52,7 +62,10 @@ class Reservoir:
                 credentials = unquote(url.username) + ":" + unquote(url.password or "")
                 headers["Authorization"] = "Basic " + base64.b64encode(credentials.encode()).decode()
             initial_origin = (url.scheme, url.hostname, url.port or (443 if url.scheme == "https" else 80))
-            target_url = self.source
+            # Keep source credentials only in the scoped header. Otherwise a
+            # relative Location inherits userinfo via urljoin and looks like
+            # credentials supplied by the redirect itself.
+            target_url = url._replace(netloc=url.netloc.rsplit("@", 1)[-1]).geturl()
             previous_scheme = url.scheme
             for redirect in range(6):
                 if self.stopped:
@@ -94,7 +107,7 @@ class Reservoir:
                 self.opens = 1
                 break
             if response.getheader("Content-Encoding", "identity").lower() != "identity":
-                self.fail("unsupported-content-encoding")
+                self.reject_format("unsupported-content-encoding")
                 return
             prefix = bytearray()
             validated = False
@@ -110,7 +123,7 @@ class Reservoir:
                     if response.length:
                         self.fail("upstream-truncated")
                     if not validated:
-                        self.fail("early-eof-before-mpegts")
+                        self.reject_format("early-eof-before-mpegts")
                     with self.cv:
                         self.eof = True
                         self.cv.notify_all()
@@ -122,9 +135,10 @@ class Reservoir:
                     if len(prefix) < 377:
                         continue
                     if any(prefix[i] != 0x47 for i in (0, 188, 376)):
-                        self.fail("unsupported-input-requires-188-byte-mpegts")
+                        self.reject_format("unsupported-input-requires-188-byte-mpegts")
                         return
                     validated = True
+                    self.classified.set()
                     data = bytes(prefix)
                     prefix.clear()
                 with self.cv:
@@ -215,7 +229,8 @@ def main():
     cap = int(os.environ["FFMPEG_SMART_SHARED_INPUT_BYTES"])
     deadline = int(os.environ["FFMPEG_SMART_SHARED_INPUT_DEADLINE"])
     idle = int(os.environ["FFMPEG_SMART_SHARED_INPUT_IDLE"])
-    reservoir = Reservoir(source, agent, cap, idle)
+    auto = os.environ.pop("FFSMART_SHARED_AUTO", "false") == "true"
+    reservoir = Reservoir(source, agent, cap, idle, auto=auto)
     token = secrets.token_urlsafe(32)
 
     class Handler(BaseHTTPRequestHandler):
@@ -237,7 +252,8 @@ def main():
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     server.daemon_threads = True
     endpoint = "http://127.0.0.1:%d/%s" % (server.server_port, token)
-    env = dict(os.environ, FFSMART_SHARED_ENDPOINT=endpoint)
+    original_env = dict(os.environ)
+    env = dict(original_env, FFSMART_SHARED_ENDPOINT=endpoint)
     # The owned wrapper/probe/playback process group talks only to this private
     # broker. Ambient proxies must never receive its URL or bearer token.
     proxy_keys = {"http_proxy", "https_proxy", "all_proxy", "ftp_proxy", "socks_proxy", "no_proxy"}
@@ -270,6 +286,30 @@ def main():
 
     try:
         threading.Thread(target=server.serve_forever, daemon=True).start()
+        if auto:
+            # Classify on the very reader that retains valid TS. Do not probe a
+            # separate URL connection and throw away its startup bytes.
+            reservoir.reader_started = True
+            threading.Thread(target=reservoir.read, daemon=True).start()
+            while not reservoir.classified.wait(.05):
+                if cancelled.is_set() or reservoir.error:
+                    break
+                if time.monotonic() - reservoir.began > deadline:
+                    reservoir.fail("startup-deadline")
+                    break
+            if cancelled.is_set():
+                return 130
+            if reservoir.error:
+                print("[ffmpeg-smart] ERROR [shared-input]: " + reservoir.error, file=sys.stderr)
+                return 65
+            if reservoir.unsupported:
+                # Keep the original URL and environment for FFmpeg's own
+                # demuxer: HLS relative URLs, redirects and auth stay its job.
+                # No output or probe has started, so this cannot splice media.
+                reservoir.close()
+                env = dict(original_env, FFSMART_SHARED_LEGACY="true")
+                env.pop("FFSMART_SHARED_ENDPOINT", None)
+                print("[ffmpeg-smart] shared-input auto_fallback=non-ts", file=sys.stderr)
         child = subprocess.Popen(sys.argv[1:], env=env, start_new_session=True, stdout=subprocess.PIPE)
         threading.Thread(target=forward_output, daemon=True).start()
         while child.poll() is None or not output_done.is_set():
@@ -302,8 +342,9 @@ def main():
             child.wait()
         server.shutdown()
         server.server_close()
-        print("[ffmpeg-smart] shared-input upstream_opens=%d upstream_requests=%d first_byte_ms=%s playback_feed_ms=%s first_output_ms=%s probe_requests=%d peak_retained_bytes=%d cap_bytes=%d probe_start_ms=%s" %
-              (reservoir.opens, reservoir.requests, reservoir.first_byte, reservoir.playback_ms, reservoir.first_output, reservoir.probes, reservoir.peak, cap, reservoir.probe_start_ms), file=sys.stderr)
+        summary = "shared-input classification" if reservoir.unsupported else "shared-input"
+        print("[ffmpeg-smart] %s upstream_opens=%d upstream_requests=%d first_byte_ms=%s playback_feed_ms=%s first_output_ms=%s probe_requests=%d peak_retained_bytes=%d cap_bytes=%d probe_start_ms=%s" %
+              (summary, reservoir.opens, reservoir.requests, reservoir.first_byte, reservoir.playback_ms, reservoir.first_output, reservoir.probes, reservoir.peak, cap, reservoir.probe_start_ms), file=sys.stderr)
     return status if status >= 0 else 128 - status
 
 

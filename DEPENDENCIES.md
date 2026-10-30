@@ -2,18 +2,19 @@
 
 ## Canonical FFmpeg Adaptive runtime
 
-- Beta.3 feature candidate pins `matrix2669/ffmpeg-adaptive` commit
-  `137103b0b5d2ed2f21976c65be2cd5bc816dbdb6`, runtime 0.1.0, via the official
+- Beta.4 fix candidate pins `matrix2669/ffmpeg-adaptive` commit
+  `bb834684eb2c513e832c43ba6dbc773d5af10cbc`, runtime 0.1.0, via the official
   synchronization workflow. Eight files (entrypoint, six shell modules and the
   Python shared-input helper) remain byte/mode-pinned with the MIT notice.
 - `--copy-codecs preferred` resolves the validated current H.264/HEVC cache
   preference dynamically. Named lists normalize case/token whitespace and accept
   public `mpeg2` plus legacy `mpeg2video`. Explicit `-vc` remains highest priority;
   processing constraints can force conversion using the cached encoder.
-- Canonical Auto now preserves legacy acquisition when any nonempty case variant
-  of HTTP/HTTPS/ALL/FTP/SOCKS proxy configuration exists, in addition to existing
-  custom-input, HLS/opaque URL, protocol and Python gates. No body is acquired to
-  decide. Explicit standalone Off/Strict and advanced fallback CLI remain valid.
+- Canonical Auto recognizes the opening 188-byte TS body on eligible direct
+  HTTP(S) inputs without relying on URL hints or Content-Type. Known HLS,
+  ambient proxy, custom-input and unsupported protocol/Python paths bypass it.
+  Opaque non-TS uses bounded pre-output legacy fallback on the original URL;
+  valid TS retains the first connection/prefix without reacquisition.
 - The plugin removes dedicated conversion/shared-input tuning controls and uses
   internal conservative Auto only for HTTP(S). Its fixed payload/startup bounds
   are 64 MiB / 10 seconds, with an independent internal 30-second network guard.
@@ -22,14 +23,11 @@
 - Python 3.9+, POSIX process groups and private IPv4 loopback remain required only
   for selected shared input. Unsupported acquisition retains legacy semantics;
   no media reconnect or disk spool is introduced.
-- Full canonical local validation passed, including both cache preferences,
-  preferred/list/alias validation, cache admission/degraded policy, explicit
-  codec/filter precedence, proxy-aware Auto and all 14 shared-input methods.
-  Bounded cancellation fixtures cover probing and playback under 10/30-second
-  guards, without a general live-failover claim. Exact canonical CI
-  [41090068901](https://github.com/matrix2669/ffmpeg-adaptive/actions/runs/41090068901)
-  passed at `137103b0b5d2ed2f21976c65be2cd5bc816dbdb6`. Final plugin CI,
-  independent review and installation/playback acceptance remain separate gates.
+- Full canonical local validation passed with 20 shared-input methods, including
+  opaque TS with missing/misleading MIME, retained prefix/single request, real
+  HLS authentication/relative redirects/segments, terminal errors, deadlines and
+  cancellation. Exact source CI and independent review are recorded at closeout.
+  Installation and TiVo playback remain separate updater acceptance gates.
 - Repeated sync and offline/online source checks must cover every file and mode.
   The published beta.2 plugin at `3b7f554c0aac64391768e4920178cacd6a15da8c`
   retains canonical `8156f96ce44c2ca0cb0360a8503f7862285b9f23`; its tag/archive

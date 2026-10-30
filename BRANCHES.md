@@ -296,3 +296,18 @@ Beta.3 publication receipt (2026-10-30): feature implementation b3f1155 is now
 integrated into dev and tagged v0.2.2-beta.3; development registry be7f633 points
 to that exact immutable source. Publication-status documentation follows on the
 owning branch; installed/live acceptance remains operator-owned.
+
+### `fix/opaque-ts-auto`
+
+- Created 2026-10-30 from `dev@f04fb72e83e55fe6d589f5c0509d658a27153016`; target dev.
+- Scope: package canonical response-based Auto detection for opaque HTTP TS
+  sources as candidate 0.2.2-beta.4, preserving generic policy and fixed bounds.
+- Validate exact source pins, full plugin gates, independent review and isolated
+  live startup captures; installation stays on the normal Dispatcharr updater.
+- No tag, registry publication, direct installation, profile/default changes,
+  source integration, stable release or branch removal in this checkpoint.
+- Canonical pin `bb834684eb2c513e832c43ba6dbc773d5af10cbc` passed full
+  local validation (20 shared-input tests) and independent canonical review.
+  Plugin local validation passed all 80 unit tests, compile/JSON/syntax and
+  offline/online pin checks; repeat sync made no changes. Exact CI and isolated
+  live capture evidence remain parent-owned closeout gates.

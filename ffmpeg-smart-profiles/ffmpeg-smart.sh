@@ -20,7 +20,7 @@ source "$FFSMART_ROOT/lib/ffsmart-policy.sh"
 
 ffsmart_maybe_start_shared_input() {
     if ffsmart_is_true "$FFSMART_SHARED_INPUT" && [[ -z "${FFSMART_SHARED_ENDPOINT:-}" ]]; then
-        export FFSMART_SHARED_SOURCE="$FFSMART_INPUT" FFSMART_SHARED_AGENT="$FFSMART_USER_AGENT"
+        export FFSMART_SHARED_SOURCE="$FFSMART_INPUT" FFSMART_SHARED_AGENT="$FFSMART_USER_AGENT" FFSMART_SHARED_AUTO
         exec python3 "$FFSMART_ROOT/lib/ffsmart-shared-input.py" "$FFSMART_ENTRYPOINT" "${FFSMART_ORIGINAL_ARGS[@]}"
     fi
 }
@@ -41,7 +41,7 @@ ffsmart_main() {
 
     # The outer wrapper already completed an explicit rebuild before starting
     # the supervisor. Do not repeat it inside the owned streaming process.
-    [[ -z "${FFSMART_SHARED_ENDPOINT:-}" ]] || FFSMART_RECACHE=false
+    [[ -z "${FFSMART_SHARED_ENDPOINT:-}" && "${FFSMART_SHARED_LEGACY:-false}" != true ]] || FFSMART_RECACHE=false
 
     fallback_mode="${FFMPEG_SMART_CACHE_FALLBACK:-none}"
     case "$fallback_mode" in

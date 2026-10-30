@@ -1,3 +1,11 @@
+## 0.2.2-beta.4 — unpublished candidate
+
+- Recognize eligible HTTP MPEG-TS bodies without URL hints, keeping probing and
+  playback on one connection with the opening media retained.
+- Preserve HLS compatibility through bounded pre-output fallback for opaque
+  non-TS inputs; preserve proxy/custom-input bypass and fixed startup limits.
+- Packaging and live evidence remain separate from updater publication.
+
 ## [0.2.2-beta.3] - 2026-10-30
 
 Published immutable development tag at

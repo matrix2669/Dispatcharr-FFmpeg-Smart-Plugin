@@ -16,6 +16,7 @@ ffsmart_cli_defaults() {
     FFSMART_RECACHE_ONLY=false
     FFSMART_CACHE_STATUS_ONLY=false
     FFSMART_SHARED_INPUT="${FFMPEG_SMART_SHARED_INPUT:-false}"
+    FFSMART_SHARED_AUTO=false
 
     FFSMART_DRI_DEVICE="${DRI_DEVICE:-}"
     FFSMART_QSV_DEVICE="${QSV_DEVICE:-}"
@@ -295,8 +296,8 @@ capability state or --recache-only to rebuild it without an input.
 
 --shared-input  Experimental single HTTP(S) MPEG-TS connection for probe and
                 playback. Python 3.9+ required; see README for limits.
---shared-input-auto  Enable only for HTTP(S) TS URL hints with no custom input
-                     options; use legacy input handling otherwise.
+--shared-input-auto  Detect HTTP(S) MPEG-TS from response bytes; other formats
+                    retain legacy acquisition. No custom input/proxy support.
 --copy-codecs LIST  Eligible automatic video-copy codecs, using FFprobe names
                     separated by commas (mpeg2 alias supported), or preferred
                     alone for the cached codec. Default: h264,hevc. -vc wins.
@@ -307,18 +308,24 @@ EOF
 
 ffsmart_validate_shared_input() {
     if [[ "$FFSMART_SHARED_INPUT" == auto ]]; then
+        # The supervisor has already classified this input as non-TS. This
+        # internal child marker prevents a second automatic classification.
+        if [[ "${FFSMART_SHARED_LEGACY:-false}" == true ]]; then
+            FFSMART_SHARED_INPUT=false
+            return 0
+        fi
         FFSMART_SHARED_INPUT=false
         if [[ "$FFSMART_INPUT" =~ ^https?:// && ${#FFSMART_USER_INPUT_ARGS[@]} -eq 0 ]] && command -v python3 >/dev/null 2>&1; then
             if python3 -c 'import os, sys
-from urllib.parse import parse_qsl, urlsplit
+from urllib.parse import urlsplit
 try:
     u = urlsplit(sys.argv[1]); path = u.path.lower()
-    hint = path.endswith(".ts") or any(k.lower() in ("format", "output") and v.lower() in ("ts", "mpegts") for k, v in parse_qsl(u.query))
     proxy = any(k.lower() in {"http_proxy", "https_proxy", "all_proxy", "ftp_proxy", "socks_proxy"} and v.strip() for k, v in os.environ.items())
-    sys.exit(not (sys.version_info >= (3, 9) and u.hostname and not path.endswith(".m3u8") and hint and not proxy))
+    sys.exit(not (sys.version_info >= (3, 9) and u.hostname and not path.endswith(".m3u8") and not proxy))
 except ValueError:
     sys.exit(1)' "$FFSMART_INPUT"; then
                 FFSMART_SHARED_INPUT=true
+                FFSMART_SHARED_AUTO=true
             fi
         fi
     fi

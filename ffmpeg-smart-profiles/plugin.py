@@ -211,7 +211,7 @@ def codec_policy_fields(prefix, label):
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.2.2-beta.3"
+    version = "0.2.2-beta.4"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."

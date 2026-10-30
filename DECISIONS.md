@@ -1753,3 +1753,39 @@ Dispatcharr0.33.0 beta.2-to-beta.3 installer overwrite/import/pin/permission che
 This documentation follow-up corrects preparation-era status without moving the
 tag or changing packaged behavior. Operator owns live installation and profile
 updates; no direct deployment, stable main, Release or branch removal.
+
+
+# ADR-034: Recognize opaque HTTP MPEG-TS in automatic shared input
+
+Accepted for candidate beta.4, 2026-10-30. The owner requested a fix and retest
+after 588 used legacy acquisition because its URL lacked a TS hint. This
+supersedes ADR-033's URL-hint eligibility rule only; the plugin remains generic.
+
+Canonical ffmpeg-adaptive owns response inspection and fallback. Synchronize
+its exact reviewed commit through the existing checksum/mode workflow; never
+edit the vendored implementation independently. Eligible direct HTTP(S) Auto
+inputs inspect the initial body in the shared reader. Valid 188-byte TS retains
+byte zero and the same upstream media connection for probing and playback,
+regardless of filename/query hint or Content-Type. Known HLS URLs still bypass
+shared acquisition. An opaque non-TS body falls back to the original FFmpeg URL
+before output; this may reopen non-TS, preserving relative HLS/auth context.
+Network/status/unsafe-redirect failures are not compatibility retries.
+
+Proxy/custom-input/Python/protocol gates, explicit standalone Off/Strict, codec
+policy, cache requirements, output pipe behavior, 64-MiB payload, 10-second
+startup and independent 30-second network bounds remain. Classification and
+fallback share the startup deadline. No dedicated UI or per-channel rules.
+
+Validation requires canonical opaque-TS single-request/prefix-replay fixtures,
+HLS fallback/redirect/auth/privacy/cancellation coverage, full plugin gates and
+two isolated 588 startup captures through the current profile arguments. Live
+results are evidence for that source, not a promise for all providers. Production
+plugin files, saved profiles and default selection must remain unchanged during
+those candidate captures.
+
+This prepares a new beta.4 work-branch package; beta.3's tag and registry remain
+immutable. Publication and operator-managed updater installation are separate
+steps. Direct file installation remains excluded by the user's instruction.
+No unresolved product choice remains: content recognition replaces hints while
+unsupported acquisition retains FFmpeg compatibility; revisit for new transport
+contracts or supported packet formats.
