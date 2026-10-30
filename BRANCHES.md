@@ -230,7 +230,7 @@ the `v0.2.1` beta cycle.
 ### `feature/shared-input-reservoir`
 
 - Created: 2026-10-30; base `9ffe9d4`; target `dev` after separate acceptance.
-- Scope: synchronize canonical `0482acf6e695f95e5c1952777f2e044afd961f87`,
+- Scope: synchronize canonical `8156f96ce44c2ca0cb0360a8503f7862285b9f23`,
   package its Python helper, expose per-Stream Profile off/auto/strict controls
   and bounded settings, prepare local test candidate 0.2.2-beta.2 and private ZIP.
 - Excluded: tags, registry, release, source promotion, remote push, installation,
@@ -256,3 +256,14 @@ the `v0.2.1` beta cycle.
   contradiction/chat-independence review completed. Private package is rebuilt
   from the exact final committed tree and inspected at handoff. Canonical CI and
   plugin CI/review/live acceptance remain separately recorded parent-owned gates.
+
+- Review repair round 1: change missing/new shared-input modes to Off while
+  retaining explicit Auto/Strict settings and generic codec controls; synchronize
+  the canonical broker proxy-isolation repair. Validate proxy-only legacy
+  acquisition through a recording proxy without initial no_proxy. All 83 unit
+  tests, compile/JSON/Bash/ShellCheck, offline/online eight-file checks and
+  repeated exact-SHA sync passed. ADR-032 supersedes the earlier Auto default
+  and records the scoped broker proxy isolation. Explicit Auto/Strict settings,
+  generic codecs and Output defaults remain intact. Final private ZIP is built
+  from the committed tree and inspected at handoff; reviewer verification and
+  exact-SHA CI remain parent-coordinated acceptance gates.

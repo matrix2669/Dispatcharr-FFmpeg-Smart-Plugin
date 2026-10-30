@@ -47,7 +47,7 @@ assert streams[0]["name"] == "FFmpeg Smart"
 assert streams[0]["command"] == str(PLUGIN_DIR / "ffmpeg-smart-plugin.sh")
 assert "-10bit" not in streams[0]["parameters"]
 assert "-hdr" not in streams[0]["parameters"]
-assert "--plugin-shared-input-mode auto" in streams[0]["parameters"]
+assert "--plugin-shared-input-mode off" in streams[0]["parameters"]
 assert "--copy-codecs h264,hevc" in streams[0]["parameters"]
 assert "--fallback-codec" not in streams[0]["parameters"]
 

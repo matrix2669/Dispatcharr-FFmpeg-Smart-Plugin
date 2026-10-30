@@ -4,14 +4,15 @@
 
 - Repository: `matrix2669/ffmpeg-adaptive`.
 - Candidate source: immutable work-branch commit
-  `0482acf6e695f95e5c1952777f2e044afd961f87`, runtime 0.1.0, for the local
+  `8156f96ce44c2ca0cb0360a8503f7862285b9f23`, runtime 0.1.0, for the local
   plugin 0.2.2-beta.2 test candidate. No tag or registry publication is implied.
 - Contract: eight bundled files (entrypoint, six shell modules, Python shared
   input helper) are byte- and mode-pinned in
   `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json`; the MIT notice is shipped
   in `FFMPEG_ADAPTIVE_LICENSE`. Runtime behavior remains canonical.
 - The helper requires Python 3.9+, POSIX process groups and private IPv4 loopback
-  access when selected. Auto uses URL hints and retains legacy handling if the
+  access when selected. Shared input defaults Off for absent/new settings,
+  preserving legacy transport/proxy behavior. Explicit Auto uses URL hints and retains legacy handling if the
   supported conditions are absent. Strict fails clearly for unavailable Python,
   non-TS input or advanced input options. Python uses direct HTTP(S), system TLS
   trust, dedicated user-agent and URL Basic authentication, with bounded safe
@@ -20,6 +21,11 @@
 - Synchronization validates shell and Python by file type, updates selected ref
   and commit only after download/syntax checks and must remain idempotent.
   Offline checks require every referenced shell/Python helper in the manifest.
+- Owned private broker clients clear inherited protocol proxy variables and set
+  loopback bypasses; the upstream shared reader remains direct. The canonical
+  recording-proxy regression starts without no_proxy and verifies exact all-tier
+  replay, one upstream request and zero proxy requests/token leakage. All 13
+  shared-input methods pass locally. Legacy jobs are unaffected by this isolation.
 - The candidate also supplies generic `--copy-codecs LIST` and optional
   `--fallback-codec h264|hevc`, with unchanged H.264/HEVC copy and cached-fallback
   defaults. Explicit `-vc` overrides both. No receiver-specific mode exists.

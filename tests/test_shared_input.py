@@ -5,6 +5,9 @@ import shlex
 import shutil
 import subprocess
 import sys
+import socket
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -18,15 +21,19 @@ class SharedInputSettingsTests(unittest.TestCase):
     def test_stream_defaults_and_output_pipe_are_independent(self):
         instance = plugin.Plugin()
         tokens = shlex.split(instance._stream_definitions({})[0]['parameters'])
-        self.assertEqual(tokens[tokens.index('--plugin-shared-input-mode') + 1], 'auto')
-        self.assertEqual(tokens[tokens.index('--plugin-shared-input-bytes') + 1], '16777216')
-        self.assertEqual(tokens[tokens.index('--plugin-shared-input-deadline') + 1], '20')
-        self.assertEqual(tokens[tokens.index('--plugin-shared-input-idle') + 1], '30')
+        self.assertEqual(tokens[tokens.index('--plugin-shared-input-mode') + 1], 'off')
+        self.assertNotIn('--plugin-shared-input-bytes', tokens)
+        self.assertNotIn('--plugin-shared-input-deadline', tokens)
+        self.assertNotIn('--plugin-shared-input-idle', tokens)
+        auto_tokens = shlex.split(instance._stream_definitions({'stream_1_shared_input_mode': 'auto'})[0]['parameters'])
+        self.assertEqual(auto_tokens[auto_tokens.index('--plugin-shared-input-bytes') + 1], '16777216')
+        self.assertEqual(auto_tokens[auto_tokens.index('--plugin-shared-input-deadline') + 1], '20')
+        self.assertEqual(auto_tokens[auto_tokens.index('--plugin-shared-input-idle') + 1], '30')
         self.assertEqual(instance._output_definitions({})[0]['parameters'], '-i pipe:0 -maxres 720 -maxbr 2M -maxchan 2 -sdr -deint')
         fields = {f['id']: f for f in instance.fields}
         for slot in (1, 2):
             field = fields[f'stream_{slot}_shared_input_mode']
-            self.assertEqual(field['default'], 'auto')
+            self.assertEqual(field['default'], 'off')
             self.assertEqual([o['value'] for o in field['options']], ['off', 'auto', 'strict'])
             self.assertIn('does not detect the body format', field['help_text'])
         self.assertFalse(any(key.startswith('output_') and 'shared_input' in key for key in fields))
@@ -54,24 +61,25 @@ class SharedInputSettingsTests(unittest.TestCase):
         instance = plugin.Plugin()
         for suffix, value in (('mode', 'unknown'), ('mib', '0'), ('mib', '1025'), ('mib', '2; touch bad'), ('deadline', '301'), ('idle', '-1')):
             with self.subTest(suffix=suffix, value=value):
-                with self.assertRaises(ValueError): instance._stream_definitions({f'stream_1_shared_input_{suffix}': value})
+                with self.assertRaises(ValueError): instance._stream_definitions({'stream_1_shared_input_mode': 'auto', f'stream_1_shared_input_{suffix}': value})
         for option in ('--shared-input', '--shared-input-auto', '--plugin-shared-input-mode'):
             with self.assertRaises(ValueError): instance._stream_definitions({'stream_1_options': option})
 
     def test_install_persists_defaults_once_without_overwriting_existing_settings(self):
         instance = plugin.Plugin()
-        settings = {'stream_1_shared_input_mode': 'off', 'stream_1_options': '-vc h264', 'unrelated': {'keep': True}}
-        result = {'message': 'Unchanged'}
-        with patch.object(instance, '_install_profiles', return_value=result), patch.object(instance, '_save_normalized_settings') as save:
-            instance.run('install_profiles', {}, {'settings': settings})
-            saved = save.call_args.args[0]
-            self.assertEqual(saved['stream_1_shared_input_mode'], 'off')
-            self.assertEqual(saved['stream_1_options'], '-vc h264')
-            self.assertEqual(saved['unrelated'], {'keep': True})
-            self.assertEqual(saved['stream_2_shared_input_mode'], 'auto')
-            save.reset_mock()
-            instance.run('install_profiles', {}, {'settings': saved})
-            save.assert_not_called()
+        for mode in ('off', 'auto', 'strict'):
+            settings = {'stream_1_shared_input_mode': mode, 'stream_1_options': '-vc h264', 'unrelated': {'keep': True}}
+            result = {'message': 'Unchanged'}
+            with patch.object(instance, '_install_profiles', return_value=result), patch.object(instance, '_save_normalized_settings') as save:
+                instance.run('install_profiles', {}, {'settings': settings})
+                saved = save.call_args.args[0]
+                self.assertEqual(saved['stream_1_shared_input_mode'], mode)
+                self.assertEqual(saved['stream_1_options'], '-vc h264')
+                self.assertEqual(saved['unrelated'], {'keep': True})
+                self.assertEqual(saved['stream_2_shared_input_mode'], 'off')
+                save.reset_mock()
+                instance.run('install_profiles', {}, {'settings': saved})
+                save.assert_not_called()
 
 
 class SharedInputLauncherTests(unittest.TestCase):
@@ -125,6 +133,55 @@ print(json.dumps({'args': sys.argv[1:], 'settings': {k: v for k, v in os.environ
             self.assertEqual(result.stdout, '')
             self.assertNotIn('private-value', result.stderr)
             self.assertNotIn('$(touch bad)', result.stderr)
+
+    def test_unspecified_settings_preserve_proxy_only_legacy_input(self):
+        body = (b'\x47' + bytes(range(187))) * 600
+        requests = []
+        class RecordingProxy(BaseHTTPRequestHandler):
+            def log_message(self, *_args): pass
+            def do_GET(self):
+                requests.append(self.path)
+                self.send_response(200)
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+        proxy = ThreadingHTTPServer(('127.0.0.1', 0), RecordingProxy)
+        threading.Thread(target=proxy.serve_forever, daemon=True).start()
+        try:
+            with socket.socket() as unused_origin:
+                unused_origin.bind(('127.0.0.1', 0))
+                source = 'http://127.0.0.1:%d/live.ts' % unused_origin.getsockname()[1]
+                # Keep the origin bound but not listening: only the proxy can
+                # serve this TS source, so default Auto would break acquisition.
+                with TemporaryDirectory() as temp:
+                    folder = Path(temp)
+                    fake_bin = folder / 'bin'
+                    fake_bin.mkdir()
+                    ffmpeg = fake_bin / 'ffmpeg'
+                    ffmpeg.write_text('''#!/usr/bin/env python3
+import sys, urllib.request
+if sys.argv[1:] == ['-version']:
+    print('ffmpeg version legacy-proxy-fixture'); sys.exit()
+with urllib.request.urlopen(sys.argv[sys.argv.index('-i') + 1], timeout=5) as response:
+    sys.stdout.buffer.write(response.read())
+''')
+                    ffmpeg.chmod(0o755)
+                    definition = plugin.Plugin()._stream_definitions({})[0]
+                    parameters = definition['parameters'].replace('{streamUrl}', source).replace('{userAgent}', 'local-fixture')
+                    env = dict(os.environ, PATH=str(fake_bin) + os.pathsep + os.environ['PATH'], FFMPEG_SMART_STATE_DIR=str(folder / 'state'), FFMPEG_SMART_REQUIRE_CACHE='true', FFMPEG_SMART_CACHE_FALLBACK='proxy')
+                    for key in list(env):
+                        if key.lower() == 'no_proxy': del env[key]
+                    address = 'http://127.0.0.1:%d' % proxy.server_port
+                    for key in ('http_proxy', 'HTTP_PROXY', 'https_proxy', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY'):
+                        env[key] = address
+                    result = subprocess.run([definition['command'], *shlex.split(parameters)], env=env, capture_output=True, timeout=10)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, body)
+                    self.assertEqual(requests, [source])
+                    self.assertNotIn(b'upstream_opens=', result.stderr)
+        finally:
+            proxy.shutdown()
+            proxy.server_close()
 
 
 class SharedHelperPackagingTests(unittest.TestCase):

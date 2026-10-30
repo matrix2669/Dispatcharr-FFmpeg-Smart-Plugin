@@ -1519,11 +1519,11 @@ class ReleaseMetadataTests(unittest.TestCase):
         self.assertEqual(metadata["repository"], "matrix2669/ffmpeg-adaptive")
         self.assertEqual(
             metadata["tracking_ref"],
-            "0482acf6e695f95e5c1952777f2e044afd961f87",
+            "8156f96ce44c2ca0cb0360a8503f7862285b9f23",
         )
         self.assertEqual(
             metadata["commit"],
-            "0482acf6e695f95e5c1952777f2e044afd961f87",
+            "8156f96ce44c2ca0cb0360a8503f7862285b9f23",
         )
         self.assertRegex(metadata["commit"], r"^[0-9a-f]{40}$")
         self.assertEqual({entry["path"] for entry in metadata["files"]}, expected_paths)

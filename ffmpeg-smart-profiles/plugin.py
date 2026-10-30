@@ -225,13 +225,13 @@ def shared_input_fields(prefix, label):
             "id": f"{prefix}_shared_input_mode",
             "label": f"{label}: shared startup input",
             "type": "select",
-            "default": "auto",
+            "default": "off",
             "options": [
                 {"value": "off", "label": "Off (legacy input handling)"},
                 {"value": "auto", "label": "Auto (MPEG-TS URL hints only)"},
                 {"value": "strict", "label": "Strict (known HTTP MPEG-TS source)"},
             ],
-            "help_text": "Auto shares one reader for HTTP(S) .ts paths or format/output=ts|mpegts URL hints, except .m3u8, custom input options or unavailable Python. It does not detect the body format. Strict requires continuous 188-byte MPEG-TS and Python 3.9+; unsupported input or custom input options fail without reopening the source.",
+            "help_text": "Off is the default and preserves existing input/proxy handling. Auto shares one reader for HTTP(S) .ts paths or format/output=ts|mpegts URL hints, except .m3u8, custom input options or unavailable Python. It does not detect the body format. Strict requires continuous 188-byte MPEG-TS and Python 3.9+; unsupported input or custom input options fail without reopening the source.",
         },
         {
             "id": f"{prefix}_shared_input_mib",
@@ -868,7 +868,7 @@ class Plugin:
         normalized = dict(settings or {})
         changed = False
         for slot in (1, 2):
-            for suffix, default in (("mode", "auto"), ("mib", "16"), ("deadline", "20"), ("idle", "30")):
+            for suffix, default in (("mode", "off"), ("mib", "16"), ("deadline", "20"), ("idle", "30")):
                 key = f"stream_{slot}_shared_input_{suffix}"
                 if key not in normalized:
                     normalized[key] = default
@@ -904,7 +904,7 @@ class Plugin:
 
     @staticmethod
     def _shared_input_parameters(settings, prefix):
-        mode = str(settings.get(f"{prefix}_shared_input_mode", "auto"))
+        mode = str(settings.get(f"{prefix}_shared_input_mode", "off"))
         if mode not in {"off", "auto", "strict"}:
             raise ValueError(f"{prefix} shared input mode must be off, auto or strict")
         if mode == "strict" and str(settings.get(f"{prefix}_ffmpeg_input_options", "") or "").strip():

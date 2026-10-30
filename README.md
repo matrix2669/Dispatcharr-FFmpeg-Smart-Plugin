@@ -3,7 +3,7 @@
 Native Dispatcharr plugin that bundles `ffmpeg-smart.sh`, creates managed Stream/Output Profiles, and can rebuild the GPU capability and concurrent-capacity cache from the Plugins page.
 
 This branch prepares local test build **0.2.2-beta.2**, pinned to canonical
-runtime `0482acf6e695f95e5c1952777f2e044afd961f87`, with shared startup-input
+runtime `8156f96ce44c2ca0cb0360a8503f7862285b9f23`, with shared startup-input
 controls for Stream Profiles. Compatible H.264/HEVC continue to copy unless an
 active constraint requires conversion. Runtime version 0.1.0 is unchanged from beta.1:
 validate the existing cache and rebuild only if required. No registry release
@@ -123,8 +123,9 @@ Profiles keep their defaults and may opt in explicitly with
 
 ## Shared startup input for Stream Profiles
 
-Each Stream Profile has a saved **Shared startup input** selector. **Auto** is
-used for new or unspecified settings; **Off** keeps legacy input handling;
+Each Stream Profile has a saved **Shared startup input** selector. **Off** is
+used for new or unspecified settings and preserves existing input/proxy handling.
+Choose **Auto** explicitly to use URL hints for shared acquisition;
 **Strict** uses one shared reader for a known continuous HTTP(S) MPEG-TS source.
 The reader retains startup bytes in RAM so probing and playback consume the
 same media connection. Full queues pause upstream reading without dropping
@@ -138,7 +139,8 @@ without reopening the source. Strict requires continuous 188-byte MPEG-TS and
 Python 3.9+; custom input options are rejected. Dedicated user-agent and URL
 Basic authentication work; redirects are bounded and strip cross-origin Basic
 Authorization. Python direct connections/system TLS trust are used, without
-FFmpeg-specific proxy, cookie or custom-header semantics.
+FFmpeg-specific proxy, cookie or custom-header semantics. Owned broker clients
+bypass inherited proxy settings so the private token-bearing URL stays local.
 
 The adjacent limits default to **16 MiB** of retained payload, **20 seconds**
 until first output media and **30 seconds** per blocking network operation.
@@ -149,7 +151,8 @@ reader. Canonical stderr telemetry reports credential-safe startup/request and
 peak-retention measurements.
 
 Save settings and run **Install or Update Profiles** to apply them. Missing
-settings are persisted once without replacing explicit choices or custom policy
+mode settings are persisted as Off; explicit Auto/Strict selections are preserved.
+Other missing defaults are added once without replacing explicit choices or custom policy
 options, including `-vc`. Existing profile updates keep the usual no-restart
 behavior. Output Profiles keep their existing `-i pipe:0` path and have no shared
 input controls. The plugin does not select Dispatcharr's global default or alter

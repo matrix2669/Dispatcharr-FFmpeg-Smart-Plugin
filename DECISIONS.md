@@ -1444,7 +1444,7 @@ No vendored implementation is developed independently in the plugin.
 
 Each of the two Stream Profile slots gains persisted controls:
 
-- `stream_N_shared_input_mode`: `off`, `auto` (default), or `strict`.
+- `stream_N_shared_input_mode`: `off` (default after ADR-032), `auto`, or `strict`.
 - `stream_N_shared_input_mib`: default string `16`, integer range 1..1024 MiB;
   convert to bytes by multiplying by 1048576.
 - `stream_N_shared_input_deadline`: default string `20`, integer range 1..300
@@ -1489,8 +1489,8 @@ reservoir is separate and unchanged.
 ## Alternatives and consequences
 
 Unconditionally forcing TS acquisition would break HLS and opaque sources.
-The conservative Auto default permits useful optimization for explicit TS hints
-while retaining existing custom-input transport semantics. Keeping mode only
+Auto permits opt-in optimization for explicit TS hints. Its initial default
+selection is superseded by ADR-032 because a source may require ambient proxies. Keeping mode only
 in free-form flags would hide the behavior and make limits harder to review.
 Duplicating the reader in the plugin would violate canonical ownership.
 The RAM limit covers retained payload, not process RSS or media duration; full
@@ -1501,8 +1501,9 @@ media disk spool, dropped-byte policy or ongoing media-time reservoir is added.
 ## Authority, evidence and review triggers
 
 The operator authorized packaging this canonical source, persisted per-Stream
-controls with Auto for unspecified settings, configurable bounds and a private
-test ZIP on 2026-10-30. The parent coordinator verified official Dispatcharr
+controls initially using Auto for unspecified settings, configurable bounds and a
+private test ZIP on 2026-10-30. ADR-032 subsequently changes that default to Off
+while preserving explicit choices after transport compatibility review. The parent coordinator verified official Dispatcharr
 0.33.0 commit `2fa13a6707bdf0dae87e0c494bcd3ca282cdeb3e` relevant source hashes
 and installer/settings/default contracts, and ran all 12 canonical shared-input
 methods as the dispatch user with Python 3.13.17 and FFmpeg 8.1.2 in isolated
@@ -1587,3 +1588,56 @@ Decision closure fixes names, defaults, units, syntax, precedence, ownership and
 scope. Review supported fallback encoders only when canonical encoder support
 changes; review any default compatibility-set change only on explicit product
 requirements and representative receiver/container evidence.
+
+---
+
+# ADR-032: Keep shared input opt-in and isolate private broker proxy routing
+
+## Status, date and scope
+
+Accepted review repair, 2026-10-30. Supersedes ADR-030's initial Auto default
+for new/unspecified settings and ADR-031's source pin. Generic video-codec
+controls, their defaults and explicit `-vc` precedence remain unchanged.
+
+## Decision and migration
+
+`stream_N_shared_input_mode` defaults to `off` in both field declarations,
+missing-setting persistence and parameter generation. Install / Update adds Off
+only when a setting is absent; existing explicit `auto` or `strict` values are
+preserved. Choosing Auto remains an explicit transport opt-in based on URL hints.
+The local deployment may separately choose Auto after validation; no global or
+channel assignment changes in this repair.
+
+A `.ts` hint alone cannot prove that Python direct HTTP acquisition is compatible
+with the operator's transport. Existing FFmpeg jobs may require ambient proxy
+settings even when no advanced input options are saved. Defaulting absent
+settings to Auto would silently bypass that proxy and fail a previously working
+source. Off preserves legacy FFmpeg/proxy behavior; it does not consume a body
+or attempt shared acquisition. This supersedes the earlier assumption that URL
+hints alone made Auto a compatible default.
+
+Pin canonical `8156f96ce44c2ca0cb0360a8503f7862285b9f23`, whose private broker
+clients remove inherited protocol proxy variables case-insensitively and set
+both loopback bypass variables. Only the owned wrapper/FFprobe/FFmpeg child
+environment changes; the helper upstream remains explicitly direct. Routing a
+private broker URL through an ambient HTTP proxy leaks its token and can fail
+before the upstream opens. Such URLs must remain local. Unselected legacy jobs
+retain their existing environment and transport semantics.
+
+## Validation, alternatives and review boundary
+
+Canonical validation adds a recording proxy with no initial `no_proxy` and both
+cases of HTTP/HTTPS/ALL/FTP/SOCKS proxy variables. It requires all probe tiers,
+exact playback, one upstream request, zero proxy requests and no token-bearing
+diagnostics. The complete canonical suite and all 13 shared-input methods pass.
+Plugin tests require new/absent modes Off, explicit Auto/Strict preservation,
+unchanged Output behavior, and a source available only through a local recording
+proxy continuing to work under absent settings.
+
+Leaving Auto as default or clearing proxy settings for all launcher invocations
+would break legacy acquisition. Stripping proxies only from owned broker clients
+resolves private routing without changing legacy jobs. Source, syntax, manifest,
+mode/hash and package gates must pass again for the new exact pin. Version stays
+the unpublished local 0.2.2-beta.2 candidate; no tag, Release, registry, live
+installation or default switch is inferred. Review sign-off and exact-SHA CI
+remain separate acceptance gates coordinated by the parent.

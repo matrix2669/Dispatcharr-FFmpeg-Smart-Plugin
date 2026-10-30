@@ -238,6 +238,13 @@ def main():
     server.daemon_threads = True
     endpoint = "http://127.0.0.1:%d/%s" % (server.server_port, token)
     env = dict(os.environ, FFSMART_SHARED_ENDPOINT=endpoint)
+    # The owned wrapper/probe/playback process group talks only to this private
+    # broker. Ambient proxies must never receive its URL or bearer token.
+    proxy_keys = {"http_proxy", "https_proxy", "all_proxy", "ftp_proxy", "socks_proxy", "no_proxy"}
+    for key in list(env):
+        if key.lower() in proxy_keys:
+            del env[key]
+    env["no_proxy"] = env["NO_PROXY"] = "127.0.0.1,localhost,::1"
     cancelled = threading.Event()
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(signum, lambda _sig, _frame: cancelled.set())
