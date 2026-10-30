@@ -291,3 +291,8 @@ the `v0.2.1` beta cycle.
   operation occurred. ADR-033 records resolved text-field UX, old-settings/CSV
   migration, fixed bounds and independent timing semantics; contradiction and
   chat-independence review completed. Plugin CI/review remain acceptance gates.
+
+Beta.3 publication receipt (2026-10-30): feature implementation b3f1155 is now
+integrated into dev and tagged v0.2.2-beta.3; development registry be7f633 points
+to that exact immutable source. Publication-status documentation follows on the
+owning branch; installed/live acceptance remains operator-owned.

@@ -1739,3 +1739,17 @@ operator-managed update acceptance are separate gates. No provider request,
 installation, default/profile change, registry/tag/Release or dev/main promotion
 is authorized by this implementation. Revisit the copy UI only on new product
 requirements; do not reintroduce receiver-specific presets or duplicate controls.
+
+
+## Beta.3 development publication receipt — 2026-10-30
+
+Owner explicitly approved beta.3 development-manifest publication for normal
+Dispatcharr Update. Accepted source/tag remains immutable at
+b3f11557887b7e7388d3589a87646a049fe5d586, exact CI41091130641. Registry
+be7f6332444be7452db0cb67e8a8106195b7657b preserves all history and unrelated
+entries. Exact downloaded tag archive SHA256
+4ed267a3fb3e5b1fc65974f2899e68ff55bb7f9e3f2da45e21968be69f4f0f4b passed isolated
+Dispatcharr0.33.0 beta.2-to-beta.3 installer overwrite/import/pin/permission checks.
+This documentation follow-up corrects preparation-era status without moving the
+tag or changing packaged behavior. Operator owns live installation and profile
+updates; no direct deployment, stable main, Release or branch removal.

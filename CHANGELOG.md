@@ -1,4 +1,10 @@
-## [0.2.2-beta.3] - Unreleased feature candidate
+## [0.2.2-beta.3] - 2026-10-30
+
+Published immutable development tag at
+`b3f11557887b7e7388d3589a87646a049fe5d586`, registry dev
+`be7f6332444be7452db0cb67e8a8106195b7657b`. This documentation follow-up records
+publication; the tag retains its preparation-era changelog text and is not moved.
+No live installation or stable release is implied.
 
 - Pin canonical `137103b0b5d2ed2f21976c65be2cd5bc816dbdb6` with dynamic
   preferred-cache selection, MPEG-2 aliasing and conservative proxy eligibility.
@@ -10,7 +16,8 @@
   succeeds, including bypass of ambient proxy jobs. Fix plugin payload/startup
   bounds at 64 MiB / 10 seconds, with an independent internal 30-second I/O guard.
 - Preserve standalone controls, Output pipe commands and explicit expert CLI
-  compatibility. No registry/tag/Release, installation or profile/default change.
+  compatibility. Publication is development tag/registry only; no GitHub Release,
+  installation or profile/default change.
 
 ## [0.2.2-beta.2] - 2026-10-30
 
