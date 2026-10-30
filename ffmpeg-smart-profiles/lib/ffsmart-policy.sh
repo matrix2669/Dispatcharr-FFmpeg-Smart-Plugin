@@ -84,13 +84,19 @@ ffsmart_choose_output_dimensions() {
 ffsmart_resolve_video_policy() {
     FFSMART_VIDEO_TRANSCODE=false
     FFSMART_VIDEO_REASONS=()
-    local source_codec requested_codec="$FFSMART_TARGET_CODEC" compatible=false
+    local source_codec requested_codec="$FFSMART_TARGET_CODEC" compatible=false copy_codecs="${FFSMART_COPY_CODECS:-h264,hevc}"
     source_codec="$(ffsmart_lower "$FFSMART_VIDEO_CODEC")"
     FFSMART_TARGET_CODEC="${requested_codec:-${FFSMART_FALLBACK_CODEC:-${FFSMART_CACHE_BEST_CODEC:-h264}}}"
     if [[ -n "$requested_codec" ]]; then
         [[ "$source_codec" != "$requested_codec" ]] || compatible=true
-    elif [[ ",${FFSMART_COPY_CODECS:-h264,hevc}," == *",$source_codec,"* ]]; then
-        compatible=true
+    else
+        if [[ "$copy_codecs" == preferred ]]; then
+            case "${FFSMART_CACHE_BEST_CODEC:-}" in
+                h264|hevc) copy_codecs="$FFSMART_CACHE_BEST_CODEC" ;;
+                *) ffsmart_fail 78 preferred-codec "Preferred copy requires a validated H.264 or HEVC cache preference"; return 78 ;;
+            esac
+        fi
+        [[ ",$copy_codecs," != *",$source_codec,"* ]] || compatible=true
     fi
     FFSMART_SELECTED_ACCEL="${FFSMART_ACCEL}"
     [[ "$FFSMART_SELECTED_ACCEL" != auto ]] || FFSMART_SELECTED_ACCEL="${FFSMART_CACHE_BEST_ACCEL:-software}"

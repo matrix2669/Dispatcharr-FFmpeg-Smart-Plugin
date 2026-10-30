@@ -24,6 +24,8 @@ This ledger records why every current branch exists and preserves the context ne
 | `feature/stable-v0.2.1-2026-10-20` | feature | stable release preparation | `dev@35ecaefd` | `dev`, then `main` | Release 0.2.1 while retaining the tested immutable runtime. |
 | `feature/shared-input-reservoir` | feature | review accepted; beta publication approved | `9ffe9d4` | `dev` | Package the canonical shared-input reader and persisted per-Stream Profile controls for local 0.2.2-beta.2 testing. |
 
+| `feature/simplify-profile-controls` | feature | implementation | `origin/dev@3b7f554` | `dev` | Simplify beta.3 codec selection and automatic shared input with fixed bounds; no publication. |
+
 ## Branch records
 
 ### `main`
@@ -267,3 +269,25 @@ the `v0.2.1` beta cycle.
   generic codecs and Output defaults remain intact. Final private ZIP is built
   from the committed tree and inspected at handoff; reviewer verification and
   exact-SHA CI remain parent-coordinated acceptance gates.
+
+### `feature/simplify-profile-controls`
+
+- Created: 2026-10-30; exact base `3b7f554c0aac64391768e4920178cacd6a15da8c`.
+- Scope: beta.3 candidate, cached/preferred copy semantics, remove conversion
+  fallback/shared-input tuning UI, automatic conservative shared input, fixed
+  64-MiB payload and 10-second startup guard, independent 30-second network guard.
+- UI decision: the user selected a blank-default text field after confirming
+  official Field.jsx lacks multiselect. No core change or checkbox substitute.
+  Blank follows preferred cache; explicit lists normalize mpeg2 spelling.
+- Canonical changes precede exact-source sync; no independent vendored edits.
+- Excluded: live/provider access, installation, settings/profile operations,
+  registry, tags/releases and dev/main promotion. Canonical exact source is
+  `137103b0b5d2ed2f21976c65be2cd5bc816dbdb6`; full local runtime gates passed.
+  All 80 plugin unit tests pass after official sync, including the proxy-only
+  legacy fixture that intentionally failed against the prior source pin.
+  Compile/JSON/Bash/ShellCheck and exact offline/online source gates passed.
+  Exact canonical CI run `41090068901` passed for this source. Repeated sync and
+  private-package inspection complete at handoff. No live/provider or database
+  operation occurred. ADR-033 records resolved text-field UX, old-settings/CSV
+  migration, fixed bounds and independent timing semantics; contradiction and
+  chat-independence review completed. Plugin CI/review remain acceptance gates.

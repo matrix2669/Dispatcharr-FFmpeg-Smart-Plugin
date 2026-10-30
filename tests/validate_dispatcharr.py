@@ -19,7 +19,7 @@ spec.loader.exec_module(module)
 manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 plugin = module.Plugin()
 
-assert plugin.version == "0.2.2-beta.2"
+assert plugin.version == "0.2.2-beta.3"
 assert manifest["version"] == plugin.version
 assert (PLUGIN_DIR / "ffmpeg-smart.sh").is_file()
 assert (PLUGIN_DIR / "ffmpeg-smart-plugin.sh").is_file()
@@ -47,8 +47,8 @@ assert streams[0]["name"] == "FFmpeg Smart"
 assert streams[0]["command"] == str(PLUGIN_DIR / "ffmpeg-smart-plugin.sh")
 assert "-10bit" not in streams[0]["parameters"]
 assert "-hdr" not in streams[0]["parameters"]
-assert "--plugin-shared-input-mode off" in streams[0]["parameters"]
-assert "--copy-codecs h264,hevc" in streams[0]["parameters"]
+assert "--plugin-shared-input" not in streams[0]["parameters"]
+assert "--copy-codecs preferred" in streams[0]["parameters"]
 assert "--fallback-codec" not in streams[0]["parameters"]
 
 assert len(outputs) == 1

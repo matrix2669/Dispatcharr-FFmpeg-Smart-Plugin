@@ -59,13 +59,14 @@ Data flow:
 - Keep policy normalization plugin-only. Remove retired `-10bit` and `-hdr` settings and flags, and migrate `-sdr`, `-deint`, or `-deinterlace` from Additional options into the remaining checkboxes without requiring a Dispatcharr core change.
 - Keep advanced FFmpeg settings aligned with the canonical wrapper's input, mapping, transcode-video, audio, and MPEG-TS/mux scopes. Parse fields with `shlex.split`, quote each wrapper argument independently, retain the beta.3 `*_ffmpeg_options` IDs as mux fields, and never expose a full custom command or wrapper-owned input, hardware, encoder, filter, format, or output controls.
 - Show each advanced scope's complete inherited default or runtime-derived formula in the mode field's help text. Keep the adjacent options field blank for user-owned Add/Replace text; Dispatcharr does not provide a dependent-field hook that can safely populate it when the mode changes.
-- Shared startup input is opt-in: new/unspecified Stream settings default Off,
-  preserving legacy proxy acquisition. Preserve explicit Auto/Strict choices;
-  keep proxy stripping scoped to canonical owned private broker clients.
-- Keep video compatibility generic: per-Stream copy-codec allowlist and fallback
-  fields default to H.264/HEVC plus cached conversion preference. Explicit `-vc`
-  takes priority. Do not introduce a receiver-specific product mode or change
-  Output defaults when configuring one deployment.
+- Shared startup input uses conservative canonical Auto internally for HTTP(S)
+  inputs, bypassing ambient proxy jobs and unsupported input contracts. Keep its
+  64-MiB payload / 10-second startup / independent 30-second network bounds fixed;
+  do not expose duplicate per-profile controls or claim Dispatcharr inheritance.
+- Keep copy selection as a blank-default text field: blank follows the validated
+  cached codec; explicit lists retain their meaning, with mpeg2 public spelling.
+  Explicit `-vc` takes priority. Retire saved fallback/shared-input UI values
+  visibly during profile reconciliation; do not retain hidden overrides.
 - HDR and 10-bit selection remain automatic. Only Force SDR and Force deinterlace generate managed policy flags, at most once each.
 - All managed Output Profiles must use the pipe-safe wrapper path. Do not replace them with bare `ffmpeg` templates.
 - Hardware benchmarking may stop input- or output-transcoded streams, but proxy-only streams must continue. New managed starts use canonical degraded stream copy until the benchmark lock clears and must not use GPU decode, filtering, or encoding.

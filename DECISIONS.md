@@ -1660,3 +1660,82 @@ existing accepted implementation review or source pin. No conflict remains with
 the owner's current publication-only scope. Installation and playback acceptance
 remain pending the normal operator-managed updater. Revisit on later publication
 or explicit operational authorization.
+
+---
+
+# ADR-033: Simplify profile controls around cached codec policy and conservative automatic input
+
+## Status, date and authority
+
+Accepted for the 0.2.2-beta.3 feature candidate, 2026-10-30. The operator chose
+one text field blank by default, with blank meaning the preferred codec from
+cache and explicit text listing codecs to copy. This supersedes ADR-031's
+conversion selector and ADR-032's plugin shared-input controls/default; it does
+not change standalone runtime defaults or publish a new plugin version.
+
+## Video copy and conversion behavior
+
+Keep `stream_N_copy_codecs` as a string field with empty default. Blank or
+whitespace-only values generate `--copy-codecs preferred`, resolved dynamically
+by the canonical runtime from its validated H.264/HEVC cache preference. No
+fixed deployment codec is stored for this choice. Explicit comma lists are
+trimmed and lowercased per token; `mpeg2` is the public spelling, and old saved
+`mpeg2video` values remain accepted and normalize visibly to `mpeg2` during
+Install / Update. Empty elements, malformed names and literal/mixed preferred
+entries are rejected before reconciliation; the public preferred choice is
+blank. Existing explicit `h264,hevc` lists retain their meaning. Only new/absent
+settings receive the blank default.
+
+Remove dedicated fallback-conversion fields and their saved values. Normal
+managed Stream conversions use the cached encoder, while explicit `-vc` remains
+highest priority and filters/limits can still force conversion. Do not silently
+retain a hidden saved fallback override. Standalone `--fallback-codec` and the
+already-supported explicit Output Additional option remain expert compatibility
+interfaces; Stream Additional options do not gain new acceptance of that flag.
+The operator selected text after official Dispatcharr 0.33.0 Field.jsx inspection
+confirmed no supported multiselect. No checkbox substitute or Dispatcharr core
+change is part of this task.
+
+## Automatic shared input and fixed bounds
+
+Remove shared-input mode/RAM/startup/network controls from both field declarations
+and manifest. For HTTP(S) inputs the launcher selects canonical Auto internally;
+for pipe, non-HTTP and maintenance calls the existing input path remains.
+Auto uses TS URL hints only and bypasses shared input for ambient protocol/all
+proxy configuration, custom input tokens, HLS/opaque/unsupported URLs and missing
+Python. This proxy gate supersedes the unsafe URL-hint-only automatic behavior
+rejected during beta.2 review. No body request is made to decide eligibility.
+Explicit standalone Off/Strict controls remain supported by canonical source.
+
+The plugin fixes retained payload at 67108864 bytes (64 MiB), startup until first
+output at 10 seconds and an independent internal network-operation guard at
+30 seconds. No per-profile tuning flags are generated. Old beta.2 launcher
+selector/limit arguments are consumed for profile continuity but no longer
+override the automatic/fixed policy. Ambient tuning variables cannot alter the
+plugin constants. Output `pipe:0` parameters remain unchanged.
+
+These constants are not copied from or automatically injected by Dispatcharr.
+Official 0.33.0's startup-no-data clock can switch at 8 seconds when alternatives
+exist and disables the short clock when exhausted; the 10-second wrapper guard
+therefore remains useful. Existing TERM cancellation shuts down the reader socket
+and owned probe/playback workers. Bounded local fixtures prove cancellation
+within three seconds in both phases under the 10/30-second guards, not a universal
+live failover guarantee. No timeout semantic change beyond the requested plugin
+startup constant is introduced.
+
+## Saved settings and delivery boundaries
+
+Install / Update removes retired fallback and shared-input setting keys and
+reports that migration. It normalizes old CSV display spelling/case/whitespace,
+reports changed copy settings and persists changes once, preserving explicit
+`-vc`, unrelated custom data and existing explicit copy lists. No hidden old
+fallback or tuning value remains effective. Existing profile changes still use
+the explicit action; no live database query or assignment is performed here.
+
+Source behavior arrives only through exact canonical synchronization. Beta.3 is
+a new isolated feature checkpoint from published beta.2's dev head; beta.2 tags,
+archives and publication remain immutable. Exact-source/plugin CI, review and
+operator-managed update acceptance are separate gates. No provider request,
+installation, default/profile change, registry/tag/Release or dev/main promotion
+is authorized by this implementation. Revisit the copy UI only on new product
+requirements; do not reintroduce receiver-specific presets or duplicate controls.

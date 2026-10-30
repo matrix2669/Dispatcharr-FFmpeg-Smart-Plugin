@@ -2,12 +2,10 @@
 
 Native Dispatcharr plugin that bundles `ffmpeg-smart.sh`, creates managed Stream/Output Profiles, and can rebuild the GPU capability and concurrent-capacity cache from the Plugins page.
 
-This branch prepares local test build **0.2.2-beta.2**, pinned to canonical
-runtime `8156f96ce44c2ca0cb0360a8503f7862285b9f23`, with shared startup-input
-controls for Stream Profiles. Compatible H.264/HEVC continue to copy unless an
-active constraint requires conversion. Runtime version 0.1.0 is unchanged from beta.1:
-validate the existing cache and rebuild only if required. No registry release
-or live deployment is claimed by this source checkpoint.
+This branch prepares **0.2.2-beta.3** as an unpublished feature candidate after
+the beta.2 development publication. It simplifies copy-codec selection and uses
+conservative automatic shared input with fixed internal bounds. Publication does
+not install the plugin, change profiles or choose Dispatcharr's global default.
 
 ## Installation
 
@@ -99,65 +97,52 @@ Profile installation is idempotent. Locked profiles, duplicate names, and same-n
 
 The plugin cannot restart Dispatcharr by itself in a standard container deployment. It runs as the unprivileged Dispatcharr service user and is intentionally not given access to the Docker host control socket.
 
-## Video compatibility controls
+## Video codecs to copy
 
-Each Stream Profile has a **Video codecs eligible for copy** list, defaulting to
-`h264,hevc`, and a **Codec when video conversion is needed** selector, defaulting
-to the cached encoder preference. These are universal defaults; configure them
-for the receiver and MPEG-TS codecs you actually support.
+Each Stream Profile has one text field, blank by default. **Leave it blank to
+copy only the preferred codec from the validated hardware cache.** This follows
+the current cached H.264/HEVC preference rather than storing a fixed codec.
+Otherwise enter codecs separated by commas, for example `h264, mpeg2`. Spaces
+and case are normalized. Existing `mpeg2video` entries remain supported and
+normalize to `mpeg2` when you run Install / Update. Empty list elements and
+malformed entries are rejected before profiles change. Existing saved explicit
+lists, including `h264,hevc`, retain their meaning.
 
-The copy list is a nonempty comma-separated list of FFprobe codec names without
-spaces, such as `h264,mpeg2video`. Video copies only when every other active
-constraint is satisfied. The conversion selector can retain the cached preference
-or choose H.264/HEVC for unsupported input and required resolution, bitrate,
-deinterlace or SDR work. Selecting a fallback does not itself force conversion
-of an allowed codec. For example, `h264,mpeg2video` plus H.264 fallback preserves
-compliant H.264/MPEG-2 and converts HEVC or deinterlaced/resized MPEG-2 to H.264.
+Allowed video copies only when every other active constraint is satisfied.
+Required resolution, bitrate, deinterlace or SDR conversion uses the cached
+encoder. Existing explicit `-vc h264|hevc` takes priority over copy eligibility
+and the cached conversion preference. There is no separate conversion dropdown.
+The standalone `--fallback-codec` flag and already-supported explicit Output
+Additional options remain available for advanced compatibility.
 
-Existing explicit `-vc h264|hevc` takes priority over both controls, even when
-it requests a codec outside the copy list. Audio, HDR and hardware behavior keep
-their existing controls. Save settings and run **Install or Update Profiles**
-to persist/apply choices; the plugin does not select a global default. Output
-Profiles keep their defaults and may opt in explicitly with
-`--copy-codecs LIST --fallback-codec h264|hevc` in Additional options.
+## Automatic shared startup input
 
-## Shared startup input for Stream Profiles
+Shared startup input is automatic when the canonical reader can conservatively
+use it. Eligible HTTP(S) TS URL hints share one retained incoming body across
+metadata probing and playback. Ambient protocol/all proxy variables, custom
+input options, HLS or opaque URLs, unsupported protocols and unavailable Python
+retain legacy acquisition. No body is opened to detect format or choose a path.
+The private broker remains local and never sends its token through a proxy.
 
-Each Stream Profile has a saved **Shared startup input** selector. **Off** is
-used for new or unspecified settings and preserves existing input/proxy handling.
-Choose **Auto** explicitly to use URL hints for shared acquisition;
-**Strict** uses one shared reader for a known continuous HTTP(S) MPEG-TS source.
-The reader retains startup bytes in RAM so probing and playback consume the
-same media connection. Full queues pause upstream reading without dropping
-media or writing it to disk. No fixed prefill wait is added.
+The plugin fixes the payload queue at **64 MiB** and its first-output startup
+watchdog at **10 seconds**. A full queue pauses upstream reading without dropping
+media, disk spooling or a fixed prefill wait. These are payload bytes, not an RSS
+or media-duration target. A separate internal **30-second network-operation
+guard** bounds blocking I/O; it is not inherited from Dispatcharr configuration
+and has no duplicate UI control.
 
-Auto checks URL hints only: HTTP(S) `.ts` paths or `format`/`output=ts|mpegts`
-query values, excluding `.m3u8` paths. It does not inspect a body to detect its
-format. Opaque URLs, other protocols, custom input-option tokens and missing
-Python keep legacy handling. A hinted URL that returns another format fails
-without reopening the source. Strict requires continuous 188-byte MPEG-TS and
-Python 3.9+; custom input options are rejected. Dedicated user-agent and URL
-Basic authentication work; redirects are bounded and strip cross-origin Basic
-Authorization. Python direct connections/system TLS trust are used, without
-FFmpeg-specific proxy, cookie or custom-header semantics. Owned broker clients
-bypass inherited proxy settings so the private token-bearing URL stays local.
+Dispatcharr 0.33.0 can switch after 8 seconds without startup data when alternatives
+exist, and disables that short clock when alternatives are exhausted. The wrapper
+watchdog remains independent. Local worker tests verify TERM cleanup during both
+probe and playback before either internal guard; this is bounded fixture evidence,
+not a claim that every live failover path has been validated.
 
-The adjacent limits default to **16 MiB** of retained payload, **20 seconds**
-until first output media and **30 seconds** per blocking network operation.
-Allowed ranges are 1–1024 MiB and 1–300 seconds. The cap excludes process and OS
-buffer overhead; it is not a media-duration target. Small caps can starve probing
-until the startup deadline. Source failures never start another shared media
-reader. Canonical stderr telemetry reports credential-safe startup/request and
-peak-retention measurements.
-
-Save settings and run **Install or Update Profiles** to apply them. Missing
-mode settings are persisted as Off; explicit Auto/Strict selections are preserved.
-Other missing defaults are added once without replacing explicit choices or custom policy
-options, including `-vc`. Existing profile updates keep the usual no-restart
-behavior. Output Profiles keep their existing `-i pipe:0` path and have no shared
-input controls. The plugin does not select Dispatcharr's global default or alter
-channel-specific assignments. Version **0.2.2-beta.2** is a local test candidate;
-provider performance and default-profile rollout require separate validation.
+Save settings and run **Install or Update Profiles** to apply profile changes.
+The action reports removal of retired shared-input/fallback fields and normalizes
+old copy-list spelling while preserving explicit `-vc`, other custom settings and
+channel assignments. Old generated tuning flags are consumed by the launcher for
+profile continuity but cannot override fixed policy. Output Profiles retain their
+existing `-i pipe:0` commands. The plugin does not select a global default.
 
 ## Hardware cache
 

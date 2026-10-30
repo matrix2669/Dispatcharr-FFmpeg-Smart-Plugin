@@ -199,67 +199,19 @@ def codec_policy_fields(prefix, label):
     return [
         {
             "id": f"{prefix}_copy_codecs",
-            "label": f"{label}: video codecs eligible for copy",
+            "label": f"{label}: video codecs to copy",
             "type": "string",
-            "default": "h264,hevc",
-            "help_text": "Nonempty comma-separated FFprobe codec names without spaces, for example h264,mpeg2video. Listed video copies only when other active limits are satisfied. Choose codecs supported by the receiver and MPEG-TS. Explicit -vc overrides this list.",
-        },
-        {
-            "id": f"{prefix}_fallback_codec",
-            "label": f"{label}: codec when video conversion is needed",
-            "type": "select",
-            "default": "auto",
-            "options": [
-                {"value": "auto", "label": "Use cached encoder preference"},
-                {"value": "h264", "label": "H.264"},
-                {"value": "hevc", "label": "HEVC"},
-            ],
-            "help_text": "Used for unsupported input or required resolution, bitrate, deinterlace or SDR conversion. Does not itself force conversion of a codec allowed for copy. Explicit -vc takes priority. Default keeps the cached codec preference.",
+            "default": "",
+            "help_text": "Leave blank to copy only the preferred codec from the validated hardware cache. Otherwise enter codecs separated by commas, for example h264, mpeg2. Spaces and case are normalized; existing mpeg2video entries remain supported. Processing limits can still require conversion, using the cached encoder. Explicit -vc takes priority.",
         },
     ]
 
 
-def shared_input_fields(prefix, label):
-    return [
-        {
-            "id": f"{prefix}_shared_input_mode",
-            "label": f"{label}: shared startup input",
-            "type": "select",
-            "default": "off",
-            "options": [
-                {"value": "off", "label": "Off (legacy input handling)"},
-                {"value": "auto", "label": "Auto (MPEG-TS URL hints only)"},
-                {"value": "strict", "label": "Strict (known HTTP MPEG-TS source)"},
-            ],
-            "help_text": "Off is the default and preserves existing input/proxy handling. Auto shares one reader for HTTP(S) .ts paths or format/output=ts|mpegts URL hints, except .m3u8, custom input options or unavailable Python. It does not detect the body format. Strict requires continuous 188-byte MPEG-TS and Python 3.9+; unsupported input or custom input options fail without reopening the source.",
-        },
-        {
-            "id": f"{prefix}_shared_input_mib",
-            "label": f"{label}: startup input RAM limit (MiB)",
-            "type": "string",
-            "default": "16",
-            "help_text": "1–1024 MiB of retained input payload. A full queue pauses the source; no media is dropped or written to disk. OS buffers and process overhead are additional. Used only when shared input is selected.",
-        },
-        {
-            "id": f"{prefix}_shared_input_deadline",
-            "label": f"{label}: startup deadline (seconds)",
-            "type": "string",
-            "default": "20",
-            "help_text": "1–300 seconds until first output media. Too small a RAM limit can starve probing and reach this deadline. Used only when shared input is selected.",
-        },
-        {
-            "id": f"{prefix}_shared_input_idle",
-            "label": f"{label}: input network timeout (seconds)",
-            "type": "string",
-            "default": "30",
-            "help_text": "1–300 seconds per blocking network operation. Shared input fails on timeout without starting another media connection.",
-        },
-    ]
 
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.2.2-beta.2"
+    version = "0.2.2-beta.3"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
@@ -278,7 +230,6 @@ class Plugin:
         {"id": "stream_1_name", "label": "Stream Profile 1 name", "type": "string", "default": "FFmpeg Smart"},
         *policy_fields("stream_1", "Stream Profile 1"),
         *codec_policy_fields("stream_1", "Stream Profile 1"),
-        *shared_input_fields("stream_1", "Stream Profile 1"),
         {
             "id": "stream_1_options",
             "label": "Stream Profile 1 options",
@@ -291,7 +242,6 @@ class Plugin:
         {"id": "stream_2_name", "label": "Stream Profile 2 name", "type": "string", "default": ""},
         *policy_fields("stream_2", "Stream Profile 2"),
         *codec_policy_fields("stream_2", "Stream Profile 2"),
-        *shared_input_fields("stream_2", "Stream Profile 2"),
         {
             "id": "stream_2_options",
             "label": "Stream Profile 2 options",
@@ -446,11 +396,16 @@ class Plugin:
             normalized_settings, normalized_probe_options = (
                 self._normalize_adaptive_probe_settings(normalized_settings)
             )
-            normalized_settings, shared_defaults_added = self._normalize_shared_input_settings(normalized_settings)
-            normalized_settings, codec_defaults_added = self._normalize_codec_policy_settings(normalized_settings)
+            normalized_settings, simplified_fields, retired_fields = self._normalize_simplified_settings(normalized_settings)
             result = self._install_profiles(normalized_settings, logger)
-            if normalized_flags or removed_automatic_flags or normalized_probe_options or shared_defaults_added or codec_defaults_added:
+            if normalized_flags or removed_automatic_flags or normalized_probe_options or simplified_fields or retired_fields:
                 self._save_normalized_settings(normalized_settings)
+            if retired_fields:
+                result["retired_profile_settings"] = retired_fields
+                result["message"] += " Shared input is now automatic with fixed bounds; dedicated conversion overrides were removed in favor of the cached encoder and explicit -vc. Refresh settings to see the simplified controls."
+            if simplified_fields:
+                result["normalized_copy_codecs"] = simplified_fields
+                result["message"] += " Video copy settings were saved in normalized form; refresh settings to see them."
             if normalized_flags:
                 result["normalized_policy_flags"] = normalized_flags
                 result["message"] += (
@@ -520,7 +475,6 @@ class Plugin:
                         '-i "{streamUrl}" -user_agent "{userAgent}"',
                         options,
                         self._codec_policy_parameters(settings, f"stream_{slot}", options),
-                        self._shared_input_parameters(settings, f"stream_{slot}"),
                         ffmpeg_options,
                     ),
                     "is_active": True,
@@ -864,63 +818,42 @@ class Plugin:
         config.save(update_fields=["settings", "updated_at"])
 
     @staticmethod
-    def _normalize_shared_input_settings(settings):
+    def _normalize_simplified_settings(settings):
         normalized = dict(settings or {})
-        changed = False
+        changed = []
+        retired = []
         for slot in (1, 2):
-            for suffix, default in (("mode", "off"), ("mib", "16"), ("deadline", "20"), ("idle", "30")):
-                key = f"stream_{slot}_shared_input_{suffix}"
-                if key not in normalized:
-                    normalized[key] = default
-                    changed = True
-        return normalized, changed
-
-    @staticmethod
-    def _normalize_codec_policy_settings(settings):
-        normalized = dict(settings or {})
-        changed = False
-        for slot in (1, 2):
-            for suffix, default in (("copy_codecs", "h264,hevc"), ("fallback_codec", "auto")):
-                key = f"stream_{slot}_{suffix}"
-                if key not in normalized:
-                    normalized[key] = default
-                    changed = True
-        return normalized, changed
+            prefix = f"stream_{slot}"
+            for suffix in ("fallback_codec", "shared_input_mode", "shared_input_mib", "shared_input_deadline", "shared_input_idle"):
+                key = f"{prefix}_{suffix}"
+                if key in normalized:
+                    normalized.pop(key)
+                    retired.append(key)
+            key = f"{prefix}_copy_codecs"
+            original = normalized.get(key)
+            value = "" if original is None else str(original).strip()
+            # Keep malformed disabled drafts visible; enabled profiles validate
+            # before any database mutation. Normalize only public spelling.
+            formatted = ",".join("mpeg2" if part.strip().lower() == "mpeg2video" else part.strip().lower() for part in value.split(",")) if value else ""
+            if original != formatted:
+                normalized[key] = formatted
+                changed.append(key)
+        return normalized, changed, retired
 
     @staticmethod
     def _codec_policy_parameters(settings, prefix, options):
         if any(token in {"--copy-codecs", "--fallback-codec"} for token in shlex.split(options)):
-            raise ValueError(f"{prefix} codec policy belongs in its copy-codec and conversion-codec controls")
-        codecs = str(settings.get(f"{prefix}_copy_codecs", "h264,hevc")).lower()
-        if not re.fullmatch(r"[a-z0-9_]+(?:,[a-z0-9_]+)*", codecs):
-            raise ValueError(f"{prefix} copy codecs require a nonempty comma-separated list of FFprobe names without spaces")
-        fallback = str(settings.get(f"{prefix}_fallback_codec", "auto"))
-        if fallback not in {"auto", "h264", "hevc"}:
-            raise ValueError(f"{prefix} conversion codec must be auto, h264 or hevc")
-        parameters = ["--copy-codecs", codecs]
-        if fallback != "auto":
-            parameters.extend(("--fallback-codec", fallback))
-        return " ".join(shlex.quote(token) for token in parameters)
-
-    @staticmethod
-    def _shared_input_parameters(settings, prefix):
-        mode = str(settings.get(f"{prefix}_shared_input_mode", "off"))
-        if mode not in {"off", "auto", "strict"}:
-            raise ValueError(f"{prefix} shared input mode must be off, auto or strict")
-        if mode == "strict" and str(settings.get(f"{prefix}_ffmpeg_input_options", "") or "").strip():
-            raise ValueError(f"{prefix} strict shared input does not support custom input options; choose Auto or Off")
-        parameters = ["--plugin-shared-input-mode", mode]
-        if mode != "off":
-            for suffix, flag, default, maximum, multiplier in (
-                ("mib", "bytes", "16", 1024, 1048576),
-                ("deadline", "deadline", "20", 300, 1),
-                ("idle", "idle", "30", 300, 1),
-            ):
-                value = str(settings.get(f"{prefix}_shared_input_{suffix}", default))
-                if not re.fullmatch(r"[1-9][0-9]{0,3}", value) or not 1 <= int(value) <= maximum:
-                    raise ValueError(f"{prefix} shared input {suffix} must be an integer from 1 to {maximum}")
-                parameters.extend((f"--plugin-shared-input-{flag}", str(int(value) * multiplier)))
-        return " ".join(shlex.quote(token) for token in parameters)
+            raise ValueError(f"{prefix} copy policy belongs in its copy-codec control; conversion uses the cache or explicit -vc")
+        value = str(settings.get(f"{prefix}_copy_codecs", "") or "").strip().lower()
+        codecs = []
+        if value:
+            for part in value.split(","):
+                part = part.strip()
+                if not re.fullmatch(r"[a-z0-9_]+", part) or part == "preferred":
+                    raise ValueError(f"{prefix} copy codecs require comma-separated names without empty entries; leave blank for the cached preference")
+                codecs.append("mpeg2" if part == "mpeg2video" else part)
+        selected = ",".join(codecs) if codecs else "preferred"
+        return f"--copy-codecs {shlex.quote(selected)}"
 
     @classmethod
     def _profile_options(cls, settings, prefix, additional_options, label):

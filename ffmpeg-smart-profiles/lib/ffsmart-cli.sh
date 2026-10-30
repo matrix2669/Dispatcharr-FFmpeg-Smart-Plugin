@@ -231,10 +231,7 @@ ffsmart_validate_maps() {
 
 ffsmart_validate_cli() {
     case "$FFSMART_ACCEL" in auto|qsv|vaapi|nvenc|videotoolbox|v4l2m2m|software) ;; *) ffsmart_configuration_error "Unsupported accelerator: $FFSMART_ACCEL"; return 64 ;; esac
-    if [[ ! "$FFSMART_COPY_CODECS" =~ ^[a-z0-9_]+(,[a-z0-9_]+)*$ ]]; then
-        ffsmart_configuration_error "--copy-codecs requires a comma-separated list of FFprobe codec names without spaces"
-        return 64
-    fi
+    ffsmart_normalize_copy_codecs || return
     case "$FFSMART_FALLBACK_CODEC" in ""|h264|hevc) ;; *) ffsmart_configuration_error "--fallback-codec must be h264 or hevc"; return 64 ;; esac
     if [[ -n "$FFSMART_TARGET_CODEC" && "$FFSMART_TARGET_CODEC" != h264 && "$FFSMART_TARGET_CODEC" != hevc ]]; then
         ffsmart_configuration_error "-vc must be h264 or hevc"
@@ -266,6 +263,29 @@ ffsmart_validate_cli() {
     fi
 }
 
+ffsmart_normalize_copy_codecs() {
+    local remaining="$FFSMART_COPY_CODECS" token normalized="" more
+    while :; do
+        more=false
+        if [[ "$remaining" == *,* ]]; then
+            token="${remaining%%,*}"; remaining="${remaining#*,}"; more=true
+        else
+            token="$remaining"
+        fi
+        token="${token#"${token%%[![:space:]]*}"}"
+        token="${token%"${token##*[![:space:]]}"}"
+        if [[ ! "$token" =~ ^[a-z0-9_]+$ ]] ||
+           { [[ "$token" == preferred ]] && { [[ "$more" == true || -n "$normalized" ]]; }; }; then
+            ffsmart_configuration_error "--copy-codecs requires codec names separated by commas, or preferred alone"
+            return 64
+        fi
+        [[ "$token" != mpeg2 ]] || token=mpeg2video
+        normalized+="${normalized:+,}$token"
+        [[ "$more" == true ]] || break
+    done
+    FFSMART_COPY_CODECS="$normalized"
+}
+
 ffsmart_show_help() {
     cat <<'EOF'
 Usage: ffmpeg-smart.sh -i INPUT [options]
@@ -278,7 +298,8 @@ capability state or --recache-only to rebuild it without an input.
 --shared-input-auto  Enable only for HTTP(S) TS URL hints with no custom input
                      options; use legacy input handling otherwise.
 --copy-codecs LIST  Eligible automatic video-copy codecs, using FFprobe names
-                    separated by commas. Default: h264,hevc. Explicit -vc wins.
+                    separated by commas (mpeg2 alias supported), or preferred
+                    alone for the cached codec. Default: h264,hevc. -vc wins.
 --fallback-codec h264|hevc  Codec for required automatic conversions; default is
                             the cached preference. Explicit -vc wins.
 EOF
@@ -288,12 +309,13 @@ ffsmart_validate_shared_input() {
     if [[ "$FFSMART_SHARED_INPUT" == auto ]]; then
         FFSMART_SHARED_INPUT=false
         if [[ "$FFSMART_INPUT" =~ ^https?:// && ${#FFSMART_USER_INPUT_ARGS[@]} -eq 0 ]] && command -v python3 >/dev/null 2>&1; then
-            if python3 -c 'import sys
+            if python3 -c 'import os, sys
 from urllib.parse import parse_qsl, urlsplit
 try:
     u = urlsplit(sys.argv[1]); path = u.path.lower()
     hint = path.endswith(".ts") or any(k.lower() in ("format", "output") and v.lower() in ("ts", "mpegts") for k, v in parse_qsl(u.query))
-    sys.exit(not (sys.version_info >= (3, 9) and u.hostname and not path.endswith(".m3u8") and hint))
+    proxy = any(k.lower() in {"http_proxy", "https_proxy", "all_proxy", "ftp_proxy", "socks_proxy"} and v.strip() for k, v in os.environ.items())
+    sys.exit(not (sys.version_info >= (3, 9) and u.hostname and not path.endswith(".m3u8") and hint and not proxy))
 except ValueError:
     sys.exit(1)' "$FFSMART_INPUT"; then
                 FFSMART_SHARED_INPUT=true

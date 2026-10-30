@@ -1,6 +1,21 @@
+## [0.2.2-beta.3] - Unreleased feature candidate
+
+- Pin canonical `137103b0b5d2ed2f21976c65be2cd5bc816dbdb6` with dynamic
+  preferred-cache selection, MPEG-2 aliasing and conservative proxy eligibility.
+- Use a blank-default copy-codecs text field for the current cached preference,
+  with normalized explicit lists and `mpeg2` spelling; retain old saved lists.
+- Remove dedicated conversion and shared-input tuning UI. Report migration of
+  retired saved fields; preserve explicit `-vc` and unrelated custom settings.
+- Automatically use shared startup input only when conservative eligibility
+  succeeds, including bypass of ambient proxy jobs. Fix plugin payload/startup
+  bounds at 64 MiB / 10 seconds, with an independent internal 30-second I/O guard.
+- Preserve standalone controls, Output pipe commands and explicit expert CLI
+  compatibility. No registry/tag/Release, installation or profile/default change.
+
 ## [0.2.2-beta.2] - 2026-10-30
 
-Local shared-input test candidate; no tag, Release or registry publication.
+Published development tag at `3b7f554c0aac64391768e4920178cacd6a15da8c`;
+no stable/main release or deployment is inferred.
 
 - Pin canonical FFmpeg Adaptive `8156f96ce44c2ca0cb0360a8503f7862285b9f23`,
   including the checksum-pinned Python RAM reader and shell modules.

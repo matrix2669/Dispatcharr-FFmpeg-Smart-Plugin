@@ -1,6 +1,6 @@
 {
   "name": "FFmpeg Smart Profiles",
-  "version": "0.2.2-beta.2",
+  "version": "0.2.2-beta.3",
   "description": "Installs FFmpeg Smart stream/output profiles and manages hardware capacity cache rebuilds.",
   "author": "matrix2669",
   "help_url": "https://github.com/matrix2669/Dispatcharr-FFmpeg-Smart-Plugin",
@@ -9,12 +9,7 @@
     {"id": "stream_1_name", "label": "Stream Profile 1 name", "type": "string", "default": "FFmpeg Smart"},
     {"id": "stream_1_sdr", "label": "Stream Profile 1: force SDR", "type": "boolean", "default": false, "help_text": "Convert HDR input to SDR. Otherwise HDR and 10-bit selection remain automatic."},
     {"id": "stream_1_deint", "label": "Stream Profile 1: force deinterlace", "type": "boolean", "default": false},
-    {"id": "stream_1_copy_codecs", "label": "Stream Profile 1: video codecs eligible for copy", "type": "string", "default": "h264,hevc", "help_text": "Nonempty comma-separated FFprobe codec names without spaces, for example h264,mpeg2video. Listed video copies only when other active limits are satisfied. Choose codecs supported by the receiver and MPEG-TS. Explicit -vc overrides this list."},
-    {"id": "stream_1_fallback_codec", "label": "Stream Profile 1: codec when video conversion is needed", "type": "select", "default": "auto", "options": [{"value": "auto", "label": "Use cached encoder preference"}, {"value": "h264", "label": "H.264"}, {"value": "hevc", "label": "HEVC"}], "help_text": "Used for unsupported input or required resolution, bitrate, deinterlace or SDR conversion. Does not itself force conversion of a codec allowed for copy. Explicit -vc takes priority. Default keeps the cached codec preference."},
-    {"id": "stream_1_shared_input_mode", "label": "Stream Profile 1: shared startup input", "type": "select", "default": "off", "options": [{"value": "off", "label": "Off (legacy input handling)"}, {"value": "auto", "label": "Auto (MPEG-TS URL hints only)"}, {"value": "strict", "label": "Strict (known HTTP MPEG-TS source)"}], "help_text": "Off is the default and preserves existing input/proxy handling. Auto shares one reader for HTTP(S) .ts paths or format/output=ts|mpegts URL hints, except .m3u8, custom input options or unavailable Python. It does not detect the body format. Strict requires continuous 188-byte MPEG-TS and Python 3.9+; unsupported input or custom input options fail without reopening the source."},
-    {"id": "stream_1_shared_input_mib", "label": "Stream Profile 1: startup input RAM limit (MiB)", "type": "string", "default": "16", "help_text": "1\u20131024 MiB of retained input payload. A full queue pauses the source; no media is dropped or written to disk. OS buffers and process overhead are additional. Used only when shared input is selected."},
-    {"id": "stream_1_shared_input_deadline", "label": "Stream Profile 1: startup deadline (seconds)", "type": "string", "default": "20", "help_text": "1\u2013300 seconds until first output media. Too small a RAM limit can starve probing and reach this deadline. Used only when shared input is selected."},
-    {"id": "stream_1_shared_input_idle", "label": "Stream Profile 1: input network timeout (seconds)", "type": "string", "default": "30", "help_text": "1\u2013300 seconds per blocking network operation. Shared input fails on timeout without starting another media connection."},
+    {"id": "stream_1_copy_codecs", "label": "Stream Profile 1: video codecs to copy", "type": "string", "default": "", "help_text": "Leave blank to copy only the preferred codec from the validated hardware cache. Otherwise enter codecs separated by commas, for example h264, mpeg2. Spaces and case are normalized; existing mpeg2video entries remain supported. Processing limits can still require conversion, using the cached encoder. Explicit -vc takes priority."},
     {"id": "stream_1_options", "label": "Stream Profile 1 options", "type": "string", "default": "", "help_text": "Optional ffmpeg-smart flags, for example: -vc h264 -maxres 1080 -maxbr 8M -maxchan 2"},
     {"id": "stream_1_ffmpeg_input_mode", "label": "Stream Profile 1: input defaults", "type": "select", "default": "inherit", "options": [{"value": "inherit", "label": "Use FFmpeg Smart default"}, {"value": "add", "label": "Add to default"}, {"value": "replace", "label": "Replace default"}], "help_text": "Inherit currently uses: -fflags +genpts+igndts+discardcorrupt -err_detect ignore_err. These run before -i. Replace removes only this managed group; URL, user-agent, reconnect, and hardware setup remain Smart-owned."},
     {"id": "stream_1_ffmpeg_input_options", "label": "Stream Profile 1: input options", "type": "string", "default": "", "help_text": "For example: -fflags +discardcorrupt+genpts+nobuffer. Text with Inherit selected is treated as Add. Adaptive -analyzeduration and -probesize values are FFmpeg Smart-owned."},
@@ -30,12 +25,7 @@
     {"id": "stream_2_name", "label": "Stream Profile 2 name", "type": "string", "default": ""},
     {"id": "stream_2_sdr", "label": "Stream Profile 2: force SDR", "type": "boolean", "default": false, "help_text": "Convert HDR input to SDR. Otherwise HDR and 10-bit selection remain automatic."},
     {"id": "stream_2_deint", "label": "Stream Profile 2: force deinterlace", "type": "boolean", "default": false},
-    {"id": "stream_2_copy_codecs", "label": "Stream Profile 2: video codecs eligible for copy", "type": "string", "default": "h264,hevc", "help_text": "Nonempty comma-separated FFprobe codec names without spaces, for example h264,mpeg2video. Listed video copies only when other active limits are satisfied. Choose codecs supported by the receiver and MPEG-TS. Explicit -vc overrides this list."},
-    {"id": "stream_2_fallback_codec", "label": "Stream Profile 2: codec when video conversion is needed", "type": "select", "default": "auto", "options": [{"value": "auto", "label": "Use cached encoder preference"}, {"value": "h264", "label": "H.264"}, {"value": "hevc", "label": "HEVC"}], "help_text": "Used for unsupported input or required resolution, bitrate, deinterlace or SDR conversion. Does not itself force conversion of a codec allowed for copy. Explicit -vc takes priority. Default keeps the cached codec preference."},
-    {"id": "stream_2_shared_input_mode", "label": "Stream Profile 2: shared startup input", "type": "select", "default": "off", "options": [{"value": "off", "label": "Off (legacy input handling)"}, {"value": "auto", "label": "Auto (MPEG-TS URL hints only)"}, {"value": "strict", "label": "Strict (known HTTP MPEG-TS source)"}], "help_text": "Off is the default and preserves existing input/proxy handling. Auto shares one reader for HTTP(S) .ts paths or format/output=ts|mpegts URL hints, except .m3u8, custom input options or unavailable Python. It does not detect the body format. Strict requires continuous 188-byte MPEG-TS and Python 3.9+; unsupported input or custom input options fail without reopening the source."},
-    {"id": "stream_2_shared_input_mib", "label": "Stream Profile 2: startup input RAM limit (MiB)", "type": "string", "default": "16", "help_text": "1\u20131024 MiB of retained input payload. A full queue pauses the source; no media is dropped or written to disk. OS buffers and process overhead are additional. Used only when shared input is selected."},
-    {"id": "stream_2_shared_input_deadline", "label": "Stream Profile 2: startup deadline (seconds)", "type": "string", "default": "20", "help_text": "1\u2013300 seconds until first output media. Too small a RAM limit can starve probing and reach this deadline. Used only when shared input is selected."},
-    {"id": "stream_2_shared_input_idle", "label": "Stream Profile 2: input network timeout (seconds)", "type": "string", "default": "30", "help_text": "1\u2013300 seconds per blocking network operation. Shared input fails on timeout without starting another media connection."},
+    {"id": "stream_2_copy_codecs", "label": "Stream Profile 2: video codecs to copy", "type": "string", "default": "", "help_text": "Leave blank to copy only the preferred codec from the validated hardware cache. Otherwise enter codecs separated by commas, for example h264, mpeg2. Spaces and case are normalized; existing mpeg2video entries remain supported. Processing limits can still require conversion, using the cached encoder. Explicit -vc takes priority."},
     {"id": "stream_2_options", "label": "Stream Profile 2 options", "type": "string", "default": ""},
     {"id": "stream_2_ffmpeg_input_mode", "label": "Stream Profile 2: input defaults", "type": "select", "default": "inherit", "options": [{"value": "inherit", "label": "Use FFmpeg Smart default"}, {"value": "add", "label": "Add to default"}, {"value": "replace", "label": "Replace default"}], "help_text": "Inherit currently uses: -fflags +genpts+igndts+discardcorrupt -err_detect ignore_err. These run before -i. Replace removes only this managed group; URL, user-agent, reconnect, and hardware setup remain Smart-owned."},
     {"id": "stream_2_ffmpeg_input_options", "label": "Stream Profile 2: input options", "type": "string", "default": "", "help_text": "For example: -fflags +discardcorrupt+genpts+nobuffer. Text with Inherit selected is treated as Add. Adaptive -analyzeduration and -probesize values are FFmpeg Smart-owned."},
@@ -93,49 +83,13 @@
     {"id": "output_3_ffmpeg_options_mode", "label": "Output Profile 3: MPEG-TS/output defaults", "type": "select", "default": "inherit", "options": [{"value": "inherit", "label": "Use FFmpeg Smart default"}, {"value": "add", "label": "Add to default"}, {"value": "replace", "label": "Replace default"}], "help_text": "Inherit currently uses: -avoid_negative_ts make_zero -start_at_zero -mpegts_copyts 0 -mpegts_flags +pat_pmt_at_frames+resend_headers -flush_packets 1 -max_muxing_queue_size 4096. Smart always appends -f mpegts pipe:1 after this group."},
     {"id": "output_3_ffmpeg_options", "label": "Output Profile 3: MPEG-TS/output options", "type": "string", "default": "", "help_text": "For example: -mpegts_flags +pat_pmt_at_frames+resend_headers+initial_discontinuity -muxdelay 0. Existing beta.3 values continue here."},
     {"id": "remove_missing_profiles", "label": "Remove disabled or renamed managed profiles", "type": "boolean", "default": true},
-    {
-      "id": "update_existing",
-      "label": "Update existing managed profiles",
-      "type": "boolean",
-      "default": true,
-      "help_text": "Only profiles already pointing to an FFmpeg Smart managed script or matching this plugin's native FFmpeg templates are updated."
-    },
-    {
-      "id": "flag_reference_video",
-      "label": "Other flags: video and limits",
-      "type": "info",
-      "description": "-vc h264|hevc selects output codec; -maxres 720 limits vertical resolution; -maxbr 2M limits video bitrate; -maxchan 2 limits audio channels."
-    },
-    {
-      "id": "flag_reference_hardware",
-      "label": "Other flags: hardware selection",
-      "type": "info",
-      "description": "-accel qsv|vaapi|software overrides acceleration; -device, -dri-device, -qsv-device, or -vaapi-device /dev/dri/renderD128 selects a specific device."
-    },
-    {
-      "id": "flag_reference_policy",
-      "label": "Managed policy flags",
-      "type": "info",
-      "description": "HDR and 10-bit selection are automatic. The controls above generate only -sdr and -deint. Install / Update removes retired -10bit/-hdr flags and moves -sdr/-deint to their matching checkboxes."
-    },
-    {
-      "id": "flag_reference_managed",
-      "label": "Input and maintenance flags",
-      "type": "info",
-      "description": "-i and -user_agent are added by the plugin. Use Rebuild Hardware Cache instead of putting --recache or --recache-only in a profile."
-    },
-    {
-      "id": "flag_reference_ffmpeg",
-      "label": "Advanced FFmpeg Smart options",
-      "type": "info",
-      "description": "Each profile can inherit, add to, or replace scoped input, video-tuning, audio, and MPEG-TS defaults, plus select default, all-stream, or custom mapping. FFmpeg Smart keeps ownership of the hardware encoder, hardware filters, input, and final MPEG-TS pipe."
-    },
-    {
-      "id": "profile_note",
-      "label": "Profile behavior",
-      "type": "info",
-      "description": "All managed profiles use the bundled FFmpeg Smart launcher and persistent state in /data/ffmpeg_smart_profiles. When a required hardware scan is pending or active, profiles use basic FFmpeg stream copy and bypass Smart policy and hardware acceleration until Rebuild Hardware Cache succeeds."
-    }
+    {"id": "update_existing", "label": "Update existing managed profiles", "type": "boolean", "default": true, "help_text": "Only profiles already pointing to an FFmpeg Smart managed script or matching this plugin's native FFmpeg templates are updated."},
+    {"id": "flag_reference_video", "label": "Other flags: video and limits", "type": "info", "description": "-vc h264|hevc selects output codec; -maxres 720 limits vertical resolution; -maxbr 2M limits video bitrate; -maxchan 2 limits audio channels."},
+    {"id": "flag_reference_hardware", "label": "Other flags: hardware selection", "type": "info", "description": "-accel qsv|vaapi|software overrides acceleration; -device, -dri-device, -qsv-device, or -vaapi-device /dev/dri/renderD128 selects a specific device."},
+    {"id": "flag_reference_policy", "label": "Managed policy flags", "type": "info", "description": "HDR and 10-bit selection are automatic. The controls above generate only -sdr and -deint. Install / Update removes retired -10bit/-hdr flags and moves -sdr/-deint to their matching checkboxes."},
+    {"id": "flag_reference_managed", "label": "Input and maintenance flags", "type": "info", "description": "-i and -user_agent are added by the plugin. Use Rebuild Hardware Cache instead of putting --recache or --recache-only in a profile."},
+    {"id": "flag_reference_ffmpeg", "label": "Advanced FFmpeg Smart options", "type": "info", "description": "Each profile can inherit, add to, or replace scoped input, video-tuning, audio, and MPEG-TS defaults, plus select default, all-stream, or custom mapping. FFmpeg Smart keeps ownership of the hardware encoder, hardware filters, input, and final MPEG-TS pipe."},
+    {"id": "profile_note", "label": "Profile behavior", "type": "info", "description": "All managed profiles use the bundled FFmpeg Smart launcher and persistent state in /data/ffmpeg_smart_profiles. When a required hardware scan is pending or active, profiles use basic FFmpeg stream copy and bypass Smart policy and hardware acceleration until Rebuild Hardware Cache succeeds."}
   ],
   "actions": [
     {

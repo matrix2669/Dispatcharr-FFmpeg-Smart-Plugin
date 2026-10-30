@@ -2,51 +2,41 @@
 
 ## Canonical FFmpeg Adaptive runtime
 
-- Repository: `matrix2669/ffmpeg-adaptive`.
-- Candidate source: immutable work-branch commit
-  `8156f96ce44c2ca0cb0360a8503f7862285b9f23`, runtime 0.1.0, for the local
-  plugin 0.2.2-beta.2 test candidate. No tag or registry publication is implied.
-- Contract: eight bundled files (entrypoint, six shell modules, Python shared
-  input helper) are byte- and mode-pinned in
-  `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json`; the MIT notice is shipped
-  in `FFMPEG_ADAPTIVE_LICENSE`. Runtime behavior remains canonical.
-- The helper requires Python 3.9+, POSIX process groups and private IPv4 loopback
-  access when selected. Shared input defaults Off for absent/new settings,
-  preserving legacy transport/proxy behavior. Explicit Auto uses URL hints and retains legacy handling if the
-  supported conditions are absent. Strict fails clearly for unavailable Python,
-  non-TS input or advanced input options. Python uses direct HTTP(S), system TLS
-  trust, dedicated user-agent and URL Basic authentication, with bounded safe
-  redirects. It does not inherit FFmpeg-specific headers, cookies or proxy
-  semantics. No media-body reconnect occurs.
-- Synchronization validates shell and Python by file type, updates selected ref
-  and commit only after download/syntax checks and must remain idempotent.
-  Offline checks require every referenced shell/Python helper in the manifest.
-- Owned private broker clients clear inherited protocol proxy variables and set
-  loopback bypasses; the upstream shared reader remains direct. The canonical
-  recording-proxy regression starts without no_proxy and verifies exact all-tier
-  replay, one upstream request and zero proxy requests/token leakage. All 13
-  shared-input methods pass locally. Legacy jobs are unaffected by this isolation.
-- The candidate also supplies generic `--copy-codecs LIST` and optional
-  `--fallback-codec h264|hevc`, with unchanged H.264/HEVC copy and cached-fallback
-  defaults. Explicit `-vc` overrides both. No receiver-specific mode exists.
-- Prior shared-input source CI run `41076177782` passed the complete suite at
-  `6e0a84b900db65fd4867d22c17d6b93e22fd1470`. The same runtime bytes at
-  `e1f70ff` passed all 12 shared-input methods under actual Dispatcharr's dispatch
-  user with Python 3.13.17 and FFmpeg 8.1.2 in isolated temporary storage. This
-  proves fixture compatibility, not live-provider performance or plugin install.
-- The generic policy candidate passed the full canonical local suite, including
-  both cached preferences, configurable MPEG-2 copy/conversion, independent list
-  and fallback values, malformed-value rejection and explicit `-vc` precedence.
-  Its exact CI and final plugin CI/review/live acceptance remain separate gates.
-- Runtime version is unchanged from the conditional-video beta.1 candidate.
-  The parent coordinator confirmed the existing managed cache reports valid
-  with the prior `6e0a84b` source; generic codec controls do not change the
-  fingerprint computation. Continue using canonical `--cache-status`; rebuild only
-  when required, never forge the fingerprint. Historical beta.4 installations
-  still need a proper rebuild when upgrading to runtime 0.1.0.
-- Historical `913a958fd5f9edc231c49a70539a09f611fdcc5a` remains the published
-  beta.5/stable plugin dependency. Historical production evidence below does not
-  validate this new candidate's rollout.
+- Beta.3 feature candidate pins `matrix2669/ffmpeg-adaptive` commit
+  `137103b0b5d2ed2f21976c65be2cd5bc816dbdb6`, runtime 0.1.0, via the official
+  synchronization workflow. Eight files (entrypoint, six shell modules and the
+  Python shared-input helper) remain byte/mode-pinned with the MIT notice.
+- `--copy-codecs preferred` resolves the validated current H.264/HEVC cache
+  preference dynamically. Named lists normalize case/token whitespace and accept
+  public `mpeg2` plus legacy `mpeg2video`. Explicit `-vc` remains highest priority;
+  processing constraints can force conversion using the cached encoder.
+- Canonical Auto now preserves legacy acquisition when any nonempty case variant
+  of HTTP/HTTPS/ALL/FTP/SOCKS proxy configuration exists, in addition to existing
+  custom-input, HLS/opaque URL, protocol and Python gates. No body is acquired to
+  decide. Explicit standalone Off/Strict and advanced fallback CLI remain valid.
+- The plugin removes dedicated conversion/shared-input tuning controls and uses
+  internal conservative Auto only for HTTP(S). Its fixed payload/startup bounds
+  are 64 MiB / 10 seconds, with an independent internal 30-second network guard.
+  These are not inherited Dispatcharr settings. Owned broker clients retain
+  proxy isolation; legacy jobs keep their transport environment.
+- Python 3.9+, POSIX process groups and private IPv4 loopback remain required only
+  for selected shared input. Unsupported acquisition retains legacy semantics;
+  no media reconnect or disk spool is introduced.
+- Full canonical local validation passed, including both cache preferences,
+  preferred/list/alias validation, cache admission/degraded policy, explicit
+  codec/filter precedence, proxy-aware Auto and all 14 shared-input methods.
+  Bounded cancellation fixtures cover probing and playback under 10/30-second
+  guards, without a general live-failover claim. Exact canonical CI
+  [41090068901](https://github.com/matrix2669/ffmpeg-adaptive/actions/runs/41090068901)
+  passed at `137103b0b5d2ed2f21976c65be2cd5bc816dbdb6`. Final plugin CI,
+  independent review and installation/playback acceptance remain separate gates.
+- Repeated sync and offline/online source checks must cover every file and mode.
+  The published beta.2 plugin at `3b7f554c0aac64391768e4920178cacd6a15da8c`
+  retains canonical `8156f96ce44c2ca0cb0360a8503f7862285b9f23`; its tag/archive
+  are immutable and are not replaced by beta.3 feature work.
+- Runtime/cache schema, version and fingerprint inputs remain unchanged. Continue
+  using canonical `--cache-status` rather than forging fingerprints or assuming
+  capability evidence transfers between machines.
 
 ## Plugin distribution and live state
 
@@ -125,3 +115,15 @@ not claimed as verified. Minimum Dispatcharr 0.29.0 remains unchanged.
 See `docs/shared-input-compatibility-2026-10-30.md` for the evidence boundary.
 Plugin candidate native installation, profile reconciliation and actual provider
 streams are pending parent-owned validation; no deployment is claimed here.
+
+## Beta.3 settings/timing compatibility
+
+Official Dispatcharr 0.33.0 at `2fa13a6707bdf0dae87e0c494bcd3ca282cdeb3e`
+`frontend/src/components/Field.jsx` supports string/select/boolean/number fields
+but no multiselect. The user selected a blank-default string field, avoiding core
+changes or a checkbox substitute. Existing source hashes/minimum-version evidence
+remain applicable to that field contract; minimum 0.29.0 is unchanged.
+The official input manager's startup-no-data switch can use 8 seconds while
+alternatives exist and disables that short clock when alternatives are exhausted.
+The wrapper's independent watchdog and network guard are not configuration
+inheritance, and no live settings or forced database query is used in this task.
