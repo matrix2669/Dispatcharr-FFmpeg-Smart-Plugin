@@ -1641,3 +1641,22 @@ mode/hash and package gates must pass again for the new exact pin. Version stays
 the unpublished local 0.2.2-beta.2 candidate; no tag, Release, registry, live
 installation or default switch is inferred. Review sign-off and exact-SHA CI
 remain separate acceptance gates coordinated by the parent.
+
+
+## Beta.2 updater publication authorization — 2026-10-30
+
+The owner explicitly approved completing plugin publication and pushing workspace
+documentation to main. Deliver 0.2.2-beta.2 through the development registry and
+an immutable plugin tag after exact-candidate CI and archive verification. This
+supersedes the local-only beta.2 delivery plan. Do not directly install into
+Dispatcharr, change profiles/defaults, restart services or publish stable/main.
+The prior attempted direct installer failed at Django SECRET_KEY initialization
+before mutation; it is not evidence of a successful update.
+
+The workspace promotion-boundary standards changes were reviewed: lifecycle
+reconciliation, approval continuity, exact-SHA CI and durable status checkpoints.
+These govern delivery only and do not change runtime, generic codec defaults,
+existing accepted implementation review or source pin. No conflict remains with
+the owner's current publication-only scope. Installation and playback acceptance
+remain pending the normal operator-managed updater. Revisit on later publication
+or explicit operational authorization.

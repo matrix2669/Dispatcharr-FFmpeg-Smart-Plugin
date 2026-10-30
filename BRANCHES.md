@@ -22,7 +22,7 @@ This ledger records why every current branch exists and preserves the context ne
 | `docs/ffmpeg-smart-beta3-live-validation` | documentation | integrated | `dev` at `dd54d4c` | `dev` | Record beta.3 publication and managed installed validation without moving its tag. |
 | `fix/benchmark-outcome-beta5` | fix | active | `dev` at `38f7d17` | `dev` | Reviewed beta.5 plugin, wrapper, development-registry, zero-viewer managed update, and completed bounded hardware validation. Stable/main promotion, GitHub Release, unrelated work, and branch deletion remain excluded. |
 | `feature/stable-v0.2.1-2026-10-20` | feature | stable release preparation | `dev@35ecaefd` | `dev`, then `main` | Release 0.2.1 while retaining the tested immutable runtime. |
-| `feature/shared-input-reservoir` | feature | locally tested; review pending | `9ffe9d4` | `dev` | Package the canonical shared-input reader and persisted per-Stream Profile controls for local 0.2.2-beta.2 testing. |
+| `feature/shared-input-reservoir` | feature | review accepted; beta publication approved | `9ffe9d4` | `dev` | Package the canonical shared-input reader and persisted per-Stream Profile controls for local 0.2.2-beta.2 testing. |
 
 ## Branch records
 

@@ -2,13 +2,18 @@
 
 ## Workspace Standards Reconciliation Gate
 
-Before any substantive work, locate the maintained local `matrix2669/workspace` checkout and run `<workspace>/scripts/reconcile-standards --check .` from this repository root. The workspace `AI-INSTRUCTIONS.md`, `AGENT-STANDARD.md`, and Git history must be available.
-
-If `WORKSPACE-STANDARDS.yaml` is missing, pending, or stale, stop project work and run `<workspace>/scripts/reconcile-standards --diff .`. Review the standards change against this complete `AGENT.md`, `DECISIONS.md`, code/configuration contracts, dependencies, `BRANCHES.md`, `RELEASE.md`, upstream requirements when applicable, and related projects.
-
-A contradiction blocks work. Ask focused follow-up questions to establish whether the changed standard, proposed work, new answer, or older accepted decision is authoritative; never choose silently. Record project-decision supersessions in `DECISIONS.md` and realign every affected artifact. Only after no contradiction remains, run `<workspace>/scripts/reconcile-standards --apply --confirm-reviewed-no-conflicts .`.
-
-Missing workspace standards or Git history is a hard block. Standards exceptions require explicit user authorization and must be stated in a dedicated section of this file with exact scope, rationale, authority, approval date, and review/removal trigger; `DECISIONS.md` cannot waive workspace standards.
+Ordinary established standalone work uses the pinned local guidance and applied
+WORKSPACE-STANDARDS.yaml. Refresh and reconcile authoritative workspace
+AI-INSTRUCTIONS.md and AGENT-STANDARD.md at bootstrap, explicit standards work,
+and before source integration or publication. Run reconcile-standards --check;
+review --diff against the complete project guidance, relevant decisions,
+dependencies and release contracts. Apply --confirm-reviewed-no-conflicts only
+after that review. Missing authoritative standards or unresolved contradictions
+block the boundary. Preserve explicit owner approval across delegation; do not
+infer deployment from publication. Required CI belongs to the exact candidate
+SHA; documentation reconciliation creates a new candidate requiring full CI.
+Publish task-related workspace status once at durable closeout. This supersedes
+the older per-task reconciliation wording, not any release or validation gate.
 
 ## Purpose
 

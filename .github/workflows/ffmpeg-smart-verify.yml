@@ -1,6 +1,7 @@
 name: Verify bundled FFmpeg Smart source
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - "ffmpeg-smart-profiles/ffmpeg-smart.sh"
