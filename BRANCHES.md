@@ -22,9 +22,10 @@ This ledger records why every current branch exists and preserves the context ne
 | `docs/ffmpeg-smart-beta3-live-validation` | documentation | integrated | `dev` at `dd54d4c` | `dev` | Record beta.3 publication and managed installed validation without moving its tag. |
 | `fix/benchmark-outcome-beta5` | fix | active | `dev` at `38f7d17` | `dev` | Reviewed beta.5 plugin, wrapper, development-registry, zero-viewer managed update, and completed bounded hardware validation. Stable/main promotion, GitHub Release, unrelated work, and branch deletion remain excluded. |
 | `feature/stable-v0.2.1-2026-10-20` | feature | stable release preparation | `dev@35ecaefd` | `dev`, then `main` | Release 0.2.1 while retaining the tested immutable runtime. |
-| `feature/shared-input-reservoir` | feature | review accepted; beta publication approved | `9ffe9d4` | `dev` | Package the canonical shared-input reader and persisted per-Stream Profile controls for local 0.2.2-beta.2 testing. |
-
-| `feature/simplify-profile-controls` | feature | implementation | `origin/dev@3b7f554` | `dev` | Simplify beta.3 codec selection and automatic shared input with fixed bounds; no publication. |
+| `feature/shared-input-reservoir` | feature | integrated; beta.2 published | `9ffe9d4` | `dev` | Package the canonical shared-input reader and persisted per-Stream Profile controls for local 0.2.2-beta.2 testing. |
+| `feature/simplify-profile-controls` | feature | integrated; beta.3 published | `origin/dev@3b7f554` | `dev` | Simplify beta.3 codec selection and automatic shared input with fixed bounds; immutable beta.3 published. |
+| `fix/conditional-video-transcode` | fix | incorporated by beta.4 dev history | `dev@7f5b775` | `dev` | Package canonical conditional video policy for isolated beta.1 testing. |
+| `fix/opaque-ts-auto` | fix | beta.4 integrated; development documentation closeout | `dev@f04fb72` | `dev` | Package response-based Auto detection and close delivery/source-link documentation. |
 
 ## Branch records
 
@@ -45,19 +46,20 @@ This ledger records why every current branch exists and preserves the context ne
 
 - Purpose: integrate plugin and canonical-wrapper changes before stable promotion.
 - Base and target: `main`.
-- Current immutable runtime/release source is reviewed beta.5 commit
-  `a5c0777875056591e4e02c989993f43b3f43aa72`; plugin tag
-  `v0.2.1-beta.5`, wrapper beta.4, and development-registry publication are
-  immutable and their CI gates passed. Documentation-only follow-ups may
-  advance remote `dev` without changing that source. The earlier beta.4
-  preparation commit `38f7d17...` and its defects remain historical
-  negative-control evidence.
-- Publication state: beta.5 dev publication, approved zero-viewer managed
-  update, and bounded hardware validation are complete. The benchmark returned
-  zero with complete outcome, valid cache, no PID/lock, and the fixture/pipe
-  proof passed; no provider channel was fetched and no Dispatcharr profile was
-  created. `main` remains stable-only.
-- Last verified at: `2026-09-21`.
+- Last observed head (2026-11-02):
+  `66f4a620ac8682dcd2d6161ee16d327b8bb81dc1`, also the owning
+  `fix/opaque-ts-auto` head. Beta.4 implementation and publication records are
+  incorporated; the bundled source metadata pins canonical
+  `bb834684eb2c513e832c43ba6dbc773d5af10cbc` across eight files and modes.
+- Historical beta.5 `a5c0777875056591e4e02c989993f43b3f43aa72` and its managed
+  benchmark/fixture proof remain immutable evidence for that older bundle.
+  Stable `v0.2.1` retains canonical `913a958fd5f9edc231c49a70539a09f611fdcc5a`.
+- Original exact-head Verify runs `41105794203`, `41105791718` and
+  `41105638669` succeeded. The source-link/delivery-documentation successor
+  requires full CI at its own exact SHA before the requested dev fast-forward.
+  The final workspace closeout records the accepted SHA, run and remote head.
+- No new pin, version, tag, registry, stable/main, Release or installation change
+  is part of that documentation integration. ADR-035 records the delivery scope.
 
 ### `feature/adaptive-input-probing`
 
@@ -222,7 +224,9 @@ the `v0.2.1` beta cycle.
 
 ## fix/conditional-video-transcode — 2026-10-29
 
-- Base: dev@7f5b775; target: dev; isolated test delivery, no integration authorized.
+- Base: dev@7f5b775; target: dev. Initial isolated-test delivery excluded
+  integration; subsequent approved beta development publication incorporated
+  this implementation into the current beta.4 dev ancestry (ADR-035).
 - Scope: pin reviewed canonical passthrough-first video policy; package distinct
   0.2.2-beta.1 test build; preserve plugin settings/profile definitions.
 - User authorized build/install and channel458 TiVo retest. No registry/tag/release.
@@ -231,6 +235,9 @@ the `v0.2.1` beta cycle.
 
 ### `feature/shared-input-reservoir`
 
+- Disposition: incorporated into published beta.2 and the current beta.4 dev
+  ancestry. Initial checkpoint exclusions below describe the implementation
+  phase; later publication authority is recorded in ADR-032 and ADR-035.
 - Created: 2026-10-30; base `9ffe9d4`; target `dev` after separate acceptance.
 - Scope: synchronize canonical `8156f96ce44c2ca0cb0360a8503f7862285b9f23`,
   package its Python helper, expose per-Stream Profile off/auto/strict controls
@@ -272,6 +279,8 @@ the `v0.2.1` beta cycle.
 
 ### `feature/simplify-profile-controls`
 
+- Disposition: integrated and published as immutable beta.3; incorporated into
+  the current beta.4 dev ancestry. Initial exclusions below remain historical.
 - Created: 2026-10-30; exact base `3b7f554c0aac64391768e4920178cacd6a15da8c`.
 - Scope: beta.3 candidate, cached/preferred copy semantics, remove conversion
   fallback/shared-input tuning UI, automatic conservative shared input, fixed
@@ -299,6 +308,11 @@ owning branch; installed/live acceptance remains operator-owned.
 
 ### `fix/opaque-ts-auto`
 
+- Disposition: beta.4 incorporated in observed dev/owning head
+  `66f4a620ac8682dcd2d6161ee16d327b8bb81dc1`. Current source-link and delivery
+  documentation is the development documentation closeout (ADR-035), gated by
+  full exact-SHA CI before dev integration; the final workspace closeout holds
+  the authoritative acceptance receipt.
 - Created 2026-10-30 from `dev@f04fb72e83e55fe6d589f5c0509d658a27153016`; target dev.
 - Scope: package canonical response-based Auto detection for opaque HTTP TS
   sources as candidate 0.2.2-beta.4, preserving generic policy and fixed bounds.
@@ -309,8 +323,10 @@ owning branch; installed/live acceptance remains operator-owned.
 - Canonical pin `bb834684eb2c513e832c43ba6dbc773d5af10cbc` passed full
   local validation (20 shared-input tests) and independent canonical review.
   Plugin local validation passed all 80 unit tests, compile/JSON/syntax and
-  offline/online pin checks; repeat sync made no changes. Exact CI and isolated
-  live capture evidence remain parent-owned closeout gates.
+  offline/online pin checks; repeat sync made no changes. Original exact-head
+  Verify runs `41105794203`, `41105791718` and `41105638669` succeeded. Prior
+  capture/publication evidence remains separate from this documentation change;
+  no new live result is claimed.
 
 - Publication approved by the owner on 2026-10-30. This supersedes the earlier
   no-tag/no-registry/no-integration restriction for beta.4 only. Advance dev to

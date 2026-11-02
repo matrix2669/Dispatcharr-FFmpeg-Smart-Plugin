@@ -1799,3 +1799,46 @@ preparation-only publication boundary, not the no-direct-install instruction.
 Canonical pinbb834684 and all runtime/settings/default bytes remain unchanged.
 The updated source documentation records the approved distribution state.
 No stable main, GitHub Release, deployment or profile/default change.
+
+
+---
+
+# ADR-035: Close development integration and expose canonical runtime ownership
+
+## Status, date and authority
+
+Accepted, 2026-11-02. The owner requested completion of development integration
+and a clickable canonical runtime repository link in the plugin README.
+
+## Decision and rationale
+
+Keep runtime implementation in `matrix2669/ffmpeg-adaptive` and link that
+repository prominently from the README and its Bundled runtime updates section.
+Explain each channel's immutable pin: stable plugin `v0.2.1` retains canonical
+`913a958fd5f9edc231c49a70539a09f611fdcc5a`; development `v0.2.2-beta.4` bundles
+`bb834684eb2c513e832c43ba6dbc773d5af10cbc`. A moving canonical branch is not a
+change to published or installed plugin bytes. Hiding the canonical source in
+unclickable inline code makes ownership needlessly hard to discover.
+
+The plugin dev baseline already incorporates beta.4 at
+`66f4a620ac8682dcd2d6161ee16d327b8bb81dc1`. Close these documentation changes
+through its owning fix branch and dev after full CI at the resulting exact SHA.
+Separately, the canonical source must integrate its accepted conditional-video,
+shared-input and opaque-TS chain into its own dev; downstream packaging alone
+did not establish that canonical integration. No repin or vendor edit is needed.
+
+This explicitly supersedes the earlier implementation-only no-integration
+boundaries for development closeout only. ADR-032–034's later beta publication
+receipts remain historical authority for their own immutable artifacts. No new
+version, tag, registry update, stable main/Release, installation, profile/default
+change, provider operation or branch deletion follows from this request.
+
+## Consequences and review trigger
+
+Preserve the accepted generic preferred-copy/Auto policy, saved-settings
+migration, fixed bounds, Output pipe behavior and standalone defaults. Required
+validation is tied to the new documentation candidate, retaining original
+runtime CI/review provenance without treating it as a pass for a different SHA.
+Record the verified exact dev head in durable closeout evidence; do not describe
+CI or integration as complete while pending. Revisit source pins or publication
+only for an explicit subsequent request through the established release gates.

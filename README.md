@@ -2,6 +2,10 @@
 
 Native Dispatcharr plugin that bundles `ffmpeg-smart.sh`, creates managed Stream/Output Profiles, and can rebuild the GPU capability and concurrent-capacity cache from the Plugins page.
 
+The canonical runtime is [FFmpeg Adaptive](https://github.com/matrix2669/ffmpeg-adaptive).
+This repository owns its Dispatcharr integration; see [Bundled runtime updates](#bundled-runtime-updates)
+for exact source pins and the synchronization workflow.
+
 **0.2.2-beta.4** recognizes supported HTTP MPEG-TS bodies without requiring a
 filename or query hint. It is intended for the development updater channel.
 Publication does not install the plugin, change profiles or choose Dispatcharr's
@@ -174,7 +178,14 @@ Because benchmark-time starts now take the degraded stream-copy path, Dispatchar
 
 ## Bundled runtime updates
 
-`matrix2669/ffmpeg-adaptive` is the source of truth for the modular `ffmpeg-smart.sh` runtime. The plugin records one exact source commit plus the path, SHA-256 checksum, and installed mode of the entrypoint and every shell/Python module in `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json`. CI verifies that the complete bundle is byte-for-byte identical to that immutable source.
+[matrix2669/ffmpeg-adaptive](https://github.com/matrix2669/ffmpeg-adaptive) is the source of truth for the modular `ffmpeg-smart.sh` runtime. The plugin records one exact source commit plus the path, SHA-256 checksum, and installed mode of the entrypoint and every shell/Python module in `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json`. CI verifies that the complete bundle is byte-for-byte identical to that immutable source.
+
+The stable plugin `v0.2.1` retains canonical source
+[`913a958fd5f9edc231c49a70539a09f611fdcc5a`](https://github.com/matrix2669/ffmpeg-adaptive/commit/913a958fd5f9edc231c49a70539a09f611fdcc5a).
+The development plugin `v0.2.2-beta.4` bundles
+[`bb834684eb2c513e832c43ba6dbc773d5af10cbc`](https://github.com/matrix2669/ffmpeg-adaptive/commit/bb834684eb2c513e832c43ba6dbc773d5af10cbc).
+Each published archive keeps its own immutable metadata; moving a canonical
+branch does not change either bundle or an installed plugin.
 
 The daily **Sync FFmpeg Adaptive runtime** workflow, which can also be run manually, checks the metadata's tracked `ffmpeg-adaptive` ref. When any runtime file changes, it updates the complete bundle and source metadata, runs validation, and opens a pull request for review. Existing plugin releases remain pinned and never change silently. An omitted immutable tag or commit ref is rejected if it resolves to a different recorded commit; pass an explicit ref to make that change intentionally.
 
