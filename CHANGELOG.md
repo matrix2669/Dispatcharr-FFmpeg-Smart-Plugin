@@ -1,3 +1,14 @@
+## 0.2.2-beta.5 — local candidate, 2026-11-13
+
+- Pin canonical FFmpeg Adaptive `fd6c400d49cff305df7c41a4149d2f00b80355bb`.
+- Make encoded six-channel 5.1(side) AAC independently joinable through the
+  approved one-to-one surround mapping into standard 5.1 ADTS configuration.
+- Compose supported added normalization after managed asynchronous resampling;
+  preserve explicit replacement/copy policy, stereo and other layouts.
+- Preserve profile IDs/defaults, saved settings, launcher/cache policy and
+  minimum Dispatcharr v0.29.0. This is local preparation, not a published tag,
+  advertised registry update, live profile change or installation.
+
 ## 0.2.2-beta.4 — 2026-10-30
 
 - Recognize eligible HTTP MPEG-TS bodies without URL hints, keeping probing and

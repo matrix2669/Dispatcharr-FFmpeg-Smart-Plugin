@@ -13,6 +13,7 @@ This ledger records why every current branch exists and preserves the context ne
 
 | Branch | Type | Status | Base | Target | Purpose |
 |---|---|---|---|---|---|
+| `fix/aac-side-late-join` | fix | local beta.5 preparation | `dev@4715c24` | `dev` after approval | Pin reviewed canonical AAC correction and prepare a versioned self-contained package; no publication or installation. |
 | `main` | long-lived | active | initial project history | stable tags | Production-ready plugin source and stable tags. |
 | `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version and canonical wrapper updates. |
 | `feature/adaptive-input-probing` | feature | integrated | `dev` | `dev` | Pin canonical adaptive probing, migrate manual probe settings, and prepare `v0.2.1-beta.1`. |

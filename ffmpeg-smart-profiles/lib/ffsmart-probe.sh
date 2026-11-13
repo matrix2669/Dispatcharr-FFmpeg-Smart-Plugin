@@ -70,6 +70,9 @@ ffsmart_reset_media_info() {
     FFSMART_AUDIO_MAX_CHANNELS=0
     FFSMART_AUDIO_SAMPLE_RATE=0
     FFSMART_AUDIO_SUMMARY=""
+    FFSMART_AUDIO_INDEXES=()
+    FFSMART_AUDIO_CHANNELS=()
+    FFSMART_AUDIO_LAYOUTS=()
     FFSMART_AUXILIARY_COUNT=0
 }
 
@@ -118,11 +121,26 @@ ffsmart_parse_probe_output() {
                 [[ "$rate" =~ ^[0-9]+$ ]] || rate=0
                 (( channels > FFSMART_AUDIO_MAX_CHANNELS )) && FFSMART_AUDIO_MAX_CHANNELS="$channels"
                 (( rate > FFSMART_AUDIO_SAMPLE_RATE )) && FFSMART_AUDIO_SAMPLE_RATE="$rate"
+                FFSMART_AUDIO_INDEXES+=("$index")
+                FFSMART_AUDIO_CHANNELS+=("$channels")
+                FFSMART_AUDIO_LAYOUTS+=("$(ffsmart_probe_value "$line" channel_layout || true)")
                 FFSMART_AUDIO_SUMMARY+="${codec:-unknown}/${channels}/${rate}/${profile:-unknown};" ;;
             subtitle|data|attachment)
                 ((FFSMART_AUXILIARY_COUNT += 1)) ;;
         esac
     done < "$file"
+    # ffprobe may repeat program records and present them out of stream order.
+    # Audio stream specifier ordinals follow the global stream index order.
+    local i j tmp
+    for ((i=0; i<FFSMART_AUDIO_COUNT; i++)); do
+        for ((j=i+1; j<FFSMART_AUDIO_COUNT; j++)); do
+            if [[ "${FFSMART_AUDIO_INDEXES[$i]}" =~ ^[0-9]+$ && "${FFSMART_AUDIO_INDEXES[$j]}" =~ ^[0-9]+$ ]] && (( 10#${FFSMART_AUDIO_INDEXES[$j]} < 10#${FFSMART_AUDIO_INDEXES[$i]} )); then
+                tmp="${FFSMART_AUDIO_INDEXES[$i]}"; FFSMART_AUDIO_INDEXES[$i]="${FFSMART_AUDIO_INDEXES[$j]}"; FFSMART_AUDIO_INDEXES[$j]="$tmp"
+                tmp="${FFSMART_AUDIO_CHANNELS[$i]}"; FFSMART_AUDIO_CHANNELS[$i]="${FFSMART_AUDIO_CHANNELS[$j]}"; FFSMART_AUDIO_CHANNELS[$j]="$tmp"
+                tmp="${FFSMART_AUDIO_LAYOUTS[$i]}"; FFSMART_AUDIO_LAYOUTS[$i]="${FFSMART_AUDIO_LAYOUTS[$j]}"; FFSMART_AUDIO_LAYOUTS[$j]="$tmp"
+            fi
+        done
+    done
 }
 
 ffsmart_probe_metadata_complete() {
@@ -150,7 +168,7 @@ ffsmart_run_probe_tier() {
     if [[ -n "$duration" ]]; then
         command+=( -analyzeduration "$duration" -probesize "$size" )
     fi
-    command+=( -show_entries 'stream=index,codec_type,codec_name,profile,pix_fmt,width,height,r_frame_rate,field_order,bit_rate,color_space,color_transfer,color_primaries,channels,sample_rate' -of 'compact=p=0:nk=0' "$FFSMART_PROBE_INPUT" )
+    command+=( -show_entries 'stream=index,codec_type,codec_name,profile,pix_fmt,width,height,r_frame_rate,field_order,bit_rate,color_space,color_transfer,color_primaries,channels,sample_rate,channel_layout' -of 'compact=p=0:nk=0' "$FFSMART_PROBE_INPUT" )
     FFSMART_PROBE_PROCESS_FAILED=false
     if ! "${command[@]}" > "$output_file" 2> "$output_file.stderr"; then
         FFSMART_PROBE_PROCESS_FAILED=true

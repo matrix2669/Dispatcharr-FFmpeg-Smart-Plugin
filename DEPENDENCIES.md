@@ -2,8 +2,8 @@
 
 ## Canonical FFmpeg Adaptive runtime
 
-- Beta.4 fix candidate pins `matrix2669/ffmpeg-adaptive` commit
-  `bb834684eb2c513e832c43ba6dbc773d5af10cbc`, runtime 0.1.0, via the official
+- Local beta.5 candidate pins `matrix2669/ffmpeg-adaptive` commit
+  `fd6c400d49cff305df7c41a4149d2f00b80355bb`, runtime 0.1.0, via the official
   synchronization workflow. Eight files (entrypoint, six shell modules and the
   Python shared-input helper) remain byte/mode-pinned with the MIT notice.
 - `--copy-codecs preferred` resolves the validated current H.264/HEVC cache

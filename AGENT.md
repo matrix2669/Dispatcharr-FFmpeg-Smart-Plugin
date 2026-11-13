@@ -1,5 +1,15 @@
 # AGENT.md
 
+## Local beta.5 preparation boundary, 2026-11-13
+
+The owner requests local packaging and development-registry preparation for the
+reviewed AAC late-join repair. Pin published canonical `fd6c400` and prepare the
+next unused beta version. Preserve field IDs/defaults, saved settings, live
+profiles and installed data. No push, dev/main integration, tag, registry
+publication, installation or deployment is authorized in this phase; this
+explicit local-only direction overrides routine checkpoint-push guidance.
+Revisit this boundary only on specific publication approval.
+
 ## Workspace Standards Reconciliation Gate
 
 Ordinary established standalone work uses the pinned local guidance and applied

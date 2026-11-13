@@ -134,6 +134,107 @@ ffsmart_audio_bitrate_for_channels() {
     esac
 }
 
+# Resolve only mapping forms whose audio order is unambiguous. Unknown selectors
+# disable this optional correction rather than guessing which stream was mapped.
+ffsmart_mapped_audio() {
+    FFSMART_MAPPED_AUDIO=()
+    local spec base negative ordinal idx match found item
+    local maps=() selected=() kept=()
+    for ((idx=0; idx<FFSMART_AUDIO_COUNT; idx++)); do
+        [[ "${FFSMART_AUDIO_INDEXES[$idx]}" =~ ^[0-9]+$ ]] || return 1
+    done
+    for ((idx=1; idx<${#FFSMART_MAP_ARGS[@]}; idx+=2)); do maps+=("${FFSMART_MAP_ARGS[$idx]}"); done
+    for spec in "${maps[@]}"; do
+        base="${spec%\?}"; negative=false
+        if [[ "$base" == -* ]]; then negative=true; base="${base#-}"; fi
+        selected=()
+        case "$base" in
+            0|0:a)
+                for ((ordinal=0; ordinal<FFSMART_AUDIO_COUNT; ordinal++)); do selected+=("$ordinal"); done ;;
+            0:a:[0-9]*)
+                ordinal="${base#0:a:}"
+                [[ "$ordinal" =~ ^(0|[1-9][0-9]*)$ ]] || return 1
+                for ((idx=0; idx<FFSMART_AUDIO_COUNT; idx++)); do
+                    [[ "$ordinal" == "$idx" ]] && selected+=("$idx")
+                done ;;
+            0:[0-9]*)
+                ordinal="${base#0:}"
+                [[ "$ordinal" =~ ^(0|[1-9][0-9]*)$ ]] || return 1
+                for ((idx=0; idx<FFSMART_AUDIO_COUNT; idx++)); do
+                    [[ "${FFSMART_AUDIO_INDEXES[$idx]}" == "$ordinal" ]] && selected+=("$idx")
+                done ;;
+            0:v|0:v:[0-9]*|0:s|0:s:[0-9]*|0:d|0:d:[0-9]*|0:t|0:t:[0-9]*) ;;
+            *) return 1 ;;
+        esac
+        if [[ "$negative" == false ]]; then
+            FFSMART_MAPPED_AUDIO+=("${selected[@]}")
+        else
+            kept=()
+            for item in "${FFSMART_MAPPED_AUDIO[@]}"; do
+                found=false
+                for match in "${selected[@]}"; do [[ "$item" != "$match" ]] || found=true; done
+                [[ "$found" == true ]] || kept+=("$item")
+            done
+            FFSMART_MAPPED_AUDIO=("${kept[@]}")
+        fi
+    done
+}
+
+ffsmart_add_audio_filters() {
+    local managed_transcode="$1"
+    # Replacement mode leaves all codec and filter choices with the operator.
+    [[ "$FFSMART_AUDIO_MODE" != replace ]] || return 0
+    ffsmart_mapped_audio || { ffsmart_log "Audio layout correction skipped: mapping is not resolvable"; return 0; }
+    local out input idx option value codec channels filter matched add_pan composed
+    local pan='pan=5.1|FL=FL|FR=FR|FC=FC|LFE=LFE|BL=SL|BR=SR'
+    for ((out=0; out<${#FFSMART_MAPPED_AUDIO[@]}; out++)); do
+        input="${FFSMART_MAPPED_AUDIO[$out]}"
+        codec=''; channels="${FFSMART_AUDIO_CHANNELS[$input]}"; filter=''
+        for ((idx=0; idx<${#FFSMART_AUDIO_ARGS[@]}; idx++)); do
+            option="${FFSMART_AUDIO_ARGS[$idx]}"
+            case "$option" in
+                -c|-codec|-c:a|-codec:a|-acodec|-c:a:*|-codec:a:*|-ac|-ac:a|-ac:a:*|-af|-filter:a|-filter:a:*)
+                    ((idx+=1)); (( idx < ${#FFSMART_AUDIO_ARGS[@]} )) || return 0
+                    value="${FFSMART_AUDIO_ARGS[$idx]}"; matched=false
+                    case "$option" in
+                        -c:a:*|-codec:a:*|-ac:a:*|-filter:a:*)
+                            [[ "${option##*:}" =~ ^(0|[1-9][0-9]*)$ ]] || return 0 ;;
+                    esac
+                    case "$option" in
+                        -c|-codec|-c:a|-codec:a|-acodec|-ac|-ac:a|-af|-filter:a) matched=true ;;
+                        *:a:"$out") matched=true ;;
+                    esac
+                    [[ "$matched" == true ]] || continue
+                    case "$option" in
+                        -c|-codec|-c:a*|-codec:a*|-acodec) codec="$value" ;;
+                        -ac*) channels="$value" ;;
+                        -af|-filter:a*) filter="$value" ;;
+                    esac ;;
+                -filter_script*|-filter_complex*|-lavfi|-channel_layout*|-ch_layout*|-c:*|-codec:*|-ac:*|-filter:*|-af:*) return 0 ;;
+            esac
+        done
+        # Only simple, known layout-preserving filters can be combined. More
+        # complex operator graphs retain FFmpeg's ordinary last-option behavior.
+        if [[ -n "$filter" && "$filter" != aresample=async=1 && ! "$filter" =~ ^dynaudnorm(=[a-zA-Z0-9_.:=+-]+)?$ ]]; then
+            ffsmart_log "Audio filter composition skipped: filter graph may change channel layout"
+            continue
+        fi
+        composed=false; add_pan=false
+        if [[ "$managed_transcode" == true && -n "$codec" && "$codec" != copy && "$filter" =~ ^dynaudnorm(=[a-zA-Z0-9_.:=+-]+)?$ ]]; then
+            filter="aresample=async=1,$filter"
+            composed=true
+        fi
+        if [[ "$codec" == aac && "$channels" == 6 && "${FFSMART_AUDIO_CHANNELS[$input]}" == 6 && "${FFSMART_AUDIO_LAYOUTS[$input]}" == '5.1(side)' ]]; then
+            add_pan=true
+        fi
+        if [[ "$add_pan" == true ]]; then
+            if [[ -n "$filter" ]]; then filter="$pan,$filter"; else filter="$pan"; fi
+            composed=true
+        fi
+        if [[ "$composed" == true ]]; then FFSMART_AUDIO_ARGS+=( "-filter:a:$out" "$filter" ); fi
+    done
+}
+
 ffsmart_resolve_audio_policy() {
     local managed=() out_channels="$FFSMART_AUDIO_MAX_CHANNELS" transcode=false
     if (( FFSMART_AUDIO_COUNT == 0 )); then
@@ -159,6 +260,7 @@ ffsmart_resolve_audio_policy() {
     if [[ -n "$FFSMART_MAX_CHANNELS" ]] && (( FFSMART_AUDIO_MAX_CHANNELS > FFSMART_MAX_CHANNELS )) && [[ "$FFSMART_AUDIO_MODE" == replace ]]; then
         FFSMART_AUDIO_ARGS+=( -ac "$FFSMART_MAX_CHANNELS" )
     fi
+    ffsmart_add_audio_filters "$transcode"
 }
 
 ffsmart_normal_video_bitrate() {

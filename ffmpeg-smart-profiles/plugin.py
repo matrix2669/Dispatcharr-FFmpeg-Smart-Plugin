@@ -86,7 +86,7 @@ ADVANCED_DEFAULT_HELP = {
     "input": "Inherit currently uses: -fflags +genpts+igndts+discardcorrupt -err_detect ignore_err. These run before -i. Replace removes only this managed group; URL, user-agent, reconnect, and hardware setup remain Smart-owned.",
     "mapping": "Inherit currently uses: -map 0:v:0 -map 0:a:0? (first video and optional first audio). Smart requires exactly one mapped video per job; Map all is valid only when the input contains one video. Mapped subtitle, data, and attachment streams are copied when compatible with MPEG-TS.",
     "video": "Inherit is calculated only when video transcodes: -b:v <target> -maxrate <rate> -bufsize <buffer> -g <rounded source fps> -bf <0 or 2> <accelerator tuning> -fps_mode cfr -r <source fps> [-tag:v hvc1]. Target is 8 Mbps at 1080p scaled by output pixels with a 2 Mbps floor; without -maxbr, maxrate is 125% and buffer 200% of target. With -maxbr, target is capped at 85%, maxrate equals the limit, and buffer is 2x the limit. Replace keeps Smart's encoder, filters, color policy, and explicit -maxbr ceiling.",
-    "audio": "Inherit is calculated per stream: no audio adds no options; compatible AAC uses -c:a copy; otherwise Smart uses -c:a aac -b:a <rate> -ac <channels> [-ch_layout ...] -af aresample=async=1. Rates are 96k mono, 192k stereo, 384k 5.1, 512k 7.1, or 64k/channel otherwise. An explicit -maxchan ceiling still follows Add or Replace.",
+    "audio": "Inherit: no audio adds no options; compatible AAC uses -c:a copy; otherwise Smart uses -c:a aac -b:a <rate> -af aresample=async=1, with -ac only when an explicit -maxchan ceiling requires downmixing. Rates are 96k mono, 192k stereo, 384k 5.1, 512k 7.1, or 64k/channel otherwise. Known six-channel 5.1(side) encoded as AAC maps surrounds one-to-one to standard 5.1 for late joins. A simple added dynaudnorm filter follows managed resampling; Replace remains operator-controlled. An explicit -maxchan ceiling still follows Add or Replace.",
     "mux": "Inherit currently uses: -avoid_negative_ts make_zero -start_at_zero -mpegts_copyts 0 -mpegts_flags +pat_pmt_at_frames+resend_headers -flush_packets 1 -max_muxing_queue_size 4096. Smart always appends -f mpegts pipe:1 after this group.",
 }
 
@@ -211,7 +211,7 @@ def codec_policy_fields(prefix, label):
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.2.2-beta.4"
+    version = "0.2.2-beta.5"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."

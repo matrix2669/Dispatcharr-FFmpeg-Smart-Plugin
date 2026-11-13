@@ -1,7 +1,7 @@
 {
   "repository": "matrix2669/ffmpeg-adaptive",
-  "tracking_ref": "bb834684eb2c513e832c43ba6dbc773d5af10cbc",
-  "commit": "bb834684eb2c513e832c43ba6dbc773d5af10cbc",
+  "tracking_ref": "fd6c400d49cff305df7c41a4149d2f00b80355bb",
+  "commit": "fd6c400d49cff305df7c41a4149d2f00b80355bb",
   "files": [
     {
       "path": "ffmpeg-smart.sh",
@@ -31,12 +31,12 @@
     {
       "path": "lib/ffsmart-policy.sh",
       "mode": "0644",
-      "sha256": "190a90ddf3ed10e8da2ff653b055b2beb4d594d7957b0056a3921901537ea448"
+      "sha256": "b1797b67a8edb231ed9561b5449bedaa6e915d7c4d4e3a5ace6435b3a7af2530"
     },
     {
       "path": "lib/ffsmart-probe.sh",
       "mode": "0644",
-      "sha256": "7a5f0f6817f2a14713b0ebc78e36f547bd248d92425f802e07d017dc7b916338"
+      "sha256": "2a6166ed89b77b49f718fc919c7eb7fcae88cbbe174401a5e707563cfab35b90"
     },
     {
       "path": "lib/ffsmart-shared-input.py",

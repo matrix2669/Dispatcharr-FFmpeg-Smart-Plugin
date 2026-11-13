@@ -1842,3 +1842,51 @@ runtime CI/review provenance without treating it as a pass for a different SHA.
 Record the verified exact dev head in durable closeout evidence; do not describe
 CI or integration as complete while pending. Revisit source pins or publication
 only for an explicit subsequent request through the established release gates.
+
+
+---
+
+# ADR-036: Prepare a versioned downstream package for the AAC late-join repair
+
+## Status and authority
+
+Accepted for local preparation, 2026-11-13. The owner clarified that canonical
+source integration alone does not deliver a fix to Dispatcharr. Prepare the
+plugin source pin/version and registry metadata, with tests. Do not publish any
+additional repository, create a remote tag, install, change live profiles or
+deploy without specific approval. This supersedes routine checkpoint-push
+instructions only for this local phase; it does not waive acceptance gates.
+
+## Decision
+
+From plugin dev `4715c24f8d9f4d52eed7554d47a117027d04c8c4`, use the official
+sync script to pin all eight runtime files to published canonical
+`fd6c400d49cff305df7c41a4149d2f00b80355bb`. Repeated synchronization must be
+idempotent; offline and remote checksum/mode verification must pass. Do not edit
+vendored behavior independently. Keep the MIT dependency notice.
+
+Reserve next unused version `0.2.2-beta.5` in VERSION, Plugin.version and
+plugin.json; the future immutable tag is `v0.2.2-beta.5`. Remote tags were checked
+before selecting it. Clarify inherited audio help without changing field IDs,
+defaults or settings migrations. The canonical change routes six side-layout
+signals one-to-one into standard back-labeled 5.1 when actually encoding AAC;
+it preserves sample rate, bitrate intent and channel count. Supported simple
+added dynaudnorm follows managed async resampling. Copy and replacement behavior
+remain explicit; existing malformed copied AAC is not repaired.
+
+Prepare a focused registry-dev root/detail change referencing the exact local
+plugin candidate, preserving history and every unrelated plugin. No moving
+branch URL is installable metadata. The candidate tag is intentionally absent
+until approval, exact source CI and package acceptance. Local archive inspection
+is not evidence that the future remote tag archive exists or matches.
+
+## Validation and delivery boundary
+
+Reuse reviewed canonical runtime evidence only for identical bytes; run the
+plugin's complete local gate, actual packaged pipe-input AAC late-join checks,
+version/source-pin/layout checks and registry tests for these candidates. Keep
+minimum Dispatcharr v0.29.0 and existing supported-version contracts unchanged;
+no live instance or new Dispatcharr version is used. Before later publication,
+recheck source/registry refs, complete exact-candidate CI, verify the immutable
+remote tag/archive and digest, then publish only the specifically approved
+channel. Managed installation and live 505 acceptance remain separate.

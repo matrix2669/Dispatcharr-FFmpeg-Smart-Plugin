@@ -6,10 +6,11 @@ The canonical runtime is [FFmpeg Adaptive](https://github.com/matrix2669/ffmpeg-
 This repository owns its Dispatcharr integration; see [Bundled runtime updates](#bundled-runtime-updates)
 for exact source pins and the synchronization workflow.
 
-**0.2.2-beta.4** recognizes supported HTTP MPEG-TS bodies without requiring a
-filename or query hint. It is intended for the development updater channel.
-Publication does not install the plugin, change profiles or choose Dispatcharr's
-global default.
+**0.2.2-beta.5 is a local candidate, not yet published.** It bundles the reviewed
+AAC late-join repair and preserves the beta.4 automatic MPEG-TS input policy.
+Encoded six-channel 5.1(side) maps surrounds one-to-one to standard 5.1; supported
+added normalization retains async resampling. Publishing or installing this
+candidate requires separate approval; live profiles and settings are unchanged.
 
 ## Installation
 
@@ -80,7 +81,7 @@ The current inherited value or formula is shown directly below every mode dropdo
 | Input | `-fflags +genpts+igndts+discardcorrupt -err_detect ignore_err` |
 | Mapping | `-map 0:v:0 -map 0:a:0?` |
 | Video transcode tuning | `-b:v <target> -maxrate <rate> -bufsize <buffer> -g <rounded source fps> -bf <0 or 2> <accelerator tuning> -fps_mode cfr -r <source fps> [-tag:v hvc1]`. The target is 8 Mbps at 1080p scaled by output pixels with a 2 Mbps floor. Without `-maxbr`, maxrate is 125% and buffer is 200% of target. With `-maxbr`, target is capped at 85%, maxrate equals the limit, and buffer is twice the limit. |
-| Audio | No options without audio; compatible AAC uses `-c:a copy`; other audio uses `-c:a aac -b:a <rate> -ac <channels> [-ch_layout ...] -af aresample=async=1`. Rates are 96k mono, 192k stereo, 384k 5.1, 512k 7.1, or 64k per channel otherwise. |
+| Audio | No options without audio; compatible AAC uses `-c:a copy`; other audio uses `-c:a aac -b:a <rate> -af aresample=async=1` with `-ac` only for explicit downmixing. Known 5.1(side) AAC encoding uses one-to-one standard 5.1 surround routing; a simple added `dynaudnorm` follows async resampling. Rates are 96k mono, 192k stereo, 384k 5.1, 512k 7.1, or 64k per channel otherwise. |
 | MPEG-TS/output | `-avoid_negative_ts make_zero -start_at_zero -mpegts_copyts 0 -mpegts_flags +pat_pmt_at_frames+resend_headers -flush_packets 1 -max_muxing_queue_size 4096`, followed by Smart-owned `-f mpegts pipe:1`. |
 
 Each non-mapping group offers **Use FFmpeg Smart default**, **Add to default**, and **Replace default**. Replace may be intentionally blank. Fields accept normal shell-style quoting; the plugin parses with `shlex` without evaluating the text and quotes every wrapper argument independently.
@@ -178,11 +179,15 @@ Because benchmark-time starts now take the degraded stream-copy path, Dispatchar
 
 ## Bundled runtime updates
 
+The local beta.5 candidate pins canonical
+[`fd6c400d49cff305df7c41a4149d2f00b80355bb`](https://github.com/matrix2669/ffmpeg-adaptive/commit/fd6c400d49cff305df7c41a4149d2f00b80355bb).
+No installed plugin changes until a new package is published and updated.
+
 [matrix2669/ffmpeg-adaptive](https://github.com/matrix2669/ffmpeg-adaptive) is the source of truth for the modular `ffmpeg-smart.sh` runtime. The plugin records one exact source commit plus the path, SHA-256 checksum, and installed mode of the entrypoint and every shell/Python module in `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json`. CI verifies that the complete bundle is byte-for-byte identical to that immutable source.
 
 The stable plugin `v0.2.1` retains canonical source
 [`913a958fd5f9edc231c49a70539a09f611fdcc5a`](https://github.com/matrix2669/ffmpeg-adaptive/commit/913a958fd5f9edc231c49a70539a09f611fdcc5a).
-The development plugin `v0.2.2-beta.4` bundles
+The currently published development plugin `v0.2.2-beta.4` bundles
 [`bb834684eb2c513e832c43ba6dbc773d5af10cbc`](https://github.com/matrix2669/ffmpeg-adaptive/commit/bb834684eb2c513e832c43ba6dbc773d5af10cbc).
 Each published archive keeps its own immutable metadata; moving a canonical
 branch does not change either bundle or an installed plugin.
