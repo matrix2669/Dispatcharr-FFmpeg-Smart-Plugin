@@ -182,15 +182,15 @@ The local beta.6 candidate stages exact local canonical
 `c7e53605242e611961ad4c3578d5c2c6d26234cf` for offline tests. Its source pin is not remotely verified until publication is approved;
 normal canonical-first sync/check and immutable package gates still apply.
 
-The local beta.5 candidate pins canonical
+The published beta.5 package pins canonical
 [`fd6c400d49cff305df7c41a4149d2f00b80355bb`](https://github.com/matrix2669/ffmpeg-adaptive/commit/fd6c400d49cff305df7c41a4149d2f00b80355bb).
-No installed plugin changes until a new package is published and updated.
+This local beta.6 preparation does not change the installed plugin.
 
 [matrix2669/ffmpeg-adaptive](https://github.com/matrix2669/ffmpeg-adaptive) is the source of truth for the modular `ffmpeg-smart.sh` runtime. The plugin records one exact source commit plus the path, SHA-256 checksum, and installed mode of the entrypoint and every shell/Python module in `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json`. CI verifies that the complete bundle is byte-for-byte identical to that immutable source.
 
 The stable plugin `v0.2.1` retains canonical source
 [`913a958fd5f9edc231c49a70539a09f611fdcc5a`](https://github.com/matrix2669/ffmpeg-adaptive/commit/913a958fd5f9edc231c49a70539a09f611fdcc5a).
-The currently published development plugin `v0.2.2-beta.4` bundles
+The previous development plugin `v0.2.2-beta.4` bundles
 [`bb834684eb2c513e832c43ba6dbc773d5af10cbc`](https://github.com/matrix2669/ffmpeg-adaptive/commit/bb834684eb2c513e832c43ba6dbc773d5af10cbc).
 Each published archive keeps its own immutable metadata; moving a canonical
 branch does not change either bundle or an installed plugin.
