@@ -83,11 +83,11 @@ MAPPING_MODE_OPTIONS = [
     {"value": "replace", "label": "Replace default mappings"},
 ]
 ADVANCED_DEFAULT_HELP = {
-    "input": "Inherit currently uses: -fflags +genpts+igndts+discardcorrupt -err_detect ignore_err. These run before -i. Replace removes only this managed group; URL, user-agent, reconnect, and hardware setup remain Smart-owned.",
-    "mapping": "Inherit currently uses: -map 0:v:0 -map 0:a:0? (first video and optional first audio). Smart requires exactly one mapped video per job; Map all is valid only when the input contains one video. Mapped subtitle, data, and attachment streams are copied when compatible with MPEG-TS.",
-    "video": "Inherit is calculated only when video transcodes: -b:v <target> -maxrate <rate> -bufsize <buffer> -g <rounded source fps> -bf <0 or 2> <accelerator tuning> -fps_mode cfr -r <source fps> [-tag:v hvc1]. Target is 8 Mbps at 1080p scaled by output pixels with a 2 Mbps floor; without -maxbr, maxrate is 125% and buffer 200% of target. With -maxbr, target is capped at 85%, maxrate equals the limit, and buffer is 2x the limit. Replace keeps Smart's encoder, filters, color policy, and explicit -maxbr ceiling.",
-    "audio": "Inherit: no audio adds no options; compatible AAC uses -c:a copy; otherwise Smart uses -c:a aac -b:a <rate> -af aresample=async=1, with -ac only when an explicit -maxchan ceiling requires downmixing. Rates are 96k mono, 192k stereo, 384k 5.1, 512k 7.1, or 64k/channel otherwise. Known six-channel 5.1(side) encoded as AAC maps surrounds one-to-one to standard 5.1 for late joins. A simple added dynaudnorm filter follows managed resampling; Replace remains operator-controlled. An explicit -maxchan ceiling still follows Add or Replace.",
-    "mux": "Inherit currently uses: -avoid_negative_ts make_zero -start_at_zero -mpegts_copyts 0 -mpegts_flags +pat_pmt_at_frames+resend_headers -flush_packets 1 -max_muxing_queue_size 4096. Smart always appends -f mpegts pipe:1 after this group.",
+    "input": "Inherit currently uses: -fflags +genpts+igndts+discardcorrupt -err_detect ignore_err. These run before -i. Replace removes only this managed group; URL, user-agent, reconnect, and hardware setup remain Smart-owned. Inherit ignores saved custom text; it remains available for a later Add or Replace selection.",
+    "mapping": "Inherit currently uses: -map 0:v:0 -map 0:a:0? (first video and optional first audio). Smart requires exactly one mapped video per job; Map all is valid only when the input contains one video. Mapped subtitle, data, and attachment streams are copied when compatible with MPEG-TS. Inherit ignores saved custom text; it remains available for a later Add or Replace selection.",
+    "video": "Inherit is calculated only when video transcodes: -b:v <target> -maxrate <rate> -bufsize <buffer> -g <rounded source fps> -bf <0 or 2> <accelerator tuning> -fps_mode cfr -r <source fps> [-tag:v hvc1]. Target is 8 Mbps at 1080p scaled by output pixels with a 2 Mbps floor; without -maxbr, maxrate is 125% and buffer 200% of target. With -maxbr, target is capped at 85%, maxrate equals the limit, and buffer is 2x the limit. Replace keeps Smart's encoder, filters, color policy, and explicit -maxbr ceiling. Inherit ignores saved custom text; it remains available for a later Add or Replace selection.",
+    "audio": "Inherit: no audio adds no options; compatible AAC uses -c:a copy; otherwise Smart uses -c:a aac -b:a <rate> -af aresample=async=1, with -ac only when an explicit -maxchan ceiling requires downmixing. Rates are 96k mono, 192k stereo, 384k 5.1, 512k 7.1, or 64k/channel otherwise. Known six-channel 5.1(side) encoded as AAC maps surrounds one-to-one to standard 5.1 for late joins. Supported simple aresample/dynaudnorm/volume/anull chains compose with the correction, preserving explicit resampling without duplication. Unsafe eligible graphs require an actionable correction or operator-owned Replace mode. An explicit -maxchan ceiling still follows Add or Replace. Inherit ignores saved custom text; it remains available for a later Add or Replace selection.",
+    "mux": "Inherit currently uses: -avoid_negative_ts make_zero -start_at_zero -mpegts_copyts 0 -mpegts_flags +pat_pmt_at_frames+resend_headers -flush_packets 1 -max_muxing_queue_size 4096. Smart always appends -f mpegts pipe:1 after this group. Inherit ignores saved custom text; it remains available for a later Add or Replace selection.",
 }
 
 
@@ -130,7 +130,7 @@ def advanced_ffmpeg_fields(prefix, label):
             "label": f"{label}: input options",
             "type": "string",
             "default": "",
-            "help_text": "For example: -fflags +discardcorrupt+genpts+nobuffer. Text with Inherit selected is treated as Add. Adaptive -analyzeduration and -probesize values are FFmpeg Smart-owned.",
+            "help_text": "For example: -fflags +discardcorrupt+genpts+nobuffer. This text is ignored while Inherit is selected and remains saved if you later choose Add or Replace. Adaptive -analyzeduration and -probesize values are FFmpeg Smart-owned.",
         },
         {
             "id": f"{prefix}_ffmpeg_mapping_mode",
@@ -211,7 +211,7 @@ def codec_policy_fields(prefix, label):
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.2.2-beta.5"
+    version = "0.2.2-beta.6"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."
@@ -683,13 +683,14 @@ class Plugin:
                 f"{prefix}_{mode_suffix}",
                 f"{label} {scope}",
             )
-            tokens = cls._advanced_tokens(
-                str(settings.get(f"{prefix}_{options_suffix}", "") or ""),
-                f"{label} {scope} options",
-            )
-            cls._validate_advanced_tokens(scope, tokens, f"{label} {scope} options")
-            if tokens and mode == "inherit":
-                mode = "add"
+            if mode == "inherit":
+                tokens = []
+            else:
+                tokens = cls._advanced_tokens(
+                    str(settings.get(f"{prefix}_{options_suffix}", "") or ""),
+                    f"{label} {scope} options",
+                )
+                cls._validate_advanced_tokens(scope, tokens, f"{label} {scope} options")
             if mode != "inherit":
                 scoped_parts.append(f"{wrapper_prefix}-mode {mode}")
             scoped_parts.extend(
@@ -703,12 +704,13 @@ class Plugin:
             f"{label} mapping",
             mapping=True,
         )
-        mapping_specs = cls._mapping_specs(
-            str(settings.get(f"{prefix}_ffmpeg_mapping", "") or ""),
-            f"{label} custom mapping",
-        )
-        if mapping_specs and mapping_mode == "inherit":
-            mapping_mode = "add"
+        if mapping_mode == "inherit":
+            mapping_specs = []
+        else:
+            mapping_specs = cls._mapping_specs(
+                str(settings.get(f"{prefix}_ffmpeg_mapping", "") or ""),
+                f"{label} custom mapping",
+            )
         if mapping_mode == "all" and mapping_specs:
             raise ValueError(f"{label} all-stream mapping cannot include custom mappings")
         if mapping_mode == "replace" and not mapping_specs:
@@ -776,6 +778,9 @@ class Plugin:
         managed_options = {"-analyzeduration", "-probesize"}
         removed = []
         for prefix in POLICY_DEFAULTS:
+            mode_key = f"{prefix}_ffmpeg_input_mode"
+            if str(normalized.get(mode_key, "inherit") or "inherit") == "inherit":
+                continue
             options_key = f"{prefix}_ffmpeg_input_options"
             options = str(normalized.get(options_key, "") or "")
             try:

@@ -13,6 +13,7 @@ This ledger records why every current branch exists and preserves the context ne
 
 | Branch | Type | Status | Base | Target | Purpose |
 |---|---|---|---|---|---|
+| `fix/audio-filter-composition` | fix | local beta.6 preparation | `dev@57bef76` | `dev` after approval | Correct composed Add audio chains via exact canonical source pin; no publication or live update. |
 | `fix/aac-side-late-join` | fix | local beta.5 preparation | `dev@4715c24` | `dev` after approval | Pin reviewed canonical AAC correction and prepare a versioned self-contained package; no publication or installation. |
 | `main` | long-lived | active | initial project history | stable tags | Production-ready plugin source and stable tags. |
 | `dev` | long-lived | active | `main` | `main` | Integrate and validate the next plugin version and canonical wrapper updates. |

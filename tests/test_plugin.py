@@ -176,6 +176,7 @@ class ProfileDefinitionTests(unittest.TestCase):
                     "-metadata 'service_name=Mobile feed' -muxdelay 0 "
                     "'; touch /tmp/ffmpeg-smart-must-not-run'"
                 ),
+                "output_1_ffmpeg_options_mode": "add",
                 "output_2_enabled": False,
                 "output_3_enabled": False,
             }
@@ -203,7 +204,166 @@ class ProfileDefinitionTests(unittest.TestCase):
     def test_scoped_ffmpeg_options_reject_invalid_quoting(self):
         plugin = Plugin()
         with self.assertRaisesRegex(ValueError, "mux options contains invalid quoting"):
-            plugin._stream_definitions({"stream_1_ffmpeg_options": "'unterminated"})
+            plugin._stream_definitions({"stream_1_ffmpeg_options_mode": "add", "stream_1_ffmpeg_options": "'unterminated"})
+
+    def test_inherit_ignores_populated_advanced_text_for_stream_and_output_profiles(self):
+        plugin = Plugin()
+        for generator, prefix in (
+            (plugin._stream_definitions, "stream_1"),
+            (plugin._output_definitions, "output_1"),
+        ):
+            with self.subTest(prefix=prefix):
+                settings = {
+                    f"{prefix}_ffmpeg_input_options": "'invalid quote",
+                    f"{prefix}_ffmpeg_mapping": "-map",
+                    f"{prefix}_ffmpeg_video_options": "-c:v copy",
+                    f"{prefix}_ffmpeg_audio_options": "-c:a ac3",
+                    f"{prefix}_ffmpeg_options": "-f matroska",
+                }
+                profile = generator(settings)[0]
+                tokens = shlex.split(profile["parameters"])
+                for forwarded in (
+                    "-ffmpeg-input-mode", "-ffmpeg-input-option",
+                    "-ffmpeg-map-mode", "-ffmpeg-map",
+                    "-ffmpeg-video-mode", "-ffmpeg-video-option",
+                    "-ffmpeg-audio-mode", "-ffmpeg-audio-option",
+                    "-ffmpeg-mux-mode", "-ffmpeg-mux-option",
+                ):
+                    self.assertNotIn(forwarded, tokens)
+
+    def test_each_scoped_mode_routes_populated_text_for_stream_and_output_profiles(self):
+        plugin = Plugin()
+        groups = (
+            ("input", "ffmpeg_input_mode", "ffmpeg_input_options", "-ffmpeg-input", "-fflags +discardcorrupt"),
+            ("video", "ffmpeg_video_mode", "ffmpeg_video_options", "-ffmpeg-video", "-g 60"),
+            ("audio", "ffmpeg_audio_mode", "ffmpeg_audio_options", "-ffmpeg-audio", "-c:a ac3"),
+            ("mux", "ffmpeg_options_mode", "ffmpeg_options", "-ffmpeg-mux", "-muxdelay 0"),
+        )
+        generators = (
+            (plugin._stream_definitions, "stream_1"),
+            (plugin._output_definitions, "output_1"),
+        )
+        for generator, prefix in generators:
+            for scope, mode_suffix, options_suffix, wrapper_prefix, options_text in groups:
+                for mode in ("inherit", "add", "replace"):
+                    with self.subTest(prefix=prefix, scope=scope, mode=mode):
+                        settings = {
+                            f"{prefix}_{mode_suffix}": mode,
+                            f"{prefix}_{options_suffix}": options_text,
+                        }
+                        profile = generator(settings)[0]
+                        tokens = shlex.split(profile["parameters"])
+                        mode_token = f"{wrapper_prefix}-mode"
+                        option_token = f"{wrapper_prefix}-option"
+                        forwarded_options = [
+                            tokens[index + 1]
+                            for index, token in enumerate(tokens[:-1])
+                            if token == option_token
+                        ]
+                        if mode == "inherit":
+                            self.assertNotIn(mode_token, tokens)
+                            self.assertEqual(forwarded_options, [])
+                        else:
+                            self.assertEqual(tokens[tokens.index(mode_token) + 1], mode)
+                            self.assertEqual(forwarded_options, shlex.split(options_text))
+                        self.assertEqual(settings[f"{prefix}_{options_suffix}"], options_text)
+
+    def test_malformed_scoped_text_is_ignored_only_for_inherit(self):
+        plugin = Plugin()
+        groups = (
+            ("ffmpeg_input_mode", "ffmpeg_input_options"),
+            ("ffmpeg_video_mode", "ffmpeg_video_options"),
+            ("ffmpeg_audio_mode", "ffmpeg_audio_options"),
+            ("ffmpeg_options_mode", "ffmpeg_options"),
+        )
+        for generator, prefix in (
+            (plugin._stream_definitions, "stream_1"),
+            (plugin._output_definitions, "output_1"),
+        ):
+            for mode_suffix, options_suffix in groups:
+                for mode in ("inherit", "add", "replace"):
+                    with self.subTest(prefix=prefix, mode_suffix=mode_suffix, mode=mode):
+                        settings = {
+                            f"{prefix}_{mode_suffix}": mode,
+                            f"{prefix}_{options_suffix}": "'unterminated",
+                        }
+                        if mode == "inherit":
+                            self.assertTrue(generator(settings))
+                        else:
+                            with self.assertRaisesRegex(ValueError, "invalid quoting"):
+                                generator(settings)
+
+    def test_mapping_modes_respect_inherit_add_replace_and_all_with_populated_text(self):
+        plugin = Plugin()
+        for generator, prefix in (
+            (plugin._stream_definitions, "stream_1"),
+            (plugin._output_definitions, "output_1"),
+        ):
+            for mode, mapping, expected in (
+                ("inherit", "-map", []),
+                ("add", "-map 0:a:0?", ["0:a:0?"]),
+                ("replace", "-map 0:v:0 -map 0:a:0?", ["0:v:0", "0:a:0?"]),
+            ):
+                with self.subTest(prefix=prefix, mode=mode):
+                    settings = {
+                        f"{prefix}_ffmpeg_mapping_mode": mode,
+                        f"{prefix}_ffmpeg_mapping": mapping,
+                    }
+                    tokens = shlex.split(generator(settings)[0]["parameters"])
+                    actual = [
+                        tokens[index + 1]
+                        for index, token in enumerate(tokens[:-1])
+                        if token == "-ffmpeg-map"
+                    ]
+                    self.assertEqual(actual, expected)
+                    if mode == "inherit":
+                        self.assertNotIn("-ffmpeg-map-mode", tokens)
+                    else:
+                        self.assertEqual(
+                            tokens[tokens.index("-ffmpeg-map-mode") + 1], mode
+                        )
+            with self.subTest(prefix=prefix, mode="all"):
+                with self.assertRaisesRegex(ValueError, "all-stream mapping"):
+                    generator(
+                        {
+                            f"{prefix}_ffmpeg_mapping_mode": "all",
+                            f"{prefix}_ffmpeg_mapping": "-map 0:a:0?",
+                        }
+                    )
+
+    def test_selected_advanced_modes_forward_saved_text_and_inherit_is_default(self):
+        plugin = Plugin()
+        stream = plugin._stream_definitions(
+            {
+                "stream_1_ffmpeg_input_mode": "add",
+                "stream_1_ffmpeg_input_options": "-fflags +discardcorrupt",
+                "stream_1_ffmpeg_mapping_mode": "add",
+                "stream_1_ffmpeg_mapping": "-map 0:a:0?",
+                "stream_1_ffmpeg_video_mode": "replace",
+                "stream_1_ffmpeg_video_options": "-g 60",
+                "stream_1_ffmpeg_audio_mode": "add",
+                "stream_1_ffmpeg_audio_options": "-c:a ac3",
+                "stream_1_ffmpeg_options_mode": "replace",
+                "stream_1_ffmpeg_options": "-muxdelay 0",
+            }
+        )[0]
+        tokens = shlex.split(stream["parameters"])
+        self.assertEqual(tokens[tokens.index("-ffmpeg-input-mode") + 1], "add")
+        self.assertIn("+discardcorrupt", tokens)
+        self.assertEqual(tokens[tokens.index("-ffmpeg-map-mode") + 1], "add")
+        self.assertIn("0:a:0?", tokens)
+        self.assertEqual(tokens[tokens.index("-ffmpeg-video-mode") + 1], "replace")
+        self.assertIn("-g", tokens)
+        self.assertEqual(tokens[tokens.index("-ffmpeg-audio-mode") + 1], "add")
+        self.assertIn("ac3", tokens)
+        self.assertEqual(tokens[tokens.index("-ffmpeg-mux-mode") + 1], "replace")
+        self.assertIn("-muxdelay", tokens)
+
+        # Missing mode fields continue to mean Inherit and do not promote text.
+        output = plugin._output_definitions(
+            {"output_1_ffmpeg_options": "-muxdelay 0"}
+        )[0]
+        self.assertNotIn("-ffmpeg-mux-option", shlex.split(output["parameters"]))
 
     def test_profile_options_cannot_invoke_cache_maintenance_modes(self):
         plugin = Plugin()
@@ -274,13 +434,13 @@ class ProfileDefinitionTests(unittest.TestCase):
     def test_scoped_options_reject_smart_owned_structure(self):
         plugin = Plugin()
         cases = (
-            {"stream_1_ffmpeg_input_options": "-i other.ts"},
-            {"stream_1_ffmpeg_input_options": "-analyzeduration 1000000"},
-            {"stream_1_ffmpeg_input_options": "-probesize 1000000"},
-            {"stream_1_ffmpeg_video_options": "-c:v copy"},
-            {"stream_1_ffmpeg_video_options": "-vf scale=1280:720"},
-            {"stream_1_ffmpeg_options": "-f matroska"},
-            {"stream_1_ffmpeg_options": "pipe:1"},
+            {"stream_1_ffmpeg_input_mode": "add", "stream_1_ffmpeg_input_options": "-i other.ts"},
+            {"stream_1_ffmpeg_input_mode": "add", "stream_1_ffmpeg_input_options": "-analyzeduration 1000000"},
+            {"stream_1_ffmpeg_input_mode": "add", "stream_1_ffmpeg_input_options": "-probesize 1000000"},
+            {"stream_1_ffmpeg_video_mode": "add", "stream_1_ffmpeg_video_options": "-c:v copy"},
+            {"stream_1_ffmpeg_video_mode": "add", "stream_1_ffmpeg_video_options": "-vf scale=1280:720"},
+            {"stream_1_ffmpeg_options_mode": "add", "stream_1_ffmpeg_options": "-f matroska"},
+            {"stream_1_ffmpeg_options_mode": "add", "stream_1_ffmpeg_options": "pipe:1"},
         )
         for settings in cases:
             with self.subTest(settings=settings):
@@ -402,12 +562,26 @@ class ProfileDefinitionTests(unittest.TestCase):
         )
 
         malformed, _ = plugin._normalize_adaptive_probe_settings(
-            {"stream_1_ffmpeg_input_options": "-analyzeduration -fflags +genpts"}
+            {
+                "stream_1_ffmpeg_input_mode": "add",
+                "stream_1_ffmpeg_input_options": "-analyzeduration -fflags +genpts",
+            }
         )
         self.assertEqual(
             malformed["stream_1_ffmpeg_input_options"],
             "-fflags +genpts",
         )
+
+        inherited, removed = plugin._normalize_adaptive_probe_settings(
+            {
+                "stream_1_ffmpeg_input_options": "-analyzeduration 1000000 'unfinished",
+            }
+        )
+        self.assertEqual(
+            inherited["stream_1_ffmpeg_input_options"],
+            "-analyzeduration 1000000 'unfinished",
+        )
+        self.assertEqual(removed, [])
 
     def test_install_persists_normalized_policy_controls(self):
         plugin = Plugin()
@@ -424,10 +598,13 @@ class ProfileDefinitionTests(unittest.TestCase):
                 {},
                 {
                     "settings": {
+                        "stream_1_sdr": True,
+                        "stream_1_ffmpeg_input_options": "-analyzeduration 900000 'unfinished",
                         "output_2_options": "-maxres 1080 -10bit -hdr -sdr -deinterlace",
                         "output_2_ffmpeg_input_options": (
                             "-analyzeduration 1000000 -probesize 1000000"
                         ),
+                        "output_2_ffmpeg_input_mode": "add",
                     }
                 },
             )
@@ -439,6 +616,10 @@ class ProfileDefinitionTests(unittest.TestCase):
         self.assertTrue(saved["output_2_sdr"])
         self.assertTrue(saved["output_2_deint"])
         self.assertEqual(saved["output_2_ffmpeg_input_options"], "")
+        self.assertEqual(
+            saved["stream_1_ffmpeg_input_options"],
+            "-analyzeduration 900000 'unfinished",
+        )
         self.assertEqual(
             result["normalized_probe_options"],
             ["output_2:-analyzeduration", "output_2:-probesize"],
@@ -1519,11 +1700,11 @@ class ReleaseMetadataTests(unittest.TestCase):
         self.assertEqual(metadata["repository"], "matrix2669/ffmpeg-adaptive")
         self.assertEqual(
             metadata["tracking_ref"],
-            "fd6c400d49cff305df7c41a4149d2f00b80355bb",
+            "c7e53605242e611961ad4c3578d5c2c6d26234cf",
         )
         self.assertEqual(
             metadata["commit"],
-            "fd6c400d49cff305df7c41a4149d2f00b80355bb",
+            "c7e53605242e611961ad4c3578d5c2c6d26234cf",
         )
         self.assertRegex(metadata["commit"], r"^[0-9a-f]{40}$")
         self.assertEqual({entry["path"] for entry in metadata["files"]}, expected_paths)

@@ -1,14 +1,16 @@
 # AGENT.md
 
-## Local beta.5 preparation boundary, 2026-11-13
+## Local beta.6 composition repair boundary, 2026-11-13
 
-The owner requests local packaging and development-registry preparation for the
-reviewed AAC late-join repair. Pin published canonical `fd6c400` and prepare the
-next unused beta version. Preserve field IDs/defaults, saved settings, live
-profiles and installed data. No push, dev/main integration, tag, registry
-publication, installation or deployment is authorized in this phase; this
-explicit local-only direction overrides routine checkpoint-push guidance.
-Revisit this boundary only on specific publication approval.
+The owner authorizes local canonical Add-to-Defaults correction plus plugin and
+registry preparation. Beta.5 is published and reported installed; its simple
+validator rejected the user's safe resample-plus-normalization chain. Reserve
+next unused beta.6 and stage exact local canonical Git objects for offline tests
+if the new commit is not yet published; this is not independent vendor development
+or a claim of remote source verification. Publication must later verify canonical
+source first through the normal sync/check workflow. No push, dev/main integration,
+tag, channel publication, installation, live profile changes or deployment is
+authorized now. This explicit local direction supersedes routine checkpoint push.
 
 ## Workspace Standards Reconciliation Gate
 

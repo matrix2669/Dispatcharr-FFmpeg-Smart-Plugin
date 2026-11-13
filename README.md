@@ -6,11 +6,10 @@ The canonical runtime is [FFmpeg Adaptive](https://github.com/matrix2669/ffmpeg-
 This repository owns its Dispatcharr integration; see [Bundled runtime updates](#bundled-runtime-updates)
 for exact source pins and the synchronization workflow.
 
-**0.2.2-beta.5 is a local candidate, not yet published.** It bundles the reviewed
-AAC late-join repair and preserves the beta.4 automatic MPEG-TS input policy.
-Encoded six-channel 5.1(side) maps surrounds one-to-one to standard 5.1; supported
-added normalization retains async resampling. Publishing or installing this
-candidate requires separate approval; live profiles and settings are unchanged.
+**0.2.2-beta.6 is a local candidate, not yet published.** It corrects composed
+Add audio chains and makes the selected defaults mode ignore dormant options
+text without deleting it. Published beta.5 remains unchanged. No installed
+plugin, settings or managed profile is changed by this source preparation.
 
 ## Installation
 
@@ -72,19 +71,19 @@ The advanced controls retain FFmpeg Smart's hardware benefits while exposing opt
 - **Stream mapping** normally selects the first video and optional first audio. Map all input streams is available when the input has one video; custom Replace mappings must explicitly select exactly one video and may add audio, subtitle, data, or attachment streams. Mapped subtitle, data, and attachment streams are copied rather than automatically encoded, but their source codec must still be compatible with MPEG-TS.
 - **Video tuning defaults** apply only when Smart chooses to transcode video and can tune GOP, key frames, rate control, or encoder-specific behavior without replacing Smart's selected encoder or hardware filters.
 - **Audio defaults** apply on both video-copy and video-transcode paths and can replace Smart's AAC/copy decision with a deliberate codec choice.
-- **MPEG-TS/output defaults** apply on both paths before the fixed `-f mpegts pipe:1` contract. The existing beta.3 Additional FFmpeg options field is retained here, and a saved value with Inherit selected behaves as Add.
+- **MPEG-TS/output defaults** apply on both paths before the fixed `-f mpegts pipe:1` contract. The existing beta.3 Additional FFmpeg options field is retained here; Inherit ignores saved custom text.
 
-The current inherited value or formula is shown directly below every mode dropdown. Dispatcharr's plugin form cannot change one field when a different dropdown changes, so the adjacent options field intentionally stays blank and contains only user-owned Add/Replace text. This also prevents selecting Inherit from overwriting a saved custom value.
+The current inherited value or formula is shown directly below every mode dropdown. Dispatcharr's plugin form cannot change one field when a different dropdown changes, so the adjacent options field intentionally stays blank and contains only user-owned Add/Replace text. Selecting Inherit ignores that saved text before parsing or validation and preserves it for later Add/Replace use; it never silently selects Add.
 
 | Scope | Inherited default |
 |---|---|
 | Input | `-fflags +genpts+igndts+discardcorrupt -err_detect ignore_err` |
 | Mapping | `-map 0:v:0 -map 0:a:0?` |
 | Video transcode tuning | `-b:v <target> -maxrate <rate> -bufsize <buffer> -g <rounded source fps> -bf <0 or 2> <accelerator tuning> -fps_mode cfr -r <source fps> [-tag:v hvc1]`. The target is 8 Mbps at 1080p scaled by output pixels with a 2 Mbps floor. Without `-maxbr`, maxrate is 125% and buffer is 200% of target. With `-maxbr`, target is capped at 85%, maxrate equals the limit, and buffer is twice the limit. |
-| Audio | No options without audio; compatible AAC uses `-c:a copy`; other audio uses `-c:a aac -b:a <rate> -af aresample=async=1` with `-ac` only for explicit downmixing. Known 5.1(side) AAC encoding uses one-to-one standard 5.1 surround routing; a simple added `dynaudnorm` follows async resampling. Rates are 96k mono, 192k stereo, 384k 5.1, 512k 7.1, or 64k per channel otherwise. |
+| Audio | No options without audio; compatible AAC uses `-c:a copy`; other audio uses `-c:a aac -b:a <rate> -af aresample=async=1` with `-ac` only for explicit downmixing. Known 5.1(side) AAC encoding uses one-to-one standard 5.1 surround routing; supported added chains retain async resampling, with an explicitly selected resampler preserved without duplication. Rates are 96k mono, 192k stereo, 384k 5.1, 512k 7.1, or 64k per channel otherwise. |
 | MPEG-TS/output | `-avoid_negative_ts make_zero -start_at_zero -mpegts_copyts 0 -mpegts_flags +pat_pmt_at_frames+resend_headers -flush_packets 1 -max_muxing_queue_size 4096`, followed by Smart-owned `-f mpegts pipe:1`. |
 
-Each non-mapping group offers **Use FFmpeg Smart default**, **Add to default**, and **Replace default**. Replace may be intentionally blank. Fields accept normal shell-style quoting; the plugin parses with `shlex` without evaluating the text and quotes every wrapper argument independently.
+Each non-mapping group offers **Use FFmpeg Smart default**, **Add to default**, and **Replace default**. Inherit ignores the adjacent text, Add appends selected options, and Replace may be intentionally blank. Mapping Inherit likewise ignores dormant selectors; All retains its existing custom-text validation. Fields accept normal shell-style quoting; the plugin parses with `shlex` without evaluating the text and quotes every wrapper argument independently.
 
 For the Discord-style example, choose Replace for Input and enter `-fflags +discardcorrupt+genpts+nobuffer`; choose Map all input streams; choose Add for Video and enter `-g 60 -keyint_min 60 -sc_threshold 0 -force_key_frames 'expr:gte(t,n_forced*2)'`; choose Replace for Audio and enter `-c:a ac3`; then choose Replace for MPEG-TS/output and enter `-mpegts_flags +pat_pmt_at_frames+resend_headers+initial_discontinuity`.
 
@@ -178,6 +177,10 @@ Because benchmark-time starts now take the degraded stream-copy path, Dispatchar
 - `/dev/dri/renderD*` mapped into the Dispatcharr container for QSV/VAAPI
 
 ## Bundled runtime updates
+
+The local beta.6 candidate stages exact local canonical
+`c7e53605242e611961ad4c3578d5c2c6d26234cf` for offline tests. Its source pin is not remotely verified until publication is approved;
+normal canonical-first sync/check and immutable package gates still apply.
 
 The local beta.5 candidate pins canonical
 [`fd6c400d49cff305df7c41a4149d2f00b80355bb`](https://github.com/matrix2669/ffmpeg-adaptive/commit/fd6c400d49cff305df7c41a4149d2f00b80355bb).

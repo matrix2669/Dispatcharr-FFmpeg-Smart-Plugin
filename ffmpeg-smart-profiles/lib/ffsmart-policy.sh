@@ -180,16 +180,67 @@ ffsmart_mapped_audio() {
     done
 }
 
+# Accept only simple, unquoted chains with numeric arguments. This deliberately
+# rejects FFmpeg escaping/quoting rather than splitting a graph incorrectly.
+ffsmart_audio_chain_supported() {
+    local rest="$1" part args item key value
+    FFSMART_CHAIN_HAS_RESAMPLE=false
+    [[ -n "$rest" && "$rest" != *"'"* && "$rest" != *'"'* && "$rest" != *'\\'* ]] || return 1
+    while :; do
+        part="${rest%%,*}"
+        [[ -n "$part" ]] || return 1
+        case "$part" in
+            anull) ;;
+            dynaudnorm|dynaudnorm=*)
+                if [[ "$part" == *=* ]]; then
+                    args="${part#*=}"
+                    [[ "$args" =~ ^[a-zA-Z0-9_.:=+-]+$ && "$args" != *::* && "$args" != :* && "$args" != *: ]] || return 1
+                    while :; do
+                        item="${args%%:*}"
+                        [[ "$item" =~ ^[a-zA-Z_][a-zA-Z0-9_]*=[0-9.+-]+$ ]] || return 1
+                        [[ "$args" == *:* ]] || break
+                        args="${args#*:}"
+                    done
+                fi ;;
+            volume=*) [[ "${part#*=}" =~ ^[0-9.+-]+(dB)?$ ]] || return 1 ;;
+            aresample|aresample=*)
+                FFSMART_CHAIN_HAS_RESAMPLE=true
+                if [[ "$part" == *=* ]]; then
+                    args="${part#*=}"
+                    [[ -n "$args" ]] || return 1
+                    while :; do
+                        item="${args%%:*}"
+                        if [[ "$item" =~ ^[0-9]+$ ]]; then :
+                        else
+                            [[ "$item" == *=* ]] || return 1
+                            key="${item%%=*}"; value="${item#*=}"
+                            case "$key" in
+                                async|osr|out_sample_rate|isr|in_sample_rate|first_pts|min_comp|min_hard_comp|comp_duration|max_soft_comp|resampler|filter_size|phase_shift|linear_interp|cutoff|precision|cheby|dither_scale)
+                                    [[ "$value" =~ ^[0-9.+-]+$ ]] || return 1 ;;
+                                *) return 1 ;;
+                            esac
+                        fi
+                        [[ "$args" == *:* ]] || break
+                        args="${args#*:}"
+                    done
+                fi ;;
+            *) return 1 ;;
+        esac
+        [[ "$rest" == *,* ]] || break
+        rest="${rest#*,}"
+    done
+}
+
 ffsmart_add_audio_filters() {
     local managed_transcode="$1"
     # Replacement mode leaves all codec and filter choices with the operator.
     [[ "$FFSMART_AUDIO_MODE" != replace ]] || return 0
     ffsmart_mapped_audio || { ffsmart_log "Audio layout correction skipped: mapping is not resolvable"; return 0; }
-    local out input idx option value codec channels filter matched add_pan composed
+    local out input idx option value codec channels filter matched add_pan composed unsafe supported
     local pan='pan=5.1|FL=FL|FR=FR|FC=FC|LFE=LFE|BL=SL|BR=SR'
     for ((out=0; out<${#FFSMART_MAPPED_AUDIO[@]}; out++)); do
         input="${FFSMART_MAPPED_AUDIO[$out]}"
-        codec=''; channels="${FFSMART_AUDIO_CHANNELS[$input]}"; filter=''
+        codec=''; channels="${FFSMART_AUDIO_CHANNELS[$input]}"; filter=''; unsafe=false
         for ((idx=0; idx<${#FFSMART_AUDIO_ARGS[@]}; idx++)); do
             option="${FFSMART_AUDIO_ARGS[$idx]}"
             case "$option" in
@@ -198,7 +249,7 @@ ffsmart_add_audio_filters() {
                     value="${FFSMART_AUDIO_ARGS[$idx]}"; matched=false
                     case "$option" in
                         -c:a:*|-codec:a:*|-ac:a:*|-filter:a:*)
-                            [[ "${option##*:}" =~ ^(0|[1-9][0-9]*)$ ]] || return 0 ;;
+                            [[ "${option##*:}" =~ ^(0|[1-9][0-9]*)$ ]] || { unsafe=true; continue; } ;;
                     esac
                     case "$option" in
                         -c|-codec|-c:a|-codec:a|-acodec|-ac|-ac:a|-af|-filter:a) matched=true ;;
@@ -210,22 +261,22 @@ ffsmart_add_audio_filters() {
                         -ac*) channels="$value" ;;
                         -af|-filter:a*) filter="$value" ;;
                     esac ;;
-                -filter_script*|-filter_complex*|-lavfi|-channel_layout*|-ch_layout*|-c:*|-codec:*|-ac:*|-filter:*|-af:*) return 0 ;;
+                -filter_script*|-filter_complex*|-lavfi|-channel_layout*|-ch_layout*|-c:*|-codec:*|-ac:*|-filter:*|-af:*) unsafe=true ;;
             esac
         done
-        # Only simple, known layout-preserving filters can be combined. More
-        # complex operator graphs retain FFmpeg's ordinary last-option behavior.
-        if [[ -n "$filter" && "$filter" != aresample=async=1 && ! "$filter" =~ ^dynaudnorm(=[a-zA-Z0-9_.:=+-]+)?$ ]]; then
-            ffsmart_log "Audio filter composition skipped: filter graph may change channel layout"
-            continue
-        fi
-        composed=false; add_pan=false
-        if [[ "$managed_transcode" == true && -n "$codec" && "$codec" != copy && "$filter" =~ ^dynaudnorm(=[a-zA-Z0-9_.:=+-]+)?$ ]]; then
-            filter="aresample=async=1,$filter"
-            composed=true
-        fi
+        add_pan=false; composed=false; supported=true
         if [[ "$codec" == aac && "$channels" == 6 && "${FFSMART_AUDIO_CHANNELS[$input]}" == 6 && "${FFSMART_AUDIO_LAYOUTS[$input]}" == '5.1(side)' ]]; then
             add_pan=true
+        fi
+        FFSMART_CHAIN_HAS_RESAMPLE=false
+        if [[ -n "$filter" ]]; then ffsmart_audio_chain_supported "$filter" || supported=false; fi
+        if [[ "$add_pan" == true && ( "$supported" != true || "$unsafe" == true ) ]]; then
+            ffsmart_fail 64 audio-filter-composition "Cannot safely compose the 5.1(side) AAC correction with this audio graph. Use a simple chain of aresample, dynaudnorm, volume or anull with supported numeric options, or use audio Replace mode to own the complete filter graph."
+            return 64
+        fi
+        if [[ "$supported" == true && "$unsafe" == false && "$managed_transcode" == true && -n "$codec" && "$codec" != copy && -n "$filter" && "$FFSMART_CHAIN_HAS_RESAMPLE" == false ]]; then
+            filter="aresample=async=1,$filter"
+            composed=true
         fi
         if [[ "$add_pan" == true ]]; then
             if [[ -n "$filter" ]]; then filter="$pan,$filter"; else filter="$pan"; fi
@@ -424,7 +475,7 @@ ffsmart_run_normal_pipeline() {
     ffsmart_resolve_static_groups
     ffsmart_dynamic_input_args
     ffsmart_resolve_video_policy
-    ffsmart_resolve_audio_policy
+    ffsmart_resolve_audio_policy || return $?
     ffsmart_resolve_auxiliary_policy
     ffsmart_export_workload
     local input_name

@@ -1,4 +1,14 @@
-## 0.2.2-beta.5 — local candidate, 2026-11-13
+## 0.2.2-beta.6 — local candidate, 2026-11-13
+
+- Compose the actual Add chain `aresample=async=1,dynaudnorm=f=150:g=15`
+  without losing required AAC layout correction or duplicating the resampler.
+- Ignore dormant custom text when Use FFmpeg Smart defaults is selected, before
+  parsing, validation and input-option normalization; preserve the saved text.
+- Retain selected Add/Replace behavior, mapping cardinality and empty Replace.
+- Reserve a new version and prepare exact source/registry metadata locally.
+  No publication, installed update or live profile reconciliation occurred.
+
+## 0.2.2-beta.5 — 2026-11-13
 
 - Pin canonical FFmpeg Adaptive `fd6c400d49cff305df7c41a4149d2f00b80355bb`.
 - Make encoded six-channel 5.1(side) AAC independently joinable through the

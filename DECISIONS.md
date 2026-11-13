@@ -1890,3 +1890,57 @@ no live instance or new Dispatcharr version is used. Before later publication,
 recheck source/registry refs, complete exact-candidate CI, verify the immutable
 remote tag/archive and digest, then publish only the specifically approved
 channel. Managed installation and live 505 acceptance remain separate.
+
+
+---
+
+# ADR-037: Correct composed audio and explicitly gate saved options by selected UI mode
+
+## Status and authority
+
+Accepted for local implementation/testing and next plugin/registry candidate
+preparation, 2026-11-13. The owner confirmed beta.5 is installed but skips the
+required AAC pan for `aresample=async=1,dynaudnorm=f=150:g=15`. The owner also
+explicitly requires Use FFmpeg Smart defaults to ignore text remaining in the
+adjacent options box. No publication, live settings, profile reconciliation,
+installation or deployment is authorized in this phase.
+
+## Actual fault paths and decision
+
+Canonical beta.5 accepts only one exact resampler or a single normalization
+filter; a valid combined chain is rejected and correction skipped. Keep runtime
+implementation canonical and stage its exact immutable local successor for
+local beta.6 tests. Compose supported chains in one FFmpeg process/encoder,
+preserving order and explicit resampling, and fail unsupported eligible side
+AAC graphs with credential-safe guidance before encoding rather than silently
+emitting uncorrected AAC. Replace remains an explicit expert bypass.
+
+In the plugin, UI select values flow through Stream/Output profile generation
+into `_advanced_ffmpeg_parameters`. Its old implementation parsed/validated
+saved text and changed Inherit into Add. The input probe-settings normalizer
+also parsed/rewrote that dormant text before profile generation. Gate inactive
+fields before parsing, validation or normalization: Inherit emits no custom
+arguments and preserves text for a later deliberate Add/Replace selection.
+Missing mode fields retain their Inherit default. Add and Replace retain normal
+validation and forwarding; blank Replace is still meaningful. Mapping Inherit
+ignores saved custom selectors, Add/Replace retain their cardinality rules and
+All retains its existing rejection of custom mapping text.
+
+This supersedes the earlier scoped-options decision that treated populated
+Inherit as Add. It is a plugin UI contract change, not a change to canonical
+expert CLI argument semantics. Do not erase settings, silently select Add,
+auto-run profile reconciliation or claim an installed profile command changed.
+Field IDs/defaults, hardware/cache policy and minimum Dispatcharr v0.29.0 remain.
+
+## Acceptance and delivery
+
+Test populated boxes in each selected mode across scoped groups and both Stream
+and Output paths, malformed dormant text, saved-text preservation, mapping modes
+and blank Replace. Test actual emitted effective audio filters and late-joined
+media, then stage a new unused 0.2.2-beta.6 package and matching manifest locally.
+Because the owner prohibits publication now, stage exact local canonical Git
+objects with recorded hashes/modes, never independently edit vendored behavior.
+Online source verification is pending canonical publication; later normal sync
+must be idempotent and verify the exact published ref. No beta.5 tag is moved.
+Subsequent canonical→plugin/tag/archive→registry publication requires explicit
+approval and exact-candidate checks. Managed update and live playback are separate.
