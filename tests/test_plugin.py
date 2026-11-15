@@ -1842,3 +1842,27 @@ class ReleaseMetadataTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class StreamReservoirProfileTests(unittest.TestCase):
+    def test_defaults_and_opt_in_are_stream_only(self):
+        p = Plugin()
+        self.assertNotIn('reservoir', p._stream_definitions({})[0]['parameters'])
+        self.assertNotIn('reservoir', p._output_definitions({})[0]['parameters'])
+        for value in ('1.05', '1.10'):
+            args = shlex.split(p._stream_definitions({'stream_1_reservoir_rate': value})[0]['parameters'])
+            self.assertEqual(args[args.index('--plugin-stream-reservoir-rate') + 1], value)
+        with self.assertRaises(ValueError):
+            p._stream_definitions({'stream_1_reservoir_rate': '1.2'})
+        with self.assertRaises(ValueError):
+            p._output_definitions({'output_1_reservoir_rate': '1.05'})
+
+    def test_private_flag_cannot_be_injected_via_options(self):
+        p = Plugin()
+        for build, prefix in ((p._stream_definitions, 'stream_1'), (p._output_definitions, 'output_1')):
+            for text in ('--plugin-stream-reservoir-rate 1.05', '--plugin-stream-reservoir-rate=1.05'):
+                with self.subTest(prefix=prefix, text=text), self.assertRaises(ValueError):
+                    build({prefix + '_options': text})
+                with self.subTest(prefix=prefix, text=text, advanced=True), self.assertRaises(ValueError):
+                    build({prefix + '_ffmpeg_audio_mode': 'add', prefix + '_ffmpeg_audio_options': text})
+                # Inherit deliberately ignores saved custom text.
+                self.assertNotIn('reservoir', build({prefix + '_ffmpeg_audio_options': text})[0]['parameters'])

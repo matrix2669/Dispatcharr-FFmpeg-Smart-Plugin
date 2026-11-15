@@ -209,6 +209,17 @@ def codec_policy_fields(prefix, label):
 
 
 
+def reservoir_field(prefix, label):
+    return {
+        "id": f"{prefix}_reservoir_rate", "label": f"{label}: reservoir pacing",
+        "type": "select", "default": "off",
+        "options": [{"value": "off", "label": "Off"},
+                    {"value": "1.05", "label": "1.05x"},
+                    {"value": "1.10", "label": "1.10x"}],
+        "help_text": "Optional bounded startup reservoir. Pacing cannot compensate for a source or transcode that is consistently too slow.",
+    }
+
+
 class Plugin:
     name = "FFmpeg Smart Profiles"
     version = "0.2.2-beta.7"
@@ -230,6 +241,7 @@ class Plugin:
         {"id": "stream_1_name", "label": "Stream Profile 1 name", "type": "string", "default": "FFmpeg Smart"},
         *policy_fields("stream_1", "Stream Profile 1"),
         *codec_policy_fields("stream_1", "Stream Profile 1"),
+        reservoir_field("stream_1", "Stream Profile 1"),
         {
             "id": "stream_1_options",
             "label": "Stream Profile 1 options",
@@ -242,6 +254,7 @@ class Plugin:
         {"id": "stream_2_name", "label": "Stream Profile 2 name", "type": "string", "default": ""},
         *policy_fields("stream_2", "Stream Profile 2"),
         *codec_policy_fields("stream_2", "Stream Profile 2"),
+        reservoir_field("stream_2", "Stream Profile 2"),
         {
             "id": "stream_2_options",
             "label": "Stream Profile 2 options",
@@ -476,6 +489,7 @@ class Plugin:
                         options,
                         self._codec_policy_parameters(settings, f"stream_{slot}", options),
                         ffmpeg_options,
+                        self._reservoir_parameters(settings, slot),
                     ),
                     "is_active": True,
                 }
@@ -483,7 +497,17 @@ class Plugin:
         self._validate_unique_names(definitions, "Stream Profile")
         return definitions
 
+    @staticmethod
+    def _reservoir_parameters(settings, slot):
+        rate = settings.get(f"stream_{slot}_reservoir_rate", "off")
+        if rate not in ("off", "1.05", "1.10"):
+            raise ValueError(f"Stream Profile {slot} reservoir pacing must be off, 1.05 or 1.10")
+        return "" if rate == "off" else f"--plugin-stream-reservoir-rate {rate}"
+
     def _output_definitions(self, settings):
+        for key in settings:
+            if key.startswith("output_") and key.endswith("_reservoir_rate") and settings[key] not in (None, "", "off"):
+                raise ValueError("Reservoir pacing is only available on Stream Profiles")
         defaults = {
             1: (True, "FFMpeg Smart - 720p Mobile", "-maxres 720 -maxbr 2M -maxchan 2"),
             2: (False, "", ""),
@@ -531,7 +555,7 @@ class Plugin:
         except ValueError as exc:
             raise ValueError(f"{label} contains invalid quoting: {exc}") from exc
         forbidden = {"-i", "--cache-status", "--recache", "--recache-only", "--shared-input", "--shared-input-auto", "--plugin-shared-input-mode", "--plugin-shared-input-bytes", "--plugin-shared-input-deadline", "--plugin-shared-input-idle"}
-        invalid = next((token for token in tokens if token in forbidden), None)
+        invalid = next((token for token in tokens if token.split("=", 1)[0] in forbidden or token.split("=", 1)[0] == "--plugin-stream-reservoir-rate"), None)
         if invalid:
             raise ValueError(f"{label} cannot contain {invalid}")
         return options.strip()
@@ -559,6 +583,8 @@ class Plugin:
     def _validate_advanced_tokens(scope, tokens, label):
         for token in tokens:
             option = token.split("=", 1)[0]
+            if option == "--plugin-stream-reservoir-rate":
+                raise ValueError(f"{label} cannot contain {option}")
             audio_codec = (
                 option in {"-acodec", "-c:a", "-codec:a"}
                 or option.startswith("-c:a:")

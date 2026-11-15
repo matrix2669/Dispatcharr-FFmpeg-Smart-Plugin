@@ -223,3 +223,11 @@ Historical tags through `v0.2.1-beta.1` retain their recorded `ffmpeg-asr` prove
 ## License
 
 The plugin is MIT licensed. Its bundled `ffmpeg-adaptive` dependency is also MIT licensed; the dependency notice is preserved as `ffmpeg-smart-profiles/FFMPEG_ADAPTIVE_LICENSE`. Historical tags retain their original provenance.
+
+### Stream Profile reservoir (local development)
+
+Each Stream Profile can opt into reservoir pacing at 1.05x or 1.10x; the default
+is off. Output Profiles do not offer this setting. It is intended to absorb
+short input dips when enough source and processing headroom exists; it cannot
+make a persistently slow source or transcode run at real-time speed. This is a
+local development feature and has not been validated on the deployed system.

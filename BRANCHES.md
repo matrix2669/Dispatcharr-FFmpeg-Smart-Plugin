@@ -13,6 +13,7 @@ This ledger records why every current branch exists and preserves the context ne
 
 | Branch | Type | Status | Base | Target | Purpose |
 |---|---|---|---|---|---|
+| `feature/stream-reservoir` | feature | local implementation | `dev@01dbfa6` | `dev` after approval | Opt-in stream reservoir integration; no publication or deployment. |
 | `fix/audio-copy-filter-beta7` | fix | local beta.7 preparation | `dev@57bef76` plus local beta.6 `8336691` | `dev` after approval | Pin reviewed filtered-copy correction; remote source/tag validation pending. |
 | `fix/audio-filter-composition` | fix | local beta.6 preparation | `dev@57bef76` | `dev` after approval | Correct composed Add audio chains via exact canonical source pin; no publication or live update. |
 | `fix/aac-side-late-join` | fix | local beta.5 preparation | `dev@4715c24` | `dev` after approval | Pin reviewed canonical AAC correction and prepare a versioned self-contained package; no publication or installation. |
