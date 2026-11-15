@@ -1840,9 +1840,6 @@ class ReleaseMetadataTests(unittest.TestCase):
         self.assertIn("trap ffsmart_exit_cleanup EXIT HUP INT TERM", common_module)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 class StreamReservoirProfileTests(unittest.TestCase):
     def test_defaults_and_opt_in_are_stream_only(self):
         p = Plugin()
@@ -1866,3 +1863,7 @@ class StreamReservoirProfileTests(unittest.TestCase):
                     build({prefix + '_ffmpeg_audio_mode': 'add', prefix + '_ffmpeg_audio_options': text})
                 # Inherit deliberately ignores saved custom text.
                 self.assertNotIn('reservoir', build({prefix + '_ffmpeg_audio_options': text})[0]['parameters'])
+
+
+if __name__ == "__main__":
+    unittest.main()
