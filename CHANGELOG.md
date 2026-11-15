@@ -1,3 +1,14 @@
+## 0.2.2-beta.8 — development candidate, 2026-11-15
+
+- Add an opt-in, Stream Profile-only bounded reservoir at 1.05x or 1.10x;
+  default off, without a fixed prefill wait. Pacing cannot repair sustained
+  throughput below real time.
+- Pin local canonical runtime `8a32e296b8c18743c7dbf5b8ac1ff35487846a26`.
+- One local burst comparison observed FFmpeg first output 1.04 seconds later;
+  this is one measurement, not receiver picture latency or a general bound.
+- Development publication is authorized; this candidate is not yet published,
+  installed, or validated on a receiver.
+
 ## 0.2.2-beta.7 — local candidate, 2026-11-15
 
 - Pin the reviewed local adaptive source `ef78f362aba5e2bab7c463e14bf2d97cdd9564dc`.

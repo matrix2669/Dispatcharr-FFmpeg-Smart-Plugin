@@ -1,5 +1,12 @@
 # AGENT.md
 
+## Stream reservoir beta.8, 2026-11-15
+
+The owner authorized publishing the no-prefill reservoir feature through the
+development workflow after checks. Deployment remains separately unauthorized.
+The prior beta.7 archive verification exception does not apply to beta.8.
+
+
 ## Local beta.6 composition repair boundary, 2026-11-13
 
 The owner authorizes local canonical Add-to-Defaults correction plus plugin and
