@@ -192,3 +192,20 @@ class SharedHelperPackagingTests(unittest.TestCase):
             result = subprocess.run([str(folder / 'scripts/check-ffmpeg-smart-source.sh'), '--offline'], capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('ffsmart-shared-input.py', result.stderr)
+
+
+class ClockModulePackagingTests(unittest.TestCase):
+    def test_clock_module_must_be_pinned(self):
+        self.assertIn(ROOT / 'ffmpeg-smart-profiles/lib/ffsmart_ts_clock.py', plugin.RUNTIME_MODULE_PATHS)
+        with TemporaryDirectory() as temp:
+            folder = Path(temp)
+            shutil.copytree(ROOT / 'ffmpeg-smart-profiles', folder / 'ffmpeg-smart-profiles', ignore=shutil.ignore_patterns('__pycache__'))
+            (folder / 'scripts').mkdir()
+            shutil.copy2(ROOT / 'scripts/check-ffmpeg-smart-source.sh', folder / 'scripts/check-ffmpeg-smart-source.sh')
+            metadata_path = folder / 'ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json'
+            metadata = json.loads(metadata_path.read_text())
+            metadata['files'] = [entry for entry in metadata['files'] if entry['path'] != 'lib/ffsmart_ts_clock.py']
+            metadata_path.write_text(json.dumps(metadata))
+            result = subprocess.run([str(folder / 'scripts/check-ffmpeg-smart-source.sh'), '--offline'], capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('ffsmart_ts_clock.py', result.stderr)

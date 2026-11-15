@@ -44,6 +44,10 @@ validate_runtime_syntax() {
 }
 
 verify_entrypoint_modules() {
+    if ! metadata_contains_path "lib/ffsmart_ts_clock.py"; then
+        echo "Required clock module is not pinned in source metadata: lib/ffsmart_ts_clock.py" >&2
+        exit 1
+    fi
     local entrypoint="$RUNTIME_DIR/ffmpeg-smart.sh"
     local required_path
     while IFS= read -r required_path; do

@@ -72,7 +72,8 @@ New versions bundling the pinned MIT-licensed `ffmpeg-adaptive` runtime may proc
    │   ├── ffsmart-hardware.sh
    │   ├── ffsmart-policy.sh
    │   ├── ffsmart-probe.sh
-   │   └── ffsmart-shared-input.py
+   │   ├── ffsmart-shared-input.py
+   │   └── ffsmart_ts_clock.py
    ├── plugin.json
    └── plugin.py
    ```

@@ -32,6 +32,7 @@ for module_name in (
     "ffsmart-policy.sh",
     "ffsmart-probe.sh",
     "ffsmart-shared-input.py",
+    "ffsmart_ts_clock.py",
 ):
     assert (PLUGIN_DIR / "lib" / module_name).is_file()
 assert os.access(PLUGIN_DIR / "ffmpeg-smart.sh", os.X_OK)

@@ -1,12 +1,12 @@
 {
   "repository": "matrix2669/ffmpeg-adaptive",
-  "tracking_ref": "d1fb84cec2d5f6b8892fb8ab66bc580ecc60634b",
-  "commit": "d1fb84cec2d5f6b8892fb8ab66bc580ecc60634b",
+  "tracking_ref": "2bfd7e511fb087b586145375ff896339d2383db9",
+  "commit": "2bfd7e511fb087b586145375ff896339d2383db9",
   "files": [
     {
       "path": "ffmpeg-smart.sh",
       "mode": "0755",
-      "sha256": "9946bc82659b0fefadf09352a89e0d4933eed02486dfc33b0f6277d0e6f494df"
+      "sha256": "63704344c540a74ff963060638026c4d67e0fe91fa926c291570c1db205731f2"
     },
     {
       "path": "lib/ffsmart-cache.sh",
@@ -16,7 +16,7 @@
     {
       "path": "lib/ffsmart-cli.sh",
       "mode": "0644",
-      "sha256": "bb340834c2c2ace758876c2e8e8df738c44b46ce534903b29c85b4d5ab1d40e9"
+      "sha256": "9ba9fde927e0b9b54b83f6ad2c7c61487995d013841576a509347512ab62efde"
     },
     {
       "path": "lib/ffsmart-common.sh",
@@ -41,7 +41,12 @@
     {
       "path": "lib/ffsmart-shared-input.py",
       "mode": "0644",
-      "sha256": "4cfe3db74db8d9265ce548527364af1bee6c3a9a14a679ba0fa425aa5100f77a"
+      "sha256": "c8fbe4a969c5622305939b3bf5ee14f769392049e58bcd7191ac56574dc609b0"
+    },
+    {
+      "path": "lib/ffsmart_ts_clock.py",
+      "mode": "0644",
+      "sha256": "5e80147fdcadb5f4a80ae6126a04ce04675b795156222e66357a1ceffa3db4c0"
     }
   ]
 }

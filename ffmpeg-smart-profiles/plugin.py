@@ -37,6 +37,7 @@ RUNTIME_MODULE_PATHS = tuple(
         "ffsmart-policy.sh",
         "ffsmart-probe.sh",
         "ffsmart-shared-input.py",
+        "ffsmart_ts_clock.py",
     )
 )
 CACHE_NOTIFICATION_KEY = "ffmpeg-smart-hardware-cache"

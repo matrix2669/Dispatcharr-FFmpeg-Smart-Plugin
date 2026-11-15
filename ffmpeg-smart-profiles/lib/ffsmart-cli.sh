@@ -17,6 +17,7 @@ ffsmart_cli_defaults() {
     FFSMART_CACHE_STATUS_ONLY=false
     FFSMART_SHARED_INPUT="${FFMPEG_SMART_SHARED_INPUT:-false}"
     FFSMART_SHARED_AUTO=false
+    FFSMART_STREAM_RESERVOIR_RATE=""
 
     FFSMART_DRI_DEVICE="${DRI_DEVICE:-}"
     FFSMART_QSV_DEVICE="${QSV_DEVICE:-}"
@@ -48,6 +49,11 @@ ffsmart_need_value() {
 ffsmart_parse_cli() {
     while (( $# )); do
         case "$1" in
+            --plugin-stream-reservoir-rate)
+                ffsmart_need_value "$1" "$#" || return
+                [[ -z "$FFSMART_STREAM_RESERVOIR_RATE" ]] || { ffsmart_configuration_error "Reservoir rate specified more than once"; return 64; }
+                case "$2" in 1.05|1.10) ;; *) ffsmart_configuration_error "Reservoir rate must be 1.05 or 1.10"; return 64 ;; esac
+                FFSMART_STREAM_RESERVOIR_RATE="$2"; shift 2 ;;
             --shared-input)
                 FFSMART_SHARED_INPUT=true; shift ;;
             --shared-input-auto)
@@ -307,6 +313,14 @@ EOF
 }
 
 ffsmart_validate_shared_input() {
+    if [[ -n "$FFSMART_STREAM_RESERVOIR_RATE" ]]; then
+        case "$FFSMART_STREAM_RESERVOIR_RATE" in 1.05|1.10) ;; *) ffsmart_configuration_error "Reservoir rate must be 1.05 or 1.10"; return 64 ;; esac
+        if [[ ! "$FFSMART_INPUT" =~ ^https?:// ]]; then
+            ffsmart_configuration_error "Stream reservoir requires an HTTP(S) MPEG-TS input"
+            return 64
+        fi
+        FFSMART_SHARED_INPUT=true
+    fi
     if [[ "$FFSMART_SHARED_INPUT" == auto ]]; then
         # The supervisor has already classified this input as non-TS. This
         # internal child marker prevents a second automatic classification.

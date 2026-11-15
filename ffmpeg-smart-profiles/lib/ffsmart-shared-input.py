@@ -21,8 +21,37 @@ import time
 from urllib.parse import unquote, urljoin, urlsplit
 
 
+class PlaybackPacer:
+    """Pace clock observations without joining unrelated clock epochs.
+
+    All time values are monotonic wall seconds or source media seconds. The
+    caller rebases on starvation and blocked writes; it never changes TS data.
+    """
+    def __init__(self, rate):
+        self.rate = rate
+        self.epoch = self.media = self.wall = None
+
+    def reset(self):
+        self.epoch = self.media = self.wall = None
+
+    def delay(self, epoch, media, now):
+        if media is None:
+            self.reset()
+            return 0.0
+        if self.epoch != epoch or self.media is None or media < self.media:
+            self.epoch, self.media, self.wall = epoch, media, now
+            return 0.0
+        due = self.wall + (media - self.media) / self.rate
+        # A delay already missed because of starvation or a blocked consumer
+        # must never cause a burst trying to catch up to the old schedule.
+        if now > due + .1:
+            self.media, self.wall = media, now
+            return 0.0
+        return max(0.0, due - now)
+
+
 class Reservoir:
-    def __init__(self, source, agent, cap, idle, auto=False):
+    def __init__(self, source, agent, cap, idle, auto=False, rate=None):
         self.source, self.agent, self.cap, self.idle = source, agent, cap, idle
         self.cv = threading.Condition()
         self.chunks = deque()
@@ -40,6 +69,13 @@ class Reservoir:
         self.auto = auto
         self.classified = threading.Event()
         self.unsupported = None
+        self.rate = rate
+        self.clock_events = deque()
+        self.clock_first = self.clock_last = None
+        self.clock = None
+        if rate is not None:
+            from ffsmart_ts_clock import TSClock
+            self.clock = TSClock()
 
     def fail(self, reason):
         with self.cv:
@@ -142,6 +178,16 @@ class Reservoir:
                     data = bytes(prefix)
                     prefix.clear()
                 with self.cv:
+                    if self.clock is not None:
+                        for event in self.clock.feed(data):
+                            self.clock_events.append(event)
+                            _, epoch, media = event
+                            if media is None:
+                                self.clock_first = self.clock_last = None
+                            elif self.clock_first is None or self.clock_first[0] != epoch:
+                                self.clock_first = self.clock_last = (epoch, media)
+                            else:
+                                self.clock_last = (epoch, media)
                     # Coalesce short socket reads without delaying delivery.
                     # Queue object overhead must not scale with one-byte reads.
                     offset = self.end
@@ -182,20 +228,64 @@ class Reservoir:
         handler.send_header("Connection", "close")
         handler.end_headers()
         cursor = 0
+        pacer = PlaybackPacer(self.rate) if playback and self.rate is not None else None
         try:
+            if pacer:
+                until = time.monotonic() + 2.0
+                with self.cv:
+                    while not (self.stopped or self.error or self.eof or self.end - self.start >= self.cap):
+                        if (self.clock_first and self.clock_last and
+                                self.clock_first[0] == self.clock_last[0] and
+                                self.clock_last[1] - self.clock_first[1] >= 1.0):
+                            break
+                        remaining = until - time.monotonic()
+                        if remaining <= 0:
+                            break
+                        self.cv.wait(min(.1, remaining))
+                    prefill_span = (self.clock_last[1] - self.clock_first[1]
+                                    if self.clock_first and self.clock_last and
+                                    self.clock_first[0] == self.clock_last[0] else None)
+                    print('[ffmpeg-smart] stream-reservoir prefill_seconds=%s clock_selected=%s clock_reason=%s' %
+                          (round(prefill_span, 3) if prefill_span is not None else 'unknown',
+                           self.clock.known, self.clock.reason), file=sys.stderr)
             while not self.stopped:
                 with self.cv:
                     while cursor >= self.end and not (self.eof or self.error or self.stopped):
+                        if pacer:
+                            pacer.reset()
                         self.cv.wait(.1)
                     if self.error or self.stopped:
                         return
                     if cursor >= self.end and self.eof:
                         return
-                    data = next((bytes(chunk[cursor - offset:]) for offset, chunk in self.chunks
+                    limit = self.end
+                    if pacer:
+                        # Do not expose a partial TS packet before its clock
+                        # observation has been parsed on the reader thread.
+                        if not self.eof:
+                            limit -= limit % 188
+                        while self.clock_events and self.clock_events[0][0] <= cursor:
+                            _, epoch, media = self.clock_events.popleft()
+                            delay = pacer.delay(epoch, media, time.monotonic())
+                            while delay > 0 and not (self.stopped or self.error):
+                                self.cv.wait(min(delay, .1))
+                                delay = pacer.delay(epoch, media, time.monotonic())
+                        if self.stopped or self.error:
+                            return
+                        if self.clock_events:
+                            limit = min(limit, self.clock_events[0][0])
+                        if limit <= cursor:
+                            pacer.reset()
+                            self.cv.wait(.1)
+                            continue
+                    data = next((bytes(chunk[cursor - offset:min(len(chunk), limit - offset)]) for offset, chunk in self.chunks
                                  if offset <= cursor < offset + len(chunk)), None)
                     if data is None:
                         return  # An old probe may finish after playback releases its prefix.
+                write_started = time.monotonic()
                 handler.wfile.write(data)
+                if pacer and time.monotonic() - write_started > .1:
+                    pacer.reset()
                 cursor += len(data)
                 if playback:
                     with self.cv:
@@ -204,6 +294,12 @@ class Reservoir:
                         while self.chunks and self.chunks[0][0] + len(self.chunks[0][1]) <= cursor:
                             offset, chunk = self.chunks.popleft()
                             self.start = offset + len(chunk)
+                        if pacer and self.chunks and self.chunks[0][0] < cursor:
+                            # A full byte cap can end mid-packet. Release the
+                            # delivered prefix so the reader can complete it.
+                            offset, chunk = self.chunks.popleft()
+                            self.chunks.appendleft((cursor, chunk[cursor - offset:]))
+                            self.start = cursor
                         self.cv.notify_all()
         except (BrokenPipeError, ConnectionResetError, socket.timeout):
             pass
@@ -224,13 +320,19 @@ class Reservoir:
 
 
 def main():
+    rate = None
+    if len(sys.argv) > 2 and sys.argv[1] == '--reservoir-rate':
+        if sys.argv[2] not in ('1.05', '1.10'):
+            raise ValueError('invalid reservoir rate')
+        rate = float(sys.argv[2])
+        del sys.argv[1:3]
     source = os.environ.pop("FFSMART_SHARED_SOURCE")
     agent = os.environ.pop("FFSMART_SHARED_AGENT", "")
     cap = int(os.environ["FFMPEG_SMART_SHARED_INPUT_BYTES"])
     deadline = int(os.environ["FFMPEG_SMART_SHARED_INPUT_DEADLINE"])
     idle = int(os.environ["FFMPEG_SMART_SHARED_INPUT_IDLE"])
     auto = os.environ.pop("FFSMART_SHARED_AUTO", "false") == "true"
-    reservoir = Reservoir(source, agent, cap, idle, auto=auto)
+    reservoir = Reservoir(source, agent, cap, idle, auto=auto, rate=rate)
     token = secrets.token_urlsafe(32)
 
     class Handler(BaseHTTPRequestHandler):
@@ -345,6 +447,9 @@ def main():
         summary = "shared-input classification" if reservoir.unsupported else "shared-input"
         print("[ffmpeg-smart] %s upstream_opens=%d upstream_requests=%d first_byte_ms=%s playback_feed_ms=%s first_output_ms=%s probe_requests=%d peak_retained_bytes=%d cap_bytes=%d probe_start_ms=%s" %
               (summary, reservoir.opens, reservoir.requests, reservoir.first_byte, reservoir.playback_ms, reservoir.first_output, reservoir.probes, reservoir.peak, cap, reservoir.probe_start_ms), file=sys.stderr)
+        if reservoir.clock is not None:
+            print("[ffmpeg-smart] stream-reservoir rate=%.2f clock_selected=%s clock_reason=%s" %
+                  (rate, reservoir.clock.known, reservoir.clock.reason), file=sys.stderr)
     return status if status >= 0 else 128 - status
 
 

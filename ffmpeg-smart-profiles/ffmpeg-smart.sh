@@ -21,6 +21,9 @@ source "$FFSMART_ROOT/lib/ffsmart-policy.sh"
 ffsmart_maybe_start_shared_input() {
     if ffsmart_is_true "$FFSMART_SHARED_INPUT" && [[ -z "${FFSMART_SHARED_ENDPOINT:-}" ]]; then
         export FFSMART_SHARED_SOURCE="$FFSMART_INPUT" FFSMART_SHARED_AGENT="$FFSMART_USER_AGENT" FFSMART_SHARED_AUTO
+        if [[ -n "$FFSMART_STREAM_RESERVOIR_RATE" ]]; then
+            exec python3 "$FFSMART_ROOT/lib/ffsmart-shared-input.py" --reservoir-rate "$FFSMART_STREAM_RESERVOIR_RATE" "$FFSMART_ENTRYPOINT" "${FFSMART_ORIGINAL_ARGS[@]}"
+        fi
         exec python3 "$FFSMART_ROOT/lib/ffsmart-shared-input.py" "$FFSMART_ENTRYPOINT" "${FFSMART_ORIGINAL_ARGS[@]}"
     fi
 }

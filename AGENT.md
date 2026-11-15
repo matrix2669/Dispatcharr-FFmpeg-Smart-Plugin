@@ -139,7 +139,7 @@ For every change, run:
 
 ```bash
 python3 -m unittest discover -s tests -v
-python3 -m py_compile ffmpeg-smart-profiles/plugin.py ffmpeg-smart-profiles/lib/ffsmart-shared-input.py tests/validate_dispatcharr.py
+python3 -m py_compile ffmpeg-smart-profiles/plugin.py ffmpeg-smart-profiles/lib/ffsmart-shared-input.py ffmpeg-smart-profiles/lib/ffsmart_ts_clock.py tests/validate_dispatcharr.py
 python3 -m json.tool ffmpeg-smart-profiles/plugin.json >/dev/null
 python3 -m json.tool ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json >/dev/null
 bash -n ffmpeg-smart-profiles/ffmpeg-smart.sh
