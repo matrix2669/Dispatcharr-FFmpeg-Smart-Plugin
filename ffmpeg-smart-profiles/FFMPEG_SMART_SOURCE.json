@@ -1,7 +1,7 @@
 {
   "repository": "matrix2669/ffmpeg-adaptive",
-  "tracking_ref": "ef78f362aba5e2bab7c463e14bf2d97cdd9564dc",
-  "commit": "ef78f362aba5e2bab7c463e14bf2d97cdd9564dc",
+  "tracking_ref": "d1fb84cec2d5f6b8892fb8ab66bc580ecc60634b",
+  "commit": "d1fb84cec2d5f6b8892fb8ab66bc580ecc60634b",
   "files": [
     {
       "path": "ffmpeg-smart.sh",
