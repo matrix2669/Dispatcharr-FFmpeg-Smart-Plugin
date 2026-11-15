@@ -2,8 +2,8 @@
 
 ## Canonical FFmpeg Adaptive runtime
 
-- Local beta.6 candidate pins `matrix2669/ffmpeg-adaptive` commit
-  `c7e53605242e611961ad4c3578d5c2c6d26234cf`, runtime 0.1.0, staged exactly
+- Local beta.7 candidate pins `matrix2669/ffmpeg-adaptive` commit
+  `ef78f362aba5e2bab7c463e14bf2d97cdd9564dc`, runtime 0.1.0, staged exactly
   from local immutable Git objects because publication is not authorized.
   Offline checksum/mode verification applies; remote verification is pending
   approved canonical publication and the normal sync/check workflow. Eight files (entrypoint, six shell modules and the
@@ -127,3 +127,9 @@ The official input manager's startup-no-data switch can use 8 seconds while
 alternatives exist and disables that short clock when alternatives are exhausted.
 The wrapper's independent watchdog and network guard are not configuration
 inheritance, and no live settings or forced database query is used in this task.
+
+- Local evidence only: `git archive --format=tar` of source commit
+  `ef78f362aba5e2bab7c463e14bf2d97cdd9564dc` has SHA-256
+  `39c2477fa518ecb913f9c10e32ba095d3a30134bbfa34aeaa114bb979252fa8b`.
+  This is not a GitHub archive checksum. The immutable remote source returned
+  HTTP 404; remote source and future tag/archive verification remain pending.

@@ -286,6 +286,69 @@ ffsmart_add_audio_filters() {
     done
 }
 
+# A simple audio filter requires an encoder. Override only Smart's own copy
+# decision, on the affected mapped output. Explicit user codec choices retain
+# their ordinary last-matching-option semantics; reject explicit copy conflicts.
+ffsmart_resolve_filtered_copy() {
+    local idx option value out matched codec explicit filter unknown=false
+    local has_filter=false has_copy=false
+    for option in "${FFSMART_AUDIO_ARGS[@]}"; do
+        case "$option" in -af|-af:*|-filter|-filter:*|-filter_script|-filter_script:*) has_filter=true ;; copy) has_copy=true ;; esac
+    done
+    [[ "$has_filter" == true && "$has_copy" == true ]] || return 0
+    ffsmart_mapped_audio || { ffsmart_fail 64 audio-filter-copy "Cannot safely resolve filtered audio mapping; use an explicit audio encoder in Replace mode."; return 64; }
+    for ((out=0; out<${#FFSMART_MAPPED_AUDIO[@]}; out++)); do
+        codec=''; explicit=false; filter=''; unknown=false
+        for ((idx=0; idx<${#FFSMART_AUDIO_ARGS[@]}; idx++)); do
+            option="${FFSMART_AUDIO_ARGS[$idx]}"
+            case "$option" in
+                -c|-codec|-c:a|-codec:a|-acodec|-c:a:*|-codec:a:*|-af|-filter:a|-filter:a:*|-filter_script:a|-filter_script:a:*)
+                    ((idx+=1)); ((idx < ${#FFSMART_AUDIO_ARGS[@]})) || return 0
+                    value="${FFSMART_AUDIO_ARGS[$idx]}"; matched=false
+                    case "$option" in
+                        -c|-codec|-c:a|-codec:a|-acodec|-af|-filter:a|-filter_script:a) matched=true ;;
+                        *:a:"$out") matched=true ;;
+                        *:a:*) [[ "${option##*:}" =~ ^(0|[1-9][0-9]*)$ ]] || unknown=true ;;
+                    esac
+                    [[ "$matched" == true ]] || continue
+                    case "$option" in
+                        -c|-codec|-c:a*|-codec:a*|-acodec)
+                            codec="$value"
+                            # Managed arguments precede user arguments.
+                            ((idx >= managed_count)) && explicit=true || explicit=false ;;
+                        *) filter="$value" ;;
+                    esac ;;
+                -af:*|-filter|-filter:*|-filter_script|-filter_script:*|-c:*|-codec:*) unknown=true ;;
+            esac
+        done
+        if [[ "$unknown" == true ]]; then
+            ffsmart_fail 64 audio-filter-copy "Cannot safely resolve audio filter or codec selectors; use simple audio stream selectors."
+            return 64
+        fi
+        if [[ -n "$filter" && "$codec" == copy ]]; then
+            if [[ "$explicit" == true ]]; then
+                ffsmart_fail 64 audio-filter-copy "Audio stream copy cannot be combined with an audio filter; choose an encoder or remove the filter."
+                return 64
+            fi
+            # A multichannel decoder may expose only a channel count (for
+            # example an AAC PCE missed during MPEG-TS probing). Guessing a
+            # speaker order here can silently remap channels. Mono and stereo
+            # have an unambiguous conventional order; require reported layout
+            # metadata for other or unknown channel counts.
+            local source_index="${FFSMART_MAPPED_AUDIO[$out]}"
+            local source_channels="${FFSMART_AUDIO_CHANNELS[$source_index]}"
+            local source_layout="${FFSMART_AUDIO_LAYOUTS[$source_index]}"
+            if [[ -z "$source_layout" || "$source_layout" == unknown || "$source_layout" == N/A ]]; then
+                if [[ "$source_channels" != 1 && "$source_channels" != 2 ]]; then
+                    ffsmart_fail 64 audio-filter-layout "Cannot automatically encode filtered audio with an unknown multichannel layout; choose an explicit encoder and layout, or remove the filter."
+                    return 64
+                fi
+            fi
+            FFSMART_AUDIO_ARGS+=( "-c:a:$out" aac )
+        fi
+    done
+}
+
 ffsmart_resolve_audio_policy() {
     local managed=() out_channels="$FFSMART_AUDIO_MAX_CHANNELS" transcode=false
     if (( FFSMART_AUDIO_COUNT == 0 )); then
@@ -311,6 +374,9 @@ ffsmart_resolve_audio_policy() {
     if [[ -n "$FFSMART_MAX_CHANNELS" ]] && (( FFSMART_AUDIO_MAX_CHANNELS > FFSMART_MAX_CHANNELS )) && [[ "$FFSMART_AUDIO_MODE" == replace ]]; then
         FFSMART_AUDIO_ARGS+=( -ac "$FFSMART_MAX_CHANNELS" )
     fi
+    local managed_count=0
+    [[ "$FFSMART_AUDIO_MODE" == replace ]] || managed_count=${#managed[@]}
+    ffsmart_resolve_filtered_copy || return $?
     ffsmart_add_audio_filters "$transcode"
 }
 

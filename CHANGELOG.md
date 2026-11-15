@@ -1,3 +1,11 @@
+## 0.2.2-beta.7 — local candidate, 2026-11-15
+
+- Pin the reviewed local adaptive source `ef78f362aba5e2bab7c463e14bf2d97cdd9564dc`.
+- Encode automatically copied AAC outputs when user audio filters require it;
+  preserve explicit codec choices and diagnose explicit copy/filter conflicts.
+- Fail closed for unknown multichannel layouts and unresolved selectors instead
+  of guessing. No plugin publication, installation or profile update occurred.
+
 ## 0.2.2-beta.6 — local candidate, 2026-11-13
 
 - Compose the actual Add chain `aresample=async=1,dynaudnorm=f=150:g=15`

@@ -6,10 +6,11 @@ The canonical runtime is [FFmpeg Adaptive](https://github.com/matrix2669/ffmpeg-
 This repository owns its Dispatcharr integration; see [Bundled runtime updates](#bundled-runtime-updates)
 for exact source pins and the synchronization workflow.
 
-**0.2.2-beta.6 is a local candidate, not yet published.** It corrects composed
-Add audio chains and makes the selected defaults mode ignore dormant options
-text without deleting it. Published beta.5 remains unchanged. No installed
-plugin, settings or managed profile is changed by this source preparation.
+**0.2.2-beta.7 is a local candidate, not yet published.** It pins the
+reviewed audio copy/filter correction. When an added audio filter targets an
+automatically copied AAC stream, Smart encodes that output; explicit copy/filter
+conflicts and unknown multichannel layouts receive a diagnostic. Saved settings
+and Inherit mode remain unchanged. Remote source and tag verification are pending.
 
 ## Installation
 
@@ -178,13 +179,13 @@ Because benchmark-time starts now take the degraded stream-copy path, Dispatchar
 
 ## Bundled runtime updates
 
-The local beta.6 candidate stages exact local canonical
-`c7e53605242e611961ad4c3578d5c2c6d26234cf` for offline tests. Its source pin is not remotely verified until publication is approved;
+The local beta.7 candidate stages exact local canonical
+`ef78f362aba5e2bab7c463e14bf2d97cdd9564dc` for offline tests. Its source pin is not remotely verified until publication is approved;
 normal canonical-first sync/check and immutable package gates still apply.
 
 The published beta.5 package pins canonical
 [`fd6c400d49cff305df7c41a4149d2f00b80355bb`](https://github.com/matrix2669/ffmpeg-adaptive/commit/fd6c400d49cff305df7c41a4149d2f00b80355bb).
-This local beta.6 preparation does not change the installed plugin.
+This local beta.7 preparation does not change the installed plugin.
 
 [matrix2669/ffmpeg-adaptive](https://github.com/matrix2669/ffmpeg-adaptive) is the source of truth for the modular `ffmpeg-smart.sh` runtime. The plugin records one exact source commit plus the path, SHA-256 checksum, and installed mode of the entrypoint and every shell/Python module in `ffmpeg-smart-profiles/FFMPEG_SMART_SOURCE.json`. CI verifies that the complete bundle is byte-for-byte identical to that immutable source.
 
