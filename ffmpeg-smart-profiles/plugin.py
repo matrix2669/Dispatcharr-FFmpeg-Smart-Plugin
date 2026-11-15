@@ -217,7 +217,7 @@ def reservoir_field(prefix, label):
         "options": [{"value": "off", "label": "Off"},
                     {"value": "1.05", "label": "1.05x"},
                     {"value": "1.10", "label": "1.10x"}],
-        "help_text": "Optional bounded startup reservoir. Pacing cannot compensate for a source or transcode that is consistently too slow.",
+        "help_text": "Optional bounded reservoir with immediate output. Pacing cannot compensate for a source or transcode that is consistently too slow.",
     }
 
 

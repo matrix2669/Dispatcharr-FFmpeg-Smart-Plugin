@@ -71,7 +71,6 @@ class Reservoir:
         self.unsupported = None
         self.rate = rate
         self.clock_events = deque()
-        self.clock_first = self.clock_last = None
         self.clock = None
         if rate is not None:
             from ffsmart_ts_clock import TSClock
@@ -181,13 +180,6 @@ class Reservoir:
                     if self.clock is not None:
                         for event in self.clock.feed(data):
                             self.clock_events.append(event)
-                            _, epoch, media = event
-                            if media is None:
-                                self.clock_first = self.clock_last = None
-                            elif self.clock_first is None or self.clock_first[0] != epoch:
-                                self.clock_first = self.clock_last = (epoch, media)
-                            else:
-                                self.clock_last = (epoch, media)
                     # Coalesce short socket reads without delaying delivery.
                     # Queue object overhead must not scale with one-byte reads.
                     offset = self.end
@@ -230,24 +222,6 @@ class Reservoir:
         cursor = 0
         pacer = PlaybackPacer(self.rate) if playback and self.rate is not None else None
         try:
-            if pacer:
-                until = time.monotonic() + 2.0
-                with self.cv:
-                    while not (self.stopped or self.error or self.eof or self.end - self.start >= self.cap):
-                        if (self.clock_first and self.clock_last and
-                                self.clock_first[0] == self.clock_last[0] and
-                                self.clock_last[1] - self.clock_first[1] >= 1.0):
-                            break
-                        remaining = until - time.monotonic()
-                        if remaining <= 0:
-                            break
-                        self.cv.wait(min(.1, remaining))
-                    prefill_span = (self.clock_last[1] - self.clock_first[1]
-                                    if self.clock_first and self.clock_last and
-                                    self.clock_first[0] == self.clock_last[0] else None)
-                    print('[ffmpeg-smart] stream-reservoir prefill_seconds=%s clock_selected=%s clock_reason=%s' %
-                          (round(prefill_span, 3) if prefill_span is not None else 'unknown',
-                           self.clock.known, self.clock.reason), file=sys.stderr)
             while not self.stopped:
                 with self.cv:
                     while cursor >= self.end and not (self.eof or self.error or self.stopped):
