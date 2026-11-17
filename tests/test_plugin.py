@@ -65,6 +65,28 @@ class ActiveTranscodeSelectionTests(unittest.TestCase):
         self.assertEqual(Plugin._active_transcode_channel_ids(redis_client), ["both"])
 
 
+class InstalledPluginKeyTests(unittest.TestCase):
+    def test_settings_save_uses_exact_installed_key(self):
+        config = MagicMock()
+        manager = MagicMock()
+        manager.get.return_value = config
+        models = types.ModuleType("apps.plugins.models")
+        models.PluginConfig = types.SimpleNamespace(objects=manager)
+        modules = {"apps": types.ModuleType("apps"), "apps.plugins": types.ModuleType("apps.plugins"), "apps.plugins.models": models}
+        with patch.dict(sys.modules, modules):
+            for key in ("ffmpeg_smart_profiles", "ffmpeg-smart-profiles"):
+                with self.subTest(key=key), patch.object(plugin, "__file__", f"/plugins/{key}/plugin.py"):
+                    settings = {"example": key}
+                    Plugin._save_normalized_settings(settings)
+                    manager.get.assert_called_with(key=key)
+                    self.assertEqual(config.settings, settings)
+                    config.save.assert_called_with(update_fields=["settings", "updated_at"])
+
+    def test_installed_key_matches_host_normalization(self):
+        with patch.object(plugin, "__file__", "/plugins/FFmpeg Smart-Profiles/plugin.py"):
+            self.assertEqual(Plugin._installed_plugin_key(), "ffmpeg_smart-profiles")
+
+
 class ProfileDefinitionTests(unittest.TestCase):
     def test_advanced_mode_fields_show_the_inherited_defaults(self):
         suffixes = {
@@ -1426,6 +1448,13 @@ class CacheNotificationTests(unittest.TestCase):
                     "message": "Run the hardware scan.",
                 },
             ):
+                for key in ("ffmpeg_smart_profiles", "ffmpeg-smart-profiles"):
+                    with self.subTest(key=key), patch.object(plugin, "__file__", f"/plugins/{key}/plugin.py"):
+                        Plugin._sync_cache_notification()
+                        self.assertEqual(manager.defaults["action_data"]["plugin_key"], key)
+                # Reset for the lifecycle assertions below.
+                manager.current = None
+                refreshes.clear()
                 Plugin._sync_cache_notification()
 
             self.assertEqual(manager.key, plugin.CACHE_NOTIFICATION_KEY)

@@ -842,10 +842,16 @@ class Plugin:
         return normalized, removed
 
     @staticmethod
+    def _installed_plugin_key():
+        # Dispatcharr keys plugins by their installed directory, normalizing
+        # spaces and case while preserving hyphens and underscores.
+        return Path(__file__).parent.name.replace(" ", "_").lower()
+
+    @staticmethod
     def _save_normalized_settings(settings):
         from apps.plugins.models import PluginConfig
 
-        config = PluginConfig.objects.get(key="ffmpeg_smart_profiles")
+        config = PluginConfig.objects.get(key=Plugin._installed_plugin_key())
         config.settings = settings
         config.save(update_fields=["settings", "updated_at"])
 
@@ -1726,7 +1732,7 @@ class Plugin:
             previous_fallback_token = previous_action_data.get("fallback_token")
             effective_fallback_token = fallback_token or previous_fallback_token
             action_data = {
-                "plugin_key": "ffmpeg_smart_profiles",
+                "plugin_key": cls._installed_plugin_key(),
                 "plugin_action": "rebuild_cache",
                 "cache_status": state.get("cache_status", state["state"]),
                 "notification_state": state["state"],

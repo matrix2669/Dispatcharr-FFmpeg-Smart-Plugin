@@ -3,6 +3,9 @@
 - Consolidate 0.2.2 development changes: conditional video conversion, shared
   startup acquisition, audio mapping and filter fixes, and the opt-in stream
   reservoir. See the beta entries below for details and limitations.
+- Use the installed Dispatcharr plugin directory key for normalized settings
+  and hardware-cache notification actions, preserving both underscore and
+  hyphen installs.
 - Retain exact canonical runtime pin `8a32e296b8c18743c7dbf5b8ac1ff35487846a26`.
 - The owner reports compatibility with Dispatcharr 0.33 and 0.34 and live use
   on 0.33. Future development targets 0.34+. This is not a claim of new 0.34
