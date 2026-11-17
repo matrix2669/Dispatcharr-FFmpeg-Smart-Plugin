@@ -1,3 +1,14 @@
+## 0.2.2 — stable candidate, 2026-11-17
+
+- Consolidate 0.2.2 development changes: conditional video conversion, shared
+  startup acquisition, audio mapping and filter fixes, and the opt-in stream
+  reservoir. See the beta entries below for details and limitations.
+- Retain exact canonical runtime pin `8a32e296b8c18743c7dbf5b8ac1ff35487846a26`.
+- The owner reports compatibility with Dispatcharr 0.33 and 0.34 and live use
+  on 0.33. Future development targets 0.34+. This is not a claim of new 0.34
+  source-review or live-validation evidence. No publication or deployment is
+  implied by this local candidate.
+
 ## 0.2.2-beta.8 — development candidate, 2026-11-15
 
 - Add an opt-in, Stream Profile-only bounded reservoir at 1.05x or 1.10x;

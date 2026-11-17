@@ -21,18 +21,15 @@ authorized now. This explicit local direction supersedes routine checkpoint push
 
 ## Workspace Standards Reconciliation Gate
 
-Ordinary established standalone work uses the pinned local guidance and applied
-WORKSPACE-STANDARDS.yaml. Refresh and reconcile authoritative workspace
-AI-INSTRUCTIONS.md and AGENT-STANDARD.md at bootstrap, explicit standards work,
-and before source integration or publication. Run reconcile-standards --check;
-review --diff against the complete project guidance, relevant decisions,
-dependencies and release contracts. Apply --confirm-reviewed-no-conflicts only
-after that review. Missing authoritative standards or unresolved contradictions
-block the boundary. Preserve explicit owner approval across delegation; do not
-infer deployment from publication. Required CI belongs to the exact candidate
-SHA; documentation reconciliation creates a new candidate requiring full CI.
-Publish task-related workspace status once at durable closeout. This supersedes
-the older per-task reconciliation wording, not any release or validation gate.
+Before substantive work, refresh the maintained workspace checkout and run
+`reconcile-standards --check .` against `WORKSPACE-STANDARDS.yaml`. If stale, review `--diff` against the project
+instructions, decisions, dependencies and release contracts; resolve any
+contradiction with the owner before applying the reviewed fingerprint. Recheck
+before promotion or release. Missing authoritative standards or unresolved
+contradictions block the affected work. Standalone project records remain in this
+repository, not a separate workspace status closeout. Preserve explicit owner
+approval across delegation; do not infer deployment from publication. Required CI
+belongs to the exact candidate SHA; reconciliation creates a new candidate.
 
 ## Purpose
 

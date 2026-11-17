@@ -223,7 +223,7 @@ def reservoir_field(prefix, label):
 
 class Plugin:
     name = "FFmpeg Smart Profiles"
-    version = "0.2.2-beta.8"
+    version = "0.2.2"
     description = (
         "Installs FFmpeg Smart stream/output profiles and manages hardware "
         "capacity cache rebuilds."

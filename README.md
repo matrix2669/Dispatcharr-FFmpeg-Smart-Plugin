@@ -22,6 +22,11 @@ https://raw.githubusercontent.com/matrix2669/dispatcharr-plugins/main/manifest.j
 
 Install **FFmpeg Smart Profiles**, enable it, then run **Install or Update Profiles**.
 
+This branch prepares stable `0.2.2`; it is not published until the release
+process completes. The owner reports the current plugin works with Dispatcharr
+0.33 and 0.34, including live use on 0.33. Future changes target 0.34 and later.
+This statement does not represent new 0.34 source-review or live-test evidence.
+
 The stable release is `v0.2.1`. The GitHub Release includes
 `dispatcharr-ffmpeg-smart-plugin-v0.2.1.zip` and its SHA-256 checksum. The registry
 uses the exact immutable tag archive. The plugin deliberately retains the tested
